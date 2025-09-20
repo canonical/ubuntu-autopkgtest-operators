@@ -8,7 +8,7 @@ class DispatcherConfig(pydantic.BaseModel):
     stable_release_percentage: int
 
     # TODO swift
-    
+
     # TODO properly implement validation
     # @pydantic.field_validator("rabbitmq_host")
     # def validate_rabbitmq_host(self, value: str):

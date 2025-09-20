@@ -125,7 +125,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
                     os.symlink(unit, dest)
             if "@" not in unit.name:
                 systemd.service_enable(unit.name)
-        
+
         systemd.daemon_reload()
 
     # action helpers
@@ -135,9 +135,9 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             return arch in ARCH_RELEASE_ALLOW_MAPPING[release]
         if release in ARCH_RELEASE_DISALLOW_MAPPING:
             return arch not in ARCH_RELEASE_DISALLOW_MAPPING[release]
-        
+
         return True
-    
+
     def disable_image_builders(self, arch, releases):
         for release in releases:
             systemd.service_stop(f"build-adt-container@worker-{arch}-{release}.timer")
@@ -174,7 +174,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         except:
             event.fail(f"Failed to add worker for arch {worker_arch}")
             return
-        
+
         event.log("Enabling image build for new worker")
         self._stored.workers.add(worker_arch)
         self.enable_image_builders(worker_arch, self.typed_config.releases.split(' '))

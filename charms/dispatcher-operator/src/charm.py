@@ -184,13 +184,13 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
                                        [autopkgtest]
                                        checkout_dir = ../../../../../../autopkgtest
                                        releases = {self.typed_config.releases}
-                                       setup_command = 
+                                       setup_command =
                                        setup_command2 =
                                        worker_upstream_percentage = {self.typed_config.worker_upstream_percentage}
                                        stable_release_percentage = {self.typed_config.stable_release_percentage}
                                        retry_delay = 300
                                        debug = 0
-                                       architectures = 
+                                       architectures =
 
                                        [virt]
                                        args = lxd -r $LXD_REMOTE $LXD_REMOTE:autopkgtest/ubuntu/$RELEASE/$ARCHITECTURE
@@ -236,10 +236,10 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         if not changes:
             logger.debug("No configuration changes detected")
             return
-        
+
         if any(["releases" in changes, "worker_upstream_percentage" in changes, "stable_release_percentage" in changes]):
             self.write_worker_config()
-            
+
 
     def config_changes(self):
         new_config = self.config
@@ -265,11 +265,11 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
     def _on_amqp_relation_changed(self, event):
         unit_data = event.relation.data[event.unit]
-        
+
         if "password" not in unit_data:
             logger.info("rabbitmq-server has not sent password yet")
             return
-        
+
         hostname = unit_data["hostname"]
         password = unit_data["password"]
 

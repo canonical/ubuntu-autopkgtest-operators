@@ -33,7 +33,7 @@ actions:
   add-worker:
     description: Add worker to run maintenance tasks on.
     params:
-      arch: 
+      arch:
         type: string
         description: Architecture of the worker.
         enum: [amd64, amd64v3, i386, arm64, armhf, s390x, ppc64el, riscv64]
