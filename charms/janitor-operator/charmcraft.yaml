@@ -27,7 +27,7 @@ parts:
     plugin: dump
     source: .
     stage:
-       - units/*
+      - units/*
 
 actions:
   add-worker:
