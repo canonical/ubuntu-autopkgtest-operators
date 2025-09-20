@@ -1,0 +1,28 @@
+[Unit]
+Description=autopkgtest worker %i
+ConditionFileNotEmpty=/home/ubuntu/rabbitmq.cred
+ConditionFileNotEmpty=/home/ubuntu/swift-password.cred
+Wants=network-online.target
+After=network-online.target
+StopWhenUnneeded=yes
+
+[Service]
+User=ubuntu
+WorkingDirectory=~
+TimeoutStartSec=5min
+EnvironmentFile=/home/ubuntu/influx.cred
+EnvironmentFile=/home/ubuntu/rabbitmq.cred
+EnvironmentFile=/home/ubuntu/swift-password.cred
+ExecStart=/bin/sh -ec 'REGION="%i"; REGION="$${REGION%-*}"; \
+    CONF="$HOME/worker.conf"; \
+    LXD_ARCH=$${REGION#*-}; \
+    exec env REGION=$${REGION} $HOME/autopkgtest-cloud/worker/worker --config $$CONF -v LXD_ARCH=$$LXD_ARCH -v LXD_REMOTE=$$REGION'
+ExecReload=/bin/kill -HUP $MAINPID
+SuccessExitStatus=0 99 SIGTERM SIGHUP
+RestartSec=5min
+Restart=on-failure
+StartLimitInterval=10m
+StartLimitBurst=3
+
+[Install]
+WantedBy=autopkgtest.target

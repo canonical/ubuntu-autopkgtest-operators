@@ -1,0 +1,8 @@
+[Unit]
+Description=Cancel duplicate upstream test requests (timer)
+
+[Timer]
+OnCalendar=minutely
+
+[Install]
+WantedBy=autopkgtest.target

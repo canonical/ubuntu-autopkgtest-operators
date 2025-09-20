@@ -1,0 +1,10 @@
+[Unit]
+Description=Cancel duplicate upstream test requests
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=~
+TimeoutStartSec=5min
+EnvironmentFile=/home/ubuntu/rabbitmq.cred
+ExecStart=/home/ubuntu/autopkgtest-cloud/tools/filter-amqp-dupes-upstream

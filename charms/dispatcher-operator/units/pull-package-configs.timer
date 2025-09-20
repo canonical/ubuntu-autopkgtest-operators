@@ -1,0 +1,9 @@
+[Unit]
+Description=Pull package configs repo (timer)
+After=autopkgtest.target
+
+[Timer]
+OnCalendar=minutely
+
+[Install]
+WantedBy=autopkgtest.target
