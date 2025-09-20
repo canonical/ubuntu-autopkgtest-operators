@@ -1,0 +1,2 @@
+# latest available versions for noble
+ops ~= 2.17

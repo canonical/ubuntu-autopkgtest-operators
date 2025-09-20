@@ -1,0 +1,56 @@
+name: autopkgtest-janitor
+type: charm
+summary: A charm for performing maintenance for autopkgtest workers.
+description: A charm for performing maintenance for autopkgtest workers.
+
+base: ubuntu@24.04
+platforms:
+  amd64:
+    build-on: [amd64]
+    build-for: [amd64]
+
+charm-libs:
+  - lib: operator_libs_linux.apt
+    version: "0"
+  - lib: operator_libs_linux.systemd
+    version: "1"
+  - lib: operator_libs_linux.snap
+    version: "2"
+
+parts:
+  charm:
+    plugin: charm
+    source: .
+    charm-binary-python-packages:
+      - pydantic
+  systemd-units:
+    plugin: dump
+    source: .
+    stage:
+       - units/*
+
+actions:
+  add-worker:
+    description: Add worker to run maintenance tasks on.
+    params:
+      arch: 
+        type: string
+        description: Architecture of the worker.
+        enum: [amd64, amd64v3, i386, arm64, armhf, s390x, ppc64el, riscv64]
+      token:
+        type: string
+        description: LXD client token to connect to a remote.
+  remove-worker:
+    description: Remove a worker from the janitor.
+    params:
+      arch:
+        type: string
+        description: Architecture of the worker.
+        enum: [amd64, amd64v3, i386, arm64, armhf, s390x, ppc64el, riscv64]
+
+config:
+  options:
+    releases:
+      type: string
+      description: Space-separated list of releases to build images for.
+      default: trusty xenial bionic focal jammy noble plucky questing

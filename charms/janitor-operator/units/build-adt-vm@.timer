@@ -1,0 +1,8 @@
+[Unit]
+Description=Timer to build autopkgtest testbed VM (%i)
+After=autopkgtest.target
+
+[Timer]
+OnBootSec=24h
+OnUnitInactiveSec=24h
+RandomizedDelaySec=6h

@@ -1,0 +1,15 @@
+[Unit]
+Description=Build autopkgtest testbed VM (%i)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=~
+# riscv64 can take quite some time!
+TimeoutStartSec=4h
+ExecStart=sh -ec 'PARAMS="%i"; REMOTE="$${PARAMS%-*}"; \
+    RELEASE="$${PARAMS##*-}"; \
+    /home/ubuntu/autopkgtest/tools/autopkgtest-build-lxd --vm -r $$REMOTE ubuntu-daily:$$RELEASE'
+SyslogIdentifier=%N
