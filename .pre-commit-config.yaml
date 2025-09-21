@@ -23,5 +23,11 @@ repos:
     rev: v0.11.0.1
     hooks:
       - id: shellcheck
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.11
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
 
 exclude: ^(charms/[^/]+/(src/charms|lib)/)
