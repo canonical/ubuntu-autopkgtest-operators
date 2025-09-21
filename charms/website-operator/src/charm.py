@@ -34,6 +34,9 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             self.unit.set_workload_version(version)
         self.unit.status = ops.ActiveStatus()
 
+    def _on_config_changed(self, event: ops.ConfigChangedEvent):
+        pass
+
 
 if __name__ == "__main__":  # pragma: nocover
     ops.main(AutopkgtestWebsiteCharm)
