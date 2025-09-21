@@ -3,6 +3,11 @@ name: autopkgtest-website
 title: Charm Template
 summary: Website for the autopkgtest service
 description: Website for the autopkgtest service
+links:
+  issues:
+    - https://github.com/canonical/ubuntu-autopkgtest-operators/issues
+  source:
+    - https://github.com/canonical/ubuntu-autopkgtest-operators
 
 base: ubuntu@24.04
 platforms:

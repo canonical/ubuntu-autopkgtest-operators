@@ -2,6 +2,11 @@ name: autopkgtest-janitor
 type: charm
 summary: A charm for performing maintenance for autopkgtest workers.
 description: A charm for performing maintenance for autopkgtest workers.
+links:
+  issues:
+    - https://github.com/canonical/ubuntu-autopkgtest-operators/issues
+  source:
+    - https://github.com/canonical/ubuntu-autopkgtest-operators
 
 base: ubuntu@24.04
 platforms:

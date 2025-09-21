@@ -2,6 +2,11 @@ name: autopkgtest-dispatcher
 type: charm
 summary: A charm that deploys an autopkgtest queue dispatcher, to run tests on available workers
 description: A charm that deploys an autopkgtest queue dispatcher, to run tests on available workers
+links:
+  issues:
+    - https://github.com/canonical/ubuntu-autopkgtest-operators/issues
+  source:
+    - https://github.com/canonical/ubuntu-autopkgtest-operators
 
 base: ubuntu@24.04
 platforms:
