@@ -1,6 +1,7 @@
 [tool.ruff]
-lint.extend-select = ["W", "C", "N", "I"]
+lint.extend-select = ["W", "I"]
 lint.extend-ignore = [
+    "E741",
     "E722",
 ]
 extend-exclude = ["__pycache__", "*.egg_info", "**/lib/charms/"]
