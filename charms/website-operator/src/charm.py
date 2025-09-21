@@ -6,10 +6,9 @@
 
 import logging
 
-import ops
-
 # A standalone module for workload-specific logic (no charming concerns):
 import autopkgtest_website
+import ops
 
 logger = logging.getLogger(__name__)
 

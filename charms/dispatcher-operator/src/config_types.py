@@ -1,5 +1,6 @@
 import pydantic
 
+
 class DispatcherConfig(pydantic.BaseModel):
     # charm
     default_worker_count: int

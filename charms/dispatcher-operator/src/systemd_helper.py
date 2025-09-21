@@ -1,15 +1,15 @@
-from collections import defaultdict
-import charms.operator_libs_linux.v1.systemd as systemd
 import subprocess
+from collections import defaultdict
 
-class SystemdHelper():
+import charms.operator_libs_linux.v1.systemd as systemd
+
+
+class SystemdHelper:
     def get_autopkgtest_unit_names(self, arch, ns):
         """Return the names of the autopkgtest worker unit files
-        for the given arch and requested unit numbers"""
-
-        return [
-            f"autopkgtest@cluster-{arch}-{n}.service" for n in ns
-        ]
+        for the given arch and requested unit numbers
+        """
+        return [f"autopkgtest@cluster-{arch}-{n}.service" for n in ns]
 
     def reload_all_units(self):
         systemd.daemon_reload()
@@ -29,29 +29,29 @@ class SystemdHelper():
 
     def list_units_by_pattern(self, pattern):
         proc = subprocess.run(
-            ["systemctl", "list-units", f'{pattern}'],
+            ["systemctl", "list-units", f"{pattern}"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            encoding="utf-8"
+            encoding="utf-8",
         )
 
         # have to mangle the systemctl output manually here
         units = []
-        for line in proc.stdout.split('\n'):
+        for line in proc.stdout.split("\n"):
             if "service" not in line or "masked" in line:
                 continue
-            units.append(line.split(' ')[1])
+            units.append(line.split(" ")[1])
 
         return units
 
     def get_autopkgtest_units(self):
         """Return names for all autopkgtest services in the following tuple:
-           (lxd_workers, build_adt_image), where lxd_workers is a dict with keys lxd_worker[arch][n]
-           and build_adt_image is a dict with keys build_adt_keys[arch][release]"""
+        (lxd_workers, build_adt_image), where lxd_workers is a dict with keys lxd_worker[arch][n]
+        and build_adt_image is a dict with keys build_adt_keys[arch][release]
+        """
         lxd_worker_names = defaultdict(lambda: defaultdict(dict))
-        build_adt_image_object_paths = defaultdict(lambda: defaultdict(dict))
 
         lxd_workers = self.list_units_by_pattern("autopkgtest@*")
 
@@ -65,7 +65,8 @@ class SystemdHelper():
 
     def set_up_systemd_units(self, target_config, releases):
         """Enable requested units and remove unneeded ones.
-        target_config is a dict which maps arches to number of workers."""
+        target_config is a dict which maps arches to number of workers.
+        """
         lxd_worker_names = self.get_autopkgtest_units()
 
         for arch in target_config:
