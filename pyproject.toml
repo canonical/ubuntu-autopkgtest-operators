@@ -1,0 +1,16 @@
+[tool.ruff]
+lint.extend-select = ["W", "C", "N", "D", "I"]
+lint.extend-ignore = [
+    "D100",
+    "D101",
+    "D102",
+    "D107",
+    "D205",
+    "D400",
+    "D415",
+    "E722",
+]
+extend-exclude = ["__pycache__", "*.egg_info"]
+
+[tool.codespell]
+skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"
