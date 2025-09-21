@@ -39,7 +39,7 @@ To deploy a new node, after having sourced the cloud ``.rc`` file (``source ~/.s
   * upload the `prod-proposed-migration-environment` SSH key with something like ``openstack keypair create --public-key ~/.ssh/id_ed25519.pub prod-proposed-migration-environment``.
   * make sure the correct security group is created with the right rules (at least allowing ingress 8443/tcp), with ``mojo/make-lxd-secgroup`` (open that script and adapt it if needed, it's currently not very flexible but easy to tweak to your needs).
 
-In the event that you want to deploy the new node on a specifc host you can use the ``--hint same_host`` argument e.g. ``openstack server create --hint same_host=2e838a71-f6d9-46c4-94f9-dd0c6a2632fe``.
+In the event that you want to deploy the new node on a specific host you can use the ``--hint same_host`` argument e.g. ``openstack server create --hint same_host=2e838a71-f6d9-46c4-94f9-dd0c6a2632fe``.
 
 N.B. Wait for it to finish deploying (watch ``/var/log/cloud-init-output.log``) on the newly deployed node. If you do not wait then the unit files for the node on the autopkgtest-lxd-worker will fail as there will be missing images for releases. You can also use ``lxc image list`` to check what was correctly built, and finish the work manually if needed. Commands should be in the cloud-init log.
 

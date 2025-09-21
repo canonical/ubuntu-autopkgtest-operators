@@ -419,7 +419,7 @@ are a few steps that can gain you some time:
   * ``cd charms/focal/autopkgtest-web && charmcraft clean && charmcraft pack``
 5. ``mojo run`` should now be working enough to get you a local working web UI
 
-If you are developping and making additional modifications to your code that needs
+If you are developing and making additional modifications to your code that needs
 to be redeployed as a new charm, the quickest way is by running something like
 this:
 ``charmcraft pack && juju refresh autopkgtest-web --path ./autopkgtest-web_ubuntu-20.04-amd64.charm``

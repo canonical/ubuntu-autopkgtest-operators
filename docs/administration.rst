@@ -95,7 +95,7 @@ where ``<unit>`` is the cloud/lxd worker shown in ``juju status``.
 Updating autopkgtest and autodep8
 ---------------------------------
 The autopkgtest-cloud-worker and autopkgtest-lxd-worker applications have
-checkouts of the Ubuntu Release team's autopkgtest and autodep8 branchs.
+checkouts of the Ubuntu Release team's autopkgtest and autodep8 branches.
 These branches can be automatically updated (which will remove any local
 changes) on a unit via the following::
 
@@ -206,7 +206,7 @@ being copied forward (``seed-new-release``) or devel results existing
 Removing an End of Life series
 ------------------------------
 
-Before proceeding with the steps below, please make sure that the serie is
+Before proceeding with the steps below, please make sure that the series is
 properly removed from ``mojo/service-bundle``, and that this change was applied
 successfully to all workers.
 
@@ -311,7 +311,7 @@ Preparing the test
 
 You need to have an autopkgtest for your project that is in some git branch.
 This can be in the actual GitHub project repo, but it's also possible and
-plausible to re-use the existing autopkgtest in the Ubuntu packaging git and
+plausible to reuse the existing autopkgtest in the Ubuntu packaging git and
 just adjusting this a little to work for upstream PR tests. For example, you
 might want to disable ``dh_install --fail-missing`` or strict
 ``dpkg-gensymbols`` checking when testing an upstream PR so that you don't
