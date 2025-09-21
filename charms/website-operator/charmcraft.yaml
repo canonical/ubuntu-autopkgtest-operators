@@ -18,3 +18,7 @@ charm-libs:
     version: "0"
   - lib: operator_libs_linux.systemd
     version: "1"
+
+requires:
+  amqp:
+    interface: rabbitmq
