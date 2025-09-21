@@ -3,7 +3,7 @@ lint.extend-select = ["W", "C", "N", "I"]
 lint.extend-ignore = [
     "E722",
 ]
-extend-exclude = ["__pycache__", "*.egg_info", "**/lib/charms/", "**/src/charms/"]
+extend-exclude = ["__pycache__", "*.egg_info", "**/lib/charms/"]
 
 [tool.codespell]
 skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"

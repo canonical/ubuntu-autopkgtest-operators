@@ -30,4 +30,4 @@ repos:
         args: [--fix]
       - id: ruff-format
 
-exclude: ^(charms/[^/]+/(src/charms|lib)/)
+exclude: ^(charms/[^/]+/lib/)
