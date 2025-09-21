@@ -13,7 +13,7 @@ import charms.operator_libs_linux.v0.apt as apt
 logger = logging.getLogger(__name__)
 
 # Packages to install
-PACKAGES = ["apache2", "codroipo"]
+PACKAGES = ["apache2"]
 
 
 def install() -> None:
