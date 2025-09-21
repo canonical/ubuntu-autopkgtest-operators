@@ -1,0 +1,186 @@
+#!/usr/bin/python3
+import io
+import json
+import logging
+import os
+import sys
+import tarfile
+import tempfile
+import time
+
+import swiftclient
+from distro_info import UbuntuDistroInfo
+from helpers.utils import swift_connect
+
+RETRY_WAIT_TIME = 5
+
+
+def upload_object(output_result_tar, container_name, object_name, swift_conn):
+    logging.info("Uploading new object %s to %s...", output_result_tar, object_name)
+    for _ in range(10):
+        try:
+            with open(output_result_tar, "rb") as f:
+                swift_conn.put_object(
+                    container_name,
+                    object_name,
+                    contents=f,
+                    content_type=None,
+                    headers=None,
+                    content_length=os.path.getsize(output_result_tar),
+                )
+                logging.info(f"Object {object_name} uploaded!")
+                return
+        except Exception as e:
+            logging.info(
+                f"Swift upload of object {object_name} failed with {e}, "
+                f"retrying in {RETRY_WAIT_TIME} seconds"
+            )
+            time.sleep(RETRY_WAIT_TIME)
+
+
+def delete_object(container_name, object_name, swift_conn):
+    logging.info("Deleting old object %s ...", object_name)
+    for _ in range(10):
+        try:
+            swift_conn.delete_object(container_name, object_name)
+            logging.info(f"Object {object_name} deleted.")
+            return
+        except Exception as e:
+            logging.error(
+                f"swift delete failed with {e}, retrying in {RETRY_WAIT_TIME} seconds."
+            )
+            time.sleep(RETRY_WAIT_TIME)
+
+
+def copy_object(container_name, object_name, destination, swift_conn):
+    logging.info(f"Moving object {object_name} to {destination}")
+    for _ in range(10):
+        try:
+            swift_conn.copy_object(
+                container_name,
+                object_name,
+                destination=f"{container_name}/{destination}",
+                headers=None,
+            )
+            logging.info(f"Object {object_name} copied to {destination}!")
+            return
+        except Exception as e:
+            logging.error(
+                f"swift copy failed with {e}, retrying in {RETRY_WAIT_TIME} seconds"
+            )
+            time.sleep(RETRY_WAIT_TIME)
+
+
+def fake_up_testinfo_json(object_contents, swift_conn, container_name, object_name):
+    object_tar_bytes = io.BytesIO(object_contents)
+    temp_dir = tempfile.TemporaryDirectory()
+    result_dir = temp_dir.name + "/result"
+    os.makedirs(result_dir)
+    autopkgtest_result_files = {}
+    with tarfile.open(None, "r", object_tar_bytes) as tar:
+        # amend testinfo.json
+        try:
+            testinfo = json.loads(tar.extractfile("testinfo.json").read().decode())
+        except Exception as _:
+            testinfo = {
+                "message": "This file has been added manually and is not a result of any test"
+            }
+        existing_files = tar.getnames()
+        for f in existing_files:
+            autopkgtest_result_files[f] = tar.extractfile(f).read().decode().strip()
+        # replace testinfo.json
+        autopkgtest_result_files["testinfo.json"] = testinfo
+    # write the files to new directory for tar'ing
+    for file_name, values in autopkgtest_result_files.items():
+        with open(f"{result_dir}/{file_name}", "w") as f:
+            if file_name.endswith(".json"):
+                json.dump(values, f)
+            else:
+                f.write(values)
+    # tar up the directory
+    output_result_tar = temp_dir.name + "/result.tar"
+    with tarfile.open(output_result_tar, "w") as tar:
+        for fn in os.listdir(result_dir):
+            p = os.path.join(result_dir, fn)
+            tar.add(p, arcname=fn)
+    # now need to upload the result.tar to swift
+    upload_object(output_result_tar, container_name, f"{object_name}.bak", swift_conn)
+    copy_object(container_name, f"{object_name}.bak", object_name, swift_conn)
+    delete_object(container_name, f"{object_name}.bak", swift_conn)
+    logging.info("New object uploaded.")
+    temp_dir.cleanup()
+
+
+def is_testinfo_object_integrity_ok(object_contents, object_name):
+    tar_bytes = io.BytesIO(object_contents)
+    try:
+        with tarfile.open(None, "r", tar_bytes) as tar:
+            _ = json.loads(tar.extractfile("testinfo.json").read().decode())
+    except (KeyError, ValueError, tarfile.TarError) as e:
+        logging.info(
+            "%s is damaged, with the following error: %s\nwill fix...",
+            object_name,
+            e,
+        )
+        return False
+    return True
+
+
+def fix_testinfo_jsons_for_release(release, swift_conn):
+    """Download new results from a swift container"""
+    container_name = "autopkgtest-" + release
+    logging.info(f"Fetching objects in container: {container_name}")
+
+    try:
+        _, objects = swift_conn.get_container(container_name, full_listing=True)
+        logging.info("%i objects fetched...", len(objects))
+        num_objects = len(objects)
+        ctr = 0
+        increment = 5
+        progress = increment
+        for obj in objects:
+            ctr += 1
+            percent = (ctr / num_objects) * 100
+            if percent > progress or ctr == 1:
+                logging.info("%i percent" % round((ctr / num_objects) * 100))
+                progress += increment
+            if obj["name"].endswith("result.tar"):
+                _, object_contents = swift_conn.get_object(container_name, obj["name"])
+                testinfo_integrity = is_testinfo_object_integrity_ok(
+                    object_contents, obj["name"]
+                )
+                if not testinfo_integrity:
+                    fake_up_testinfo_json(
+                        object_contents,
+                        swift_conn,
+                        container_name,
+                        obj["name"],
+                    )
+            sys.stdout.flush()
+    except swiftclient.ClientException as e:
+        logging.error(
+            "Something went wrong accessing container %s\nTraceback: %s"
+            % (container_name, str(e))
+        )
+        raise
+
+
+def get_releases():
+    releases = list(
+        set(UbuntuDistroInfo().supported() + UbuntuDistroInfo().supported_esm())
+    )
+    releases.sort(key=UbuntuDistroInfo().all.index, reverse=True)
+    return releases
+
+
+def main():
+    logging.basicConfig(level=logging.INFO)
+    logging.info("Setting up swift connection")
+    swift_conn = swift_connect()
+    releases = get_releases()
+    for release in releases:
+        fix_testinfo_jsons_for_release(release, swift_conn)
+
+
+if __name__ == "__main__":
+    main()

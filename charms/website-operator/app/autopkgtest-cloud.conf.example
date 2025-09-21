@@ -1,0 +1,42 @@
+# For local development copy me to `./autopkgtest-cloud.conf`
+# All scripts in that folder should use that by default, provided you don't have
+# a `~/autopkgtest-cloud.conf` file existing.
+[web]
+database=/tmp/autopkgtest-cloud-web/autopkgtest.db
+database_ro=/tmp/autopkgtest-cloud-web/public/autopkgtest.db
+ExternalURL=http://127.0.0.1:5000/results
+stats_cache_dir=/tmp/autopkgtest-cloud-web
+ppa_containers_cache_dir=/tmp/autopkgtest-cloud-web
+archive_url=http://archive.ubuntu.com/ubuntu
+indexed_packages=/tmp/autopkgtest-cloud-web/indexed-packages.json
+amqp_queue_cache=/tmp/autopkgtest-cloud-web/queued.json
+running_cache=/tmp/autopkgtest-cloud-web/running.json
+allowed_requestors=autopkgtest-requestors,canonical-ubuntu-qa
+
+[amqp]
+uri=amqp://guest:guest@127.0.0.1
+
+[swift]
+os_region_name = canonistack-bos01
+os_auth_url = https://keystone.bos01.canonistack.canonical.com:5000/v3
+os_project_domain_name = default
+# change this
+os_username = user
+os_user_domain_name = default
+# change this
+os_project_name = user_project
+# change this
+os_password = complicatedpassword
+os_identity_api_version = 3
+
+[influxdb]
+# change these if not running locally
+influxdb_hostname = localhost
+influxdb_port = 8086
+# change this
+influxdb_username = user
+# change this
+influxdb_password = complicatedpassword
+influxdb_database = metrics
+# change this to test staging or production contexts
+influxdb_context = development

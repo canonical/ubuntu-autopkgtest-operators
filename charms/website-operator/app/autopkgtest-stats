@@ -1,0 +1,235 @@
+#!/usr/bin/python3
+
+import argparse
+import json
+import logging
+from time import sleep
+
+from helpers.utils import (
+    get_autopkgtest_db_conn,
+    get_influx_creds,
+    get_release_arches,
+    get_source_versions,
+    get_stats_cache,
+    is_db_empty,
+)
+from influxdb import InfluxDBClient
+
+STAT_NUMPKGS = "numpkgs"
+STAT_NUMPKGSPASS = "numpkgspass"
+STAT_FAILRUNS = "failruns"
+STAT_PASSRUNS = "passruns"
+
+# to silence pylint errors
+logger = None
+
+
+def success_count_for_release_and_arch(db, release, arch, src_versions):
+    """Return number of packages with tests that pass"""
+
+    count = 0
+
+    # we consider the latest successful run of a package's current version with
+    # triggers for current packages; if none exist (i. e. tests generally fail,
+    # but succeeded for a trigger that is not published), don't count it as
+    # success
+    cur_pkg = None
+    # pylint: disable=unused-variable
+    for pkg, triggers, code in db.execute(
+        "SELECT test.package, triggers, exitcode "
+        "FROM test, result, current_version "
+        "WHERE test.id == result.test_id AND test.release=? AND arch=? "
+        "  AND test.package = current_version.package "
+        "  AND test.release = current_version.release "
+        "  AND result.version = current_version.version "
+        "  AND (exitcode = 0 OR exitcode = 2 OR exitcode = 8) "
+        "ORDER BY test.package, run_id DESC",
+        (release, arch),
+    ):
+        # start of a new package block?
+        if pkg != cur_pkg:
+            logger.debug("new package start: %s [%s] %i", pkg, triggers, code)
+            cur_pkg = pkg
+            found_valid = False
+        elif found_valid:
+            # we found a valid success, skip over the older test results of
+            # that package
+            logger.debug("ignored older result: %s [%s] %i", pkg, triggers, code)
+            continue
+        logger.debug("considered result: %s [%s] %i", pkg, triggers, code)
+        # weed out non-current triggers
+        for trigger in triggers.split():
+            src, ver = trigger.split("/")
+            # it can happen that src_versions does not have a trigger source
+            # package if that trigger source got removed in the final release
+            if src_versions.get(src) != ver:
+                # pylint: disable=line-too-long
+                logger.debug(
+                    "%s/%s/%s: ignoring non-current trigger %s",
+                    release,
+                    arch,
+                    pkg,
+                    trigger,
+                )
+                continue
+        # if we arrive here, we have a passing test result for pkg with current
+        # triggers, so count it
+        logger.debug("counting result: %s [%s] %i", pkg, triggers, code)
+        count += 1
+        # ... and ignore older results for that package
+        found_valid = True
+
+    return count
+
+
+def calc_stats():
+    logger.debug("Connecting to autopkgtest.db")
+    db_con = get_autopkgtest_db_conn()
+    if not db_con:
+        logger.debug("Unable to get DB con")
+        exit(1)
+
+    while is_db_empty(db_con):
+        logger.info("DB is empty, waiting for it to get populated")
+        sleep(5)
+
+    logger.debug("Getting release arches")
+    release_arches = get_release_arches(db_con)
+
+    data = {}
+    for release in release_arches:  # pylint: disable=consider-using-dict-items
+        data[release] = {}
+        for arch in release_arches[release]:
+            data[release][arch] = {
+                STAT_NUMPKGS: 0,
+                STAT_NUMPKGSPASS: 0,
+                STAT_PASSRUNS: 0,
+                STAT_FAILRUNS: 0,
+            }
+
+    logger.debug("Getting package count per arch")
+    for release, arch, numpkgs in db_con.execute(
+        "SELECT release, arch, COUNT(DISTINCT package) FROM test GROUP BY release, arch"
+    ):
+        if numpkgs > 1:
+            try:
+                data[release][arch][STAT_NUMPKGS] = numpkgs
+            except KeyError:
+                pass
+
+    logger.debug("Getting pass info for packages")
+    for release, arch, key, numruns in db_con.execute(
+        "SELECT release, arch, "
+        "       CASE WHEN exitcode IN (0,2,8) "
+        "           THEN 'passruns' ELSE 'failruns' END exit, "
+        "       COUNT(run_id) "
+        "FROM result LEFT JOIN test ON result.test_id = test.id "
+        "GROUP BY release, arch, exit"
+    ):
+        try:
+            data[release][arch][key] = data[release][arch].get(key, 0) + numruns
+        except KeyError:
+            pass
+
+    logger.debug("Collating stats")
+    for release in release_arches:  # pylint: disable=consider-using-dict-items
+        sources = get_source_versions(db_con, release)
+        for arch in release_arches[release]:
+            data[release][arch][STAT_NUMPKGSPASS] = success_count_for_release_and_arch(
+                db_con, release, arch, sources
+            )
+
+    return data
+
+
+def make_submission(data, context):
+    measurement = "autopkgtest_package_stats"
+    out = []
+    for release in data:
+        for arch in data[release]:
+            release_arch_data = data[release][arch]
+            for field in [
+                STAT_NUMPKGS,
+                STAT_NUMPKGSPASS,
+                STAT_FAILRUNS,
+                STAT_PASSRUNS,
+            ]:
+                m = {
+                    "measurement": measurement,
+                    "fields": {"count": release_arch_data[field]},
+                    "tags": {
+                        "release": release,
+                        "arch": arch,
+                        "stat": field,
+                        "instance": context,
+                    },
+                }
+                out.append(m)
+
+            pass_percent = round(
+                # avoid division by zero
+                (
+                    release_arch_data[STAT_NUMPKGSPASS]
+                    / (release_arch_data[STAT_NUMPKGS] or 1)
+                )
+                * 100,
+                2,
+            )
+            m = {
+                "measurement": measurement,
+                "fields": {"percentage": pass_percent},
+                "tags": {
+                    "release": release,
+                    "arch": arch,
+                    "instance": context,
+                },
+            }
+            out.append(m)
+    return out
+
+
+def parse_args():
+    arg_parser = argparse.ArgumentParser(
+        description="Script to collect release and arch-specific data for "
+        "passing or failing package tests."
+    )
+    arg_parser.add_argument("--debug", action="store_true", help="debug mode")
+    return arg_parser.parse_args()
+
+
+def main():
+    try:
+        influx_creds = get_influx_creds()
+    except KeyError:
+        logger.warning("Could not load InfluxDB credentials, writing to DB will fail")
+
+    cache_directory = get_stats_cache()
+    cache_directory.mkdir(parents=True, exist_ok=True)
+
+    data = calc_stats()
+    logger.debug("Writing results to %s" % cache_directory)
+
+    cache_file = cache_directory / "stats.json"
+    cache_file.write_text(json.dumps(data))
+
+    try:
+        influx_client = InfluxDBClient(
+            influx_creds["influxdb_hostname"],
+            influx_creds["influxdb_port"],
+            influx_creds["influxdb_username"],
+            influx_creds["influxdb_password"],
+            influx_creds["influxdb_database"],
+        )
+        influx_client.write_points(
+            make_submission(data, influx_creds["influxdb_context"])
+        )
+    except Exception:
+        # leaving this as general exception to cover all possible failures
+        logger.warning("Cannot write to InfluxDB")
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
+    logger = logging.getLogger("autopkgtest-success-stats")
+    main()

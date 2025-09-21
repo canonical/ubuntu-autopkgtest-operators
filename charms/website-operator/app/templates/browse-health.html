@@ -1,0 +1,42 @@
+{% extends "browse-layout.html" %}
+{% import "macros.html" as macros %}
+
+{% block content %}
+  <h2>
+    release health <small>[{{ release }}
+    {% if arch %}/{{ arch }}{% endif %}
+  ]</small>
+</h2>
+
+<table class="table">
+  <tr>
+    <td>
+      <b>Package</b>
+    </td>
+    <td>
+      <b>Version</b>
+    </td>
+    {% for arch in arches %}<td>{{arch}}</td>{% endfor %}
+  </tr>
+
+  {% for package, version in reference_results %}
+    <tr>
+      <td>{{package}}</td>
+      <td>{{version}}</td>
+      {% for arch in arches %}
+        {% set values = reference_results[package, version].get(arch, None) %}
+        {% if values and values["run_id"] %}
+          <td class="nowrap {{values["code"]}}" title={{values["code"]}}>
+            <a href="{{values["url"]}}/log.gz">{{values["code"]}}</a> &emsp;
+            {% if values["show_retry"] %}
+              <a href="{{base_url}}request.cgi?release={{release}}&arch={{values["arch"]}}&package={{package|urlencode}}&trigger=migration-reference/0">&#9851;</a>
+            {% endif %}
+          </td>
+        {% else %}
+          <td>N/A</td>
+        {% endif %}
+      {% endfor %}
+    </tr>
+  {% endfor %}
+</table>
+{% endblock content %}

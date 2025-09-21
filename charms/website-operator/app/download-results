@@ -1,0 +1,116 @@
+#!/usr/bin/python3
+
+import datetime
+import json
+import logging
+import os
+import socket
+import sys
+import time
+
+import amqp
+from helpers.utils import SqliteWriterConfig, amqp_connect
+
+EXCHANGE_NAME = "testcomplete.fanout"
+amqp_con = None
+
+
+def process_message(msg):
+    global amqp_con
+    body = msg.body
+    if isinstance(body, bytes):
+        body = body.decode("UTF-8", errors="replace")
+    info = json.loads(body)
+    logging.info("Received notification of completed test {}".format(info))
+
+    arch = info["architecture"]
+    container = info["container"]
+    duration = info["duration"]
+    exitcode = info["exitcode"]
+    package = info["package"]
+    release = info["release"]
+    requester = (info["requester"] or "").strip()
+    version = info["testpkg_version"]
+    test_uuid = info.get("uuid", "")
+    (_, _, _, _, run_id) = info["swift_dir"].split("/")
+
+    # we don't handle PPA requests and their container names are
+    # formatted like autopkgtest-$release-$user-$ppaname
+    if container != ("autopkgtest-{}".format(release)):
+        logging.debug("Ignoring non-distro request: {}".format(info))
+        msg.channel.basic_ack(msg.delivery_tag)
+        return
+
+    try:
+        triggers = info["triggers"]
+        if not triggers:
+            raise KeyError
+    except KeyError:
+        logging.error(
+            "%s/%s/%s result has no ADT_TEST_TRIGGERS, ignoring",
+            package,
+            arch,
+            release,
+        )
+        msg.channel.basic_ack(msg.delivery_tag)
+        return
+
+    start = datetime.datetime.now()
+    while True:
+        try:
+            # add to queue instead of writing to db
+            with amqp_con.channel() as complete_amqp:
+                complete_amqp.exchange_declare(
+                    SqliteWriterConfig.writer_exchange_name,
+                    "fanout",
+                    durable=True,
+                    auto_delete=False,
+                )
+                write_me_msg = {
+                    "run_id": run_id,
+                    "version": version,
+                    "triggers": triggers,
+                    "duration": duration,
+                    "exitcode": exitcode,
+                    "requester": requester,
+                    "env": info.get("env", ""),
+                    "uuid": test_uuid,
+                    "release": release,
+                    "arch": arch,
+                    "package": package,
+                }
+                complete_amqp.basic_publish(
+                    amqp.Message(json.dumps(write_me_msg), delivery_mode=2),
+                    SqliteWriterConfig.writer_exchange_name,
+                    "",
+                )
+
+                msg.channel.basic_ack(msg.delivery_tag)
+                return
+        except Exception:
+            time.sleep(3)
+            now = datetime.datetime.now()
+            if (
+                now.timestamp() - start.timestamp()
+            ) > SqliteWriterConfig.retry_time_limit:
+                logging.error("amqp connection seems unstable, exiting...")
+                sys.exit(1)
+            amqp_con = amqp_connect()
+
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=(logging.DEBUG if "DEBUG" in os.environ else logging.INFO)
+    )
+
+    amqp_con = amqp_connect()
+    status_ch = amqp_con.channel()
+    status_ch.exchange_declare(EXCHANGE_NAME, "fanout", durable=True, auto_delete=False)
+    queue_name = "complete-listener-%s" % socket.getfqdn()
+    status_ch.queue_declare(queue_name, durable=True, auto_delete=False)
+    status_ch.queue_bind(queue_name, EXCHANGE_NAME, queue_name)
+
+    logging.info("Listening to requests on %s" % queue_name)
+    status_ch.basic_consume("", callback=process_message)
+    while status_ch.callbacks:
+        amqp_con.drain_events()

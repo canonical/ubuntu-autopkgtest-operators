@@ -1,0 +1,158 @@
+#!/usr/bin/python3
+# pylint: disable=wrong-import-position
+
+import datetime
+import json
+import logging
+import os
+import socket
+import sqlite3
+
+import swiftclient
+from helpers.utils import (
+    SqliteWriterConfig,
+    amqp_connect,
+    get_db_path,
+    get_test_id,
+    init_db,
+    is_db_empty,
+    swift_connect,
+    zstd_decompress,
+)
+
+sqlite3.paramstyle = "named"
+
+LAST_CHECKPOINT = datetime.datetime.now()
+
+config = None
+db_con = None
+
+
+def check_msg(queue_msg):
+    queue_keys = set(queue_msg.keys())
+    if set(SqliteWriterConfig.amqp_entry_fields) == queue_keys:
+        return True
+    return False
+
+
+def checkpoint_db_if_necessary(db_con):
+    global LAST_CHECKPOINT
+    now = datetime.datetime.now()
+    with db_con:
+        if (now - LAST_CHECKPOINT) > datetime.timedelta(
+            minutes=SqliteWriterConfig.checkpoint_interval
+        ):
+            c = db_con.cursor()
+            c.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            LAST_CHECKPOINT = now
+
+
+def process_message(msg, db_con):
+    body = msg.body
+    if isinstance(body, bytes):
+        body = body.decode("UTF-8", errors="replace")
+    info = json.loads(body)
+    logging.info("Message is: \n%s" % json.dumps(info))
+    if not check_msg(info):
+        logging.error(
+            "Message has incorrect keys! Ignoring\n%s" % json.dumps(info, indent=2)
+        )
+        return
+    # these aren't currently in the messages!
+    # This block transforms the amqp message to a dictionary suitable
+    # to be entered into the db
+    info["test_id"] = get_test_id(
+        db_con, info["release"], info["arch"], info["package"]
+    )
+    del info["release"]
+    del info["arch"]
+    del info["package"]
+    with db_con:
+        c = db_con.cursor()
+        c.execute(
+            (
+                "INSERT OR REPLACE INTO result(test_id, run_id, version, triggers, duration, "
+                "exitcode, requester, env, uuid) VALUES (:test_id, :run_id, "
+                ":version, :triggers, :duration, :exitcode, :requester, :env, :uuid)"
+            ),
+            info,
+        )
+    logging.info("Inserted the following entry into the db:\n%s" % json.dumps(info))
+
+
+def msg_callback(msg, db_con):
+    process_message(msg, db_con)
+    msg.channel.basic_ack(msg.delivery_tag)
+    checkpoint_db_if_necessary(db_con)
+
+
+def restore_db_from_backup(db_con: sqlite3.Connection):
+    backups_container = "db-backups"
+    logging.info("Connecting to swift")
+    try:
+        swift_conn = swift_connect()
+        _, objects = swift_conn.get_container(container=backups_container)
+    except swiftclient.ClientException as e:
+        logging.warning(
+            (
+                f"Initialising swift connection failed with {e} - "
+                "continuing without restoring db from backup"
+            )
+        )
+        return
+    logging.info(
+        f"Connected to swift! Getting backups from container: {backups_container}"
+    )
+    db_con.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+
+    latest = objects[-1]
+    _, compressed_db_dump = swift_conn.get_object(
+        container=backups_container, obj=latest["name"]
+    )
+    db_dump = zstd_decompress(compressed_db_dump)
+    logging.info(
+        (
+            "Restoring db from swift - "
+            f"container: {backups_container} - object: {latest['name']}"
+        )
+    )
+    for line in db_dump.splitlines():
+        try:
+            db_con.execute(line.decode("utf-8"))
+        except sqlite3.OperationalError as e:
+            logging.warning(
+                f"Running sql command: `{line.decode('utf-8')}` failed with {e}"
+            )
+    logging.info("db restored from backup!")
+
+
+def main():
+    logging.basicConfig(
+        level=(logging.DEBUG if "DEBUG" in os.environ else logging.INFO)
+    )
+    db_con = init_db(get_db_path())
+    if is_db_empty(db_con):
+        logging.info("DB is empty, indicating this unit has been recently deployed.")
+        logging.info("Restoring database from a swift backup")
+        restore_db_from_backup(db_con)
+    amqp_con = amqp_connect()
+    status_ch = amqp_con.channel()
+    status_ch.exchange_declare(
+        SqliteWriterConfig.writer_exchange_name,
+        "fanout",
+        durable=True,
+        auto_delete=False,
+    )
+    queue_name = "sqlite-writer-listener-%s" % socket.getfqdn()
+    status_ch.queue_declare(queue_name, durable=True, auto_delete=False)
+    status_ch.queue_bind(
+        queue_name, SqliteWriterConfig.writer_exchange_name, queue_name
+    )
+    logging.info("Listening to requests on %s" % queue_name)
+    status_ch.basic_consume("", callback=lambda msg: msg_callback(msg, db_con))
+    while status_ch.callbacks:
+        amqp_con.drain_events()
+
+
+if __name__ == "__main__":
+    main()

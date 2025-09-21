@@ -1,0 +1,165 @@
+.queued:before {
+  content: ".";
+  display: inline-block;
+  margin: 5px;
+  font-size: 1.3em;
+  vertical-align: top;
+  line-height: 14px;
+  width: 14px;
+  height: 14px;
+  animation: bounce 2s linear infinite;
+}
+
+@keyframes bounce {
+  0% { transform: translate(0px); }
+  50% { transform: translate(0px, -14px); }
+  100% { transform: translate(0px); }
+}
+
+.running:before {
+  content: "⚙";
+  display: inline-block;
+  margin: 5px;
+  font-size: 1.3em;
+  vertical-align: top;
+  line-height: 14px;
+  width: 14px;
+  height: 14px;
+  animation: spin 1.2s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.pass:before {
+  content: "✔ ";
+  color: #8ae234;
+  font-size: 18px;
+  vertical-align: top;
+}
+
+.neutral:before {
+  content: "😐";
+  color: #cab388;
+  font-size: 18px;
+  vertical-align: top;
+}
+
+.fail:before,
+.fail-with-skipped-tests:before,
+.denylisted:before {
+  content: "✖ ";
+  color: #ef2929;
+  font-size: 18px;
+  vertical-align: top;
+}
+
+.tmpfail:before {
+  content: "⚠ ";
+  color: #ffd862;
+  font-size: 18px;
+  vertical-align: top;
+}
+
+.error:before {
+  content: "😅 ";
+  color: brown;
+  font-size: 18px;
+  vertical-align: top;
+}
+
+.panel .panel-heading {
+  font-size: 130%;
+}
+
+/* external links to launchpad, excuses, navigation links for the webpage ... */
+
+.links {
+  list-style-type: none;
+  padding: 0em;
+  margin: 0em;
+}
+
+.links li {
+  display: inline;
+}
+
+.page-links {
+  text-align: center;
+}
+
+.page-links a {
+  display: inline-block;
+  margin: 0.3em 1em;
+}
+
+.navigation-links a {
+  display: inline-block;
+  margin: 0.3em 0.4em;
+}
+
+.external-links a {
+  padding: 0.5em;
+}
+
+.external-links li a {
+  padding: 0.5em;
+}
+
+.icon {
+  height: 1em;
+  margin: 0.5em;
+}
+
+h1 .icon {
+  height: 0.9em;
+}
+
+/* package browsing by prefix */
+
+.list-inline h5 a {
+  color: #E90051;
+  background-color: #eeeeec;
+  padding: 1px 10px;
+  border-radius: 5px;
+}
+
+.list-inline h5 a:hover {
+  text-decoration: none;
+  background-color: #E90051;
+  color: white;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+th.sticky-table-headers {
+    /* Background color */
+    background-color: #9ca3af;
+
+    /* Stick to the top */
+    top: 0;
+    position: sticky;
+
+    /* Displayed on top of other rows when scrolling */
+    z-index: 9999;
+}
+
+.unfinished {
+  color: grey;
+}
+
+.code {
+  font-family: monospace;
+  color: #eeeeee;
+  background: #111111;
+  border-color: #666666;
+}
+
+/* test result browsing by uuid */
+.test-run th {
+  font-weight: bold;
+}

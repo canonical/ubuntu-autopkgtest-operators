@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ubuntu Autopkgtest Results {{title_suffix}}</title>
+    <!-- <link rel="icon" type="image/png" href="/debian.png" /> -->
+    <link rel="stylesheet"
+          type="text/css"
+          href="{{static_url}}bootstrap/css/bootstrap.css" />
+    <link rel="stylesheet"
+          type="text/css"
+          href="{{static_url}}bootstrap/css/bootstrap-theme.css" />
+    <link rel="stylesheet" type="text/css" href="{{static_url}}style.css" />
+  </head>
+  <body>
+    <div id="wrap">
+
+      <!-- Fixed navbar -->
+      <div class="navbar navbar-default">
+        <div class="container">
+          <div class="navbar-header">
+            <button type="button"
+                    class="navbar-toggle"
+                    data-toggle="collapse"
+                    data-target=".navbar-collapse">
+              <span class="icon-bar"></span>
+              <span class="icon-bar"></span>
+              <span class="icon-bar"></span>
+            </button>
+            <a class="navbar-brand" href="{{base_url}}">Ubuntu Autopkgtest</a>
+          </div>
+          <div class="collapse navbar-collapse">
+            <ul class="nav navbar-nav">
+              <li>
+                <a href="{{base_url}}">Home</a>
+              </li>
+              <li>
+                <a href="{{base_url}}testlist">Test list</a>
+              </li>
+              <li>
+                <a href="{{base_url}}running">Running</a>
+              </li>
+              <li>
+                <a href="{{base_url}}recent">Recent</a>
+              </li>
+              <li>
+                <a href="{{base_url}}statistics">Statistics</a>
+              </li>
+              <li>
+                <a href="https://wiki.ubuntu.com/ProposedMigration#autopkgtests">Documentation</a>
+              </li>
+              <li>
+                <a href="https://discourse.ubuntu.com/t/autopkgtest-service/34490">Service Status</a>
+              </li>
+              <li>
+                <a href="https://autopkgtest-cloud.readthedocs.io/">Docs for admins</a>
+              </li>
+              <li>
+                <a href="{{base_url}}admin">Admin</a>
+              </li>
+              {% if not session.get("nickname") %}
+                <li>
+                  <a href="{{base_url}}request.cgi?/login">Login</a>
+                </li>
+              {% else %}
+                <li>
+                  <a href="{{ base_url }}user/{{ session.get("nickname") }}">{{ session.get("nickname") }}</a>
+                </li>
+              {% endif %}
+            </ul>
+          </div>
+          <!--/.nav-collapse -->
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      {% block content %}
+      {% endblock content %}
+    </div>
+
+    <script type="text/javascript" src="{{static_url}}jquery/jquery.min.js"></script>
+    <script type="text/javascript"
+            src="{{static_url}}bootstrap/js/bootstrap.min.js"></script>
+  </body>
+</html>

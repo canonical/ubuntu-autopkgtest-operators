@@ -1,0 +1,30 @@
+{% extends "browse-layout.html" %}
+{% import "macros.html" as macros %}
+
+{% macro display_ppa_releases(releases) -%}
+  [
+  {%- for release in releases %}
+    {{ release }}
+  {% endfor -%}
+  ]
+{%- endmacro %}
+
+{% block content %}
+  <h2>PPA containers for {{ user }}</h2>
+
+  {% if ppas %}
+    <ul>
+      {% for name, releases in ppas.items() %}
+        <li>
+          <a href="{{ base_url }}user/{{ user }}/ppa/{{ name }}">{{ name }}</a>
+          {{ display_ppa_releases(releases) }}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No PPAs automatically identified for {{ user }}.</p>
+    <p>
+      You may manually navigate to a PPA's results by going to {{ base_url }}results/autopkgtest-releasename-username-ppaname.
+    </p>
+  {% endif %}
+{% endblock content %}

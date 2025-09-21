@@ -1,0 +1,84 @@
+#!/usr/bin/python3
+"""
+Logs exit codes from HTTP test requests to InfluxDB for viewing in Grafana
+"""
+
+import argparse
+import datetime
+import re
+
+from helpers.utils import get_influx_creds
+from influxdb import InfluxDBClient
+
+PROCESSED_TIME_RANGE = 5  # minutes
+
+
+def get_influx_client():
+    influx_creds = get_influx_creds()
+    return InfluxDBClient(
+        influx_creds["influxdb_hostname"],
+        influx_creds["influxdb_port"],
+        influx_creds["influxdb_username"],
+        influx_creds["influxdb_password"],
+        influx_creds["influxdb_database"],
+    )
+
+
+def get_log_lines(last_x_minutes):
+    current_time = datetime.datetime.now()
+    apache_logfile = "/var/log/apache2/access.log"
+    apache_logs = []
+    with open(apache_logfile, "r") as f:
+        apache_logs = f.read().splitlines()
+    apache_logs.reverse()
+    return_lines = []
+    datetime_regex = re.compile(r"\[\d\d\/[a-zA-Z]*\/\d\d\d\d:\d\d:\d\d:\d\d \+0000\]")
+    for logline in apache_logs:
+        datetime_matches = datetime_regex.findall(logline)
+        if len(datetime_matches) != 1:
+            continue
+        time_string = datetime_matches[0].replace(" +0000", "")
+        logline_time = datetime.datetime.strptime(time_string, "[%d/%b/%Y:%H:%M:%S]")
+        if current_time - logline_time < datetime.timedelta(minutes=last_x_minutes):
+            return_lines.append(logline)
+        else:
+            return return_lines
+
+
+def parse_http_codes(loglines):
+    data = {}
+    for line in loglines:
+        code = line.split(" ")[8]
+        if code not in data:
+            data[code] = {
+                "measurement": "apache2_requests",
+                "fields": {"count": 0},
+                "tags": {
+                    "code": code,
+                },
+            }
+        data[code]["fields"]["count"] += 1
+    return data
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-d",
+        "--dry-run",
+        action="store_true",
+        help="Doesn't copy results to new container.",
+    )
+    args = parser.parse_args()
+    influx_client = get_influx_client()
+    loglines = get_log_lines(PROCESSED_TIME_RANGE)
+    data = parse_http_codes(loglines)
+    for _, i in data.items():
+        if args.dry_run:
+            print("Dry run enabled, would submit:\n%s" % str(i))
+        else:
+            influx_client.write_points([i])
+
+
+if __name__ == "__main__":
+    main()

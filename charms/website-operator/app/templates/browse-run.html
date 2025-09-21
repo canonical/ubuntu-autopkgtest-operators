@@ -1,0 +1,80 @@
+{% extends "browse-layout.html" %}
+{% import "macros.html" as macros %}
+
+{% block content %}
+  <h2>
+    <a href="{{base_url}}packages/{{package}}">{{package}}</a>
+    <small>
+      <a href="{{base_url}}packages/{{package}}/{{release}}/{{arch}}">[{{release}}/{{arch}}]</a>
+    </small>
+  </h2>
+  <ul class="external-links links">
+    <li>{{ macros.launchpad_link(package, release) }}</li>
+    <li>{{ macros.excuses_link(package, release) }}</li>
+  </ul>
+
+  <table class="table test-run">
+    <tr>
+      <th>Version</th>
+      <td>{{ test_results["version"] }}</td>
+    </tr>
+
+    <tr>
+      <th>Triggers</th>
+      <td>{{ test_results["triggers"] }}</td>
+    </tr>
+
+    <tr>
+      <th>Env</th>
+      <td>{{ test_results["env"] }}</td>
+    </tr>
+
+    <tr>
+      <th>Date</th>
+      <td>{{ test_results["run_date"] }}</td>
+    </tr>
+
+    <tr>
+      <th>Duration</th>
+      <td>{{ test_results["duration"] }}</td>
+    </tr>
+
+    <tr>
+      <th>Requester</th>
+      <td>
+        {% if test_results["requester"] != "-" %}
+          <a href="https://launchpad.net/~{{ test_results['requester'] }}">{{ test_results["requester"] }}</a>
+        {% else %}
+          {{ test_results["requester"] }}
+        {% endif %}
+      </td>
+    </tr>
+
+    <tr>
+      <th>Result</th>
+      <td class="nowrap {{ test_results['result'] }}"
+          title="{{ test_results['result'] }}">{{ test_results["result"] }}</td>
+    </tr>
+
+    <tr>
+      <th>UUID</th>
+      <td>{{ test_results["uuid"] }}</td>
+    </tr>
+
+    <tr>
+      <th></th>
+      <td>
+        {% if test_results["result"] not in ["running", "queued"] %}
+          <a href="{{ test_results['url'] }}/log.gz">log</a> &emsp;
+          <a href="{{ test_results['url'] }}/artifacts.tar.gz">artifacts</a> &emsp;
+
+        {% endif %}
+
+        {% if test_results["show_retry"] %}
+          {{ macros.retry_button(release, arch, package, test_results["triggers"], test_results["all_proposed"]) }}
+        {% endif %}
+      </td>
+    </tr>
+  </table>
+
+{% endblock content %}

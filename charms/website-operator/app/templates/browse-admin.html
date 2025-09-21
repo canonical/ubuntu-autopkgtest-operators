@@ -1,0 +1,30 @@
+{% extends "browse-layout.html" %}
+{% import "macros.html" as macros %}
+
+{% block content %}
+  <h1 class="page-header">Admin</h1>
+  <p>Click on the package name to jump to the tests of the package for all arches/releases.</p>
+  <p>
+    This page is simply a bunch of heuristics filtering all running jobs to try to get the problematic ones. Feel free to come help improve the heuristics <a href="https://code.launchpad.net/~ubuntu-release/autopkgtest-cloud/+git/autopkgtest-cloud/+ref/master">here.</a>
+  </p>
+
+  <!-- Running tests -->
+  <h2>Jobs taking abnormally long time</h2>
+  <p>More than {{ too_long_factor }} times the average time.</p>
+  {% for p, info in too_long_jobs.items()|sort %}
+    <h2 id="pkg-{{ p }}">
+      <a href="/packages/{{ p }}">{{ p }}</a>
+    </h2>
+    {{ macros.display_running_job(p, info) }}
+  {% endfor %}
+
+  <h2>Jobs likely stuck</h2>
+  <p>More than {{ stuck_factor }} minutes of delta between recorded duration and last log line.</p>
+  {% for p, info in stuck_jobs.items()|sort %}
+    <h2 id="pkg-{{ p }}">
+      <a href="/packages/{{ p }}">{{ p }}</a>
+    </h2>
+    {{ macros.display_running_job(p, info) }}
+  {% endfor %}
+
+{% endblock content %}

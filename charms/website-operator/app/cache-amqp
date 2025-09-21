@@ -1,0 +1,274 @@
+#!/usr/bin/python3
+
+import argparse
+import json
+import logging
+import os
+import sqlite3
+import sys
+import tempfile
+import time
+import urllib.parse
+
+import amqp
+from amqp.exceptions import AMQPError
+from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf, is_db_empty
+
+AMQP_CONTEXTS = ["ubuntu", "huge", "ppa", "upstream"]
+
+logger = logging.getLogger()
+
+
+class AutopkgtestQueueContents:
+    def __init__(self, amqp_uri, database, refresh_semaphores=False):
+        assert amqp_uri is not None
+        assert database is not None
+
+        self.amqp_uri = amqp_uri
+        self.database = database
+
+        # connect to AMQP
+        parts = urllib.parse.urlsplit(self.amqp_uri, allow_fragments=False)
+        self.amqp_con = amqp_connect()
+        self.amqp_channel = self.amqp_con.channel()
+        logger.info("Connected to AMQP host %s", parts.hostname)
+
+        # we are the leader, init the semaphores if necessary
+        for context in AMQP_CONTEXTS:
+            for release, arches in self.release_arches.items():
+                for arch in arches:
+                    queue_name = f"semaphore-{context}-{release}-{arch}"
+                    if refresh_semaphores:
+                        self.amqp_channel.queue_delete(queue_name)
+                        logger.info(
+                            f"Semaphore queue '{queue_name}' deleted for recreation"
+                        )
+                    try:
+                        self.amqp_channel.queue_declare(
+                            queue_name, durable=True, passive=True
+                        )
+                        logger.info(f"Semaphore queue '{queue_name}' exists")
+                    except AMQPError as e:
+                        code = e.code
+                        if code != 404:
+                            raise
+                        if os.path.exists("/run/autopkgtest-web-is-leader"):
+                            # 404s invalidate the channel for some reason
+                            self.amqp_channel = self.amqp_con.channel()
+                            # queue does not exist, create it
+                            logger.info(
+                                f"Semaphore queue {queue_name} does not exist, initialising..."
+                            )
+                            self.amqp_channel.queue_declare(queue_name, durable=True)
+                            # add a single message to the queue so only one run
+                            # of cache-amqp can read the actual queue contents
+                            self.amqp_channel.basic_publish(
+                                amqp.Message(f"{queue_name}", delivery_mode=2),
+                                routing_key=queue_name,
+                            )
+                        else:  # not the leader
+                            # pylint: disable=line-too-long
+                            logging.error(
+                                "We are not the leader, and there is no semaphore queue yet, we can't do anything - exiting."
+                            )
+                            sys.exit(0)
+
+    @property
+    def release_arches(self):
+        """Determine available releases and architectures
+
+        Return release → [arch] dict.
+        """
+
+        db_con = sqlite3.connect("file:%s?mode=ro" % self.database, uri=True)
+        if is_db_empty(db_con=db_con):
+            logging.warning(
+                "Database is currently empty - waiting for it to be populated, exiting cache-amqp"
+            )
+            sys.exit(0)
+
+        release_arches = {}
+        releases = []
+        for row in db_con.execute("SELECT DISTINCT release from test"):
+            releases.append(row[0])
+        for r in releases:
+            for row in db_con.execute(
+                "SELECT DISTINCT arch from test WHERE release=?", (r,)
+            ):
+                release_arches.setdefault(r, []).append(row[0])
+        return release_arches
+
+    def get_queue_requests(self, queue_name):
+        """Return list of pending requests in AMQP queue"""
+
+        delivery_tags = []
+        requests = []
+
+        # non-acking read of all requests to inspect the queue
+        while True:
+            r = self.amqp_channel.basic_get(queue_name)
+            if r is None:
+                break
+            requests.append(r.body)
+            logging.debug("queue_name: found %s", r.body)
+            delivery_tags.append(r.delivery_tag)
+        # now explicitly reject the requests so that they become available again
+        # for real workers
+        for t in delivery_tags:
+            self.amqp_channel.basic_reject(t, True)
+
+        res = []
+        for r in requests:
+            if isinstance(r, bytes):
+                r = r.decode("UTF-8")
+            try:
+                req = r.split("\n", 1)
+                if len(req) > 1:
+                    params = json.loads(req[1])
+                    if params.get("readable-by", False) or params.get(
+                        "swiftuser", False
+                    ):
+                        r = "private job"
+                else:
+                    logging.warning(
+                        "Found malformed request: %s - Marking it as such." % r
+                    )
+                    r = "malformed request"
+                res.append(r)
+            except (ValueError, IndexError) as e:
+                logging.warning('Received invalid request format "%s" (%s)', r, repr(e))
+        return res
+
+    def get_queue_contents(self):
+        """Get queue contents from AMQP and cache them on disk"""
+
+        release_arches = self.release_arches
+        all_arches = set()
+
+        channel = self.amqp_con.channel()
+        channel.basic_qos(0, 1, False)
+
+        result = {}
+        for context in AMQP_CONTEXTS:
+            for release, arches in release_arches.items():
+                for arch in arches:
+                    semaphore_queue_name = f"semaphore-{context}-{release}-{arch}"
+                    logging.info(
+                        f"Trying to lock semaphore queue {semaphore_queue_name}..."
+                    )
+                    r = None
+                    while r is None:
+                        r = channel.basic_get(semaphore_queue_name)
+                        if r is None:
+                            logging.debug("...can't lock, sleeping...")
+                            time.sleep(1)
+                    logging.info("...locked.")
+                    if context == "ubuntu":
+                        # ubuntu test requests use context-less name (backwards compatibility)
+                        queue_name = "debci-%s-%s" % (release, arch)
+                    else:
+                        queue_name = "debci-%s-%s-%s" % (
+                            context,
+                            release,
+                            arch,
+                        )
+                    try:
+                        requests = self.get_queue_requests(queue_name)
+                    except AMQPError as e:
+                        code = e.code
+                        if code != 404:
+                            raise
+                        requests = []
+                        # 404s invalidate the channel for some reason
+                        self.amqp_channel = self.amqp_con.channel()
+                    queue_size = 0
+                    if requests:
+                        queue_size = len(requests)
+                    logging.info("Queue %s has %d items", queue_name, queue_size)
+                    result.setdefault(context, {}).setdefault(release, {})[arch] = {
+                        "size": queue_size,
+                        "requests": requests,
+                    }
+                    all_arches.add(arch)
+                    logging.debug(f"Releasing semaphore lock {semaphore_queue_name}")
+                    channel.basic_reject(r.delivery_tag, True)
+
+        queued = {
+            "releases": list(release_arches.keys()),
+            "arches": sorted(all_arches),
+            "queues": result,
+        }
+
+        return queued
+
+
+if __name__ == "__main__":
+    cp = get_autopkgtest_cloud_conf()
+
+    state_directory = cp["web"]["amqp_queue_cache"]
+
+    parser = argparse.ArgumentParser(description="Fetch AMQP queues into a file")
+    parser.add_argument(
+        "--debug",
+        dest="debug",
+        action="count",
+        default=0,
+        help="Print debugging (give twice for super verbose output)",
+    )
+    parser.add_argument(
+        "--refresh-semaphores",
+        dest="refresh_semaphores",
+        action="store_true",
+        help="Force the recreation of the semaphore queues if something broke them "
+        "(make sure to stop every running cache-amqp script before use)",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        dest="output",
+        type=str,
+        default=state_directory,
+    )
+
+    args = parser.parse_args()
+
+    formatter = logging.Formatter("%(asctime)s: %(message)s", "%Y-%m-%d %H:%M:%S")
+    ch = logging.StreamHandler()
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
+    if args.debug > 1:
+        logger.setLevel(logging.DEBUG)
+    elif args.debug > 0:
+        logger.setLevel(logging.INFO)
+
+    try:
+        amqp_uri = cp["amqp"]["uri"]
+    except KeyError:
+        print("No AMQP URI found", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        database = cp["web"]["database_ro"]
+    except KeyError:
+        print("No database found", file=sys.stderr)
+        sys.exit(1)
+
+    # Get queue details from rabbitmq directly
+    aq = AutopkgtestQueueContents(amqp_uri, database, args.refresh_semaphores)
+    queue_contents = aq.get_queue_contents()
+
+    with tempfile.NamedTemporaryFile(
+        mode="w", dir=os.path.dirname(args.output), delete=False
+    ) as tf:
+        try:
+            json.dump(queue_contents, tf, indent=2)
+            umask = os.umask(0)
+            os.umask(umask)
+            os.chmod(tf.name, 0o644 & ~umask)
+            os.rename(tf.name, args.output)
+        finally:
+            try:
+                os.unlink(tf.name)
+            except FileNotFoundError:
+                pass
