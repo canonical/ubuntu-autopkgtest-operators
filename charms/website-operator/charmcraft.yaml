@@ -1,0 +1,14 @@
+type: charm
+name: autopkgtest-website
+title: Charm Template
+summary: Website for the autopkgtest service
+description: Website for the autopkgtest service
+
+base: ubuntu@24.04
+platforms:
+  amd64:
+
+parts:
+  charm:
+    plugin: charm
+    source: .
