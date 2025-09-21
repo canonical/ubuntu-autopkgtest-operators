@@ -8,15 +8,19 @@ The intention is that this module could be used outside the context of a charm.
 
 import logging
 
+import charms.operator_libs_linux.v0.apt as apt
+
 logger = logging.getLogger(__name__)
 
-
-# Functions for managing the workload process on the local machine:
+# Packages to install
+PACKAGES = ["apache2", "codroipo"]
 
 
 def install() -> None:
-    """Install the workload (by installing a snap, for example)."""
-    # You'll need to implement this function.
+    """Install website"""
+
+    apt.update()
+    apt.add_package(PACKAGES)
 
 
 def start() -> None:
