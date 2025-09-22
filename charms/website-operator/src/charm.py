@@ -10,7 +10,11 @@ import logging
 import autopkgtest_website
 import ops
 
+from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer as IngressRequirer
+
 logger = logging.getLogger(__name__)
+
+PORT = 8080
 
 
 class AutopkgtestWebsiteCharm(ops.CharmBase):
@@ -18,6 +22,10 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
 
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
+        self.ingress = IngressRequirer(
+            self, port=PORT, strip_prefix=True, relation_name="ingress"
+        )
+
         framework.observe(self.on.install, self._on_install)
         framework.observe(self.on.start, self._on_start)
 
