@@ -31,21 +31,19 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
 
     def _on_install(self, event: ops.InstallEvent):
         """Install the workload on the machine."""
+        self.unit.status = ops.MaintenanceStatus("installing website")
         autopkgtest_website.install()
+
+    def _on_config_changed(self, event: ops.ConfigChangedEvent):
+        ops.MaintenanceStatus("configuring website")
+        autopkgtest_website.configure()
 
     def _on_start(self, event: ops.StartEvent):
         """Handle start event."""
         self.unit.status = ops.MaintenanceStatus("starting workload")
         autopkgtest_website.start()
-        version = autopkgtest_website.get_version()
-        if version is not None:
-            self.unit.set_workload_version(version)
+        self.unit.open_port("tcp", 80)
         self.unit.status = ops.ActiveStatus()
-
-    def _on_config_changed(self, event: ops.ConfigChangedEvent):
-        ops.MaintenanceStatus()
-        # todo
-        ops.ActiveStatus()
 
 
 if __name__ == "__main__":  # pragma: nocover

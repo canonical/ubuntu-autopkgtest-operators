@@ -32,3 +32,7 @@ requires:
   ingress:
     interface: ingress
     limit: 1
+
+provides:
+  website:
+    interface: http

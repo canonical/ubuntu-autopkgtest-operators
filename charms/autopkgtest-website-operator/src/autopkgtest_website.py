@@ -7,10 +7,14 @@ The intention is that this module could be used outside the context of a charm.
 """
 
 import logging
+from pathlib import Path
 
 import charms.operator_libs_linux.v0.apt as apt
 
 logger = logging.getLogger(__name__)
+
+# Config files create by the charm
+SITES_AVAILABLE_PATH = Path("/etc/apache2/sites-available/")
 
 # Packages to install
 PACKAGES = [
@@ -29,16 +33,10 @@ def install() -> None:
     apt.add_package(PACKAGES)
 
 
+def configure() -> None:
+    pass
+
+
 def start() -> None:
-    """Start the workload (by running a commamd, for example)."""
-    # You'll need to implement this function.
-    # Ideally, this function should only return once the workload is ready to use.
-
-
-# Functions for interacting with the workload, for example over HTTP:
-
-
-def get_version() -> str | None:
-    """Get the running version of the workload."""
-    # You'll need to implement this function (or remove it if not needed).
-    return None
+    """Start the workload"""
+    pass
