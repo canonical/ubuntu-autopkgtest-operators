@@ -1,5 +1,0 @@
-[project]
-dependencies = [
-    "ops~=3.2",
-    "pydantic~=2.11",
-]
