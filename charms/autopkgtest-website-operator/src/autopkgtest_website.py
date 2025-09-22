@@ -13,7 +13,11 @@ import charms.operator_libs_linux.v0.apt as apt
 logger = logging.getLogger(__name__)
 
 # Packages to install
-PACKAGES = ["apache2"]
+PACKAGES = [
+    "apache2",
+    "libjs-bootstrap",
+    "libjs-jquery",
+]
 
 
 def install() -> None:
