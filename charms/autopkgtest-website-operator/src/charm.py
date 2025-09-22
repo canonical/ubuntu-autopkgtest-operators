@@ -43,7 +43,9 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         self.unit.status = ops.ActiveStatus()
 
     def _on_config_changed(self, event: ops.ConfigChangedEvent):
-        pass
+        ops.MaintenanceStatus()
+        # todo
+        ops.ActiveStatus()
 
 
 if __name__ == "__main__":  # pragma: nocover
