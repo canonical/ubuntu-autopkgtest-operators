@@ -19,7 +19,9 @@ PACKAGES = ["apache2"]
 def install() -> None:
     """Install website"""
 
+    logger.info("Updating package index")
     apt.update()
+    logger.info("Installing packages")
     apt.add_package(PACKAGES)
 
 
