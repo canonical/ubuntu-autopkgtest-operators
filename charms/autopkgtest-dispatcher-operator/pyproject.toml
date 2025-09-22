@@ -1,0 +1,4 @@
+[project]
+dependencies = [
+    "ops~=3.2",
+]
