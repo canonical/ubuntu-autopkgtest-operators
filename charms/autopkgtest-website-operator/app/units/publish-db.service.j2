@@ -1,0 +1,8 @@
+[Unit]
+Description=publish autopkgtest.db
+
+[Service]
+User=ubuntu
+Type=oneshot
+ExecStart={{ webcontrol }}/publish-db
+TimeoutSec=300

@@ -17,6 +17,11 @@ parts:
   charm:
     plugin: charm
     source: .
+  website:
+    plugin: dump
+    source: app
+    organize:
+      www: app/www
 
 charm-libs:
   - lib: operator_libs_linux.apt
@@ -25,6 +30,13 @@ charm-libs:
     version: "1"
   - lib: traefik_k8s.ingress
     version: "2"
+
+config:
+  options:
+    hostname:
+      type: string
+      description: Website hostname, e.g. autopkgtest.ubuntu.com
+      default: localhost
 
 requires:
   amqp:

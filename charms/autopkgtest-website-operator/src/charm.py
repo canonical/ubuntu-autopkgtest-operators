@@ -6,15 +6,13 @@
 
 import logging
 
-# A standalone module for workload-specific logic (no charming concerns):
 import autopkgtest_website
+import config_types
 import ops
 
 from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer as IngressRequirer
 
 logger = logging.getLogger(__name__)
-
-PORT = 8080
 
 
 class AutopkgtestWebsiteCharm(ops.CharmBase):
@@ -22,12 +20,18 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
 
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
+
+        self.typed_config = self.load_config(
+            config_types.WebsiteConfig, errors="blocked"
+        )
+
         self.ingress = IngressRequirer(
-            self, port=PORT, strip_prefix=True, relation_name="ingress"
+            self, port=80, strip_prefix=True, relation_name="ingress"
         )
 
         framework.observe(self.on.install, self._on_install)
         framework.observe(self.on.start, self._on_start)
+        framework.observe(self.on.config_changed, self._on_config_changed)
 
     def _on_install(self, event: ops.InstallEvent):
         """Install the workload on the machine."""
@@ -36,7 +40,9 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
 
     def _on_config_changed(self, event: ops.ConfigChangedEvent):
         ops.MaintenanceStatus("configuring website")
-        autopkgtest_website.configure()
+        autopkgtest_website.configure(
+            hostname=self.typed_config.hostname,
+        )
 
     def _on_start(self, event: ops.StartEvent):
         """Handle start event."""

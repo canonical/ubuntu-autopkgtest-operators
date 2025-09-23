@@ -92,10 +92,8 @@ def read_config_file(filepath: typing.Union[str, pathlib.Path], cfg_key: str = N
 
 def get_autopkgtest_cloud_conf():
     try:
-        return read_config_file(
-            pathlib.Path("~ubuntu/autopkgtest-cloud.conf").expanduser()
-        )
-    except (FileNotFoundError, RuntimeError):
+        return read_config_file(pathlib.Path("/etc/autopkgtest-cloud.conf"))
+    except (FileNotFoundError, RuntimeError, PermissionError):
         try:
             return read_config_file(
                 pathlib.Path("~/autopkgtest-cloud.conf").expanduser()
