@@ -359,10 +359,7 @@ def all_exception_handler(error):
     return (
         HTML.format(
             (
-                "<p>A server error has occurred, please contact a member of "
-                + "the Ubuntu Release Management team. You can contact them via the "
-                + "ubuntu-quality mailing list, or via Matrix in the #devel:ubuntu.com room "
-                + "(highlight 'release-help' for more reactivity). Traceback:</p> <pre>%s</pre>"
+                "<p>A server error has occurred. Traceback:</p> <pre>%s</pre>"
                 % "\n".join(
                     traceback.format_exception(exc_type, exc_value, exc_traceback)
                 )

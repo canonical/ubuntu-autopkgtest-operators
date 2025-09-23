@@ -1,0 +1,8 @@
+[Unit]
+Description=Cache queue entries from AMQP (timer)
+
+[Timer]
+OnCalendar=minutely
+
+[Install]
+WantedBy=autopkgtest-web.target

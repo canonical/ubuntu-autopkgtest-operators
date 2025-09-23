@@ -82,6 +82,10 @@ def install() -> None:
 def configure(
     *,
     hostname: str,
+    amqp_hostname: str,
+    amqp_vhost: str,
+    amqp_username: str,
+    amqp_password: str,
 ) -> None:
     """Configuring service"""
     logger.info("Stopping apache2")
@@ -117,6 +121,9 @@ def configure(
     j2context = {
         "database": DATA_DIR / "autopkgtest.db",
         "database_ro": PUBLIC_DATA_DIR / "autopkgtest.db",
+        "rabbithost": amqp_hostname,
+        "rabbituser": amqp_username,
+        "rabbitpassword": amqp_password,
     }
     conf_file = Path("/etc/autopkgtest-cloud.conf")
     with open(conf_file, "w") as f:
@@ -124,8 +131,12 @@ def configure(
 
     logger.info("Installing systemd units")
     system_units_dir = Path("/etc/systemd/system/")
-    units_to_install = {"autopkgtest-web.target", "publish-db.timer"}
-    units_to_enable = {"autopkgtest-web.target", "publish-db.timer"}
+    units_to_install = {
+        "autopkgtest-web.target",
+        "publish-db.timer",
+        "cache-amqp-timer",
+    }
+    units_to_enable = {"autopkgtest-web.target", "publish-db.timer", "cache-amqp.timer"}
     for unit in units_to_install:
         shutil.copy(CHARM_APP_DATA / "units" / unit, system_units_dir)
 

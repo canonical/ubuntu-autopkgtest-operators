@@ -1,0 +1,9 @@
+[Unit]
+Description=Cache queue entries from AMQP
+
+[Service]
+Type=oneshot
+TimeoutStartSec=600
+User=nobody
+StateDirectory=cache-amqp
+ExecStart={{ webcontrol }}/cache-amqp
