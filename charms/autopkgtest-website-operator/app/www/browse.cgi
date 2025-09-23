@@ -16,17 +16,10 @@ from pathlib import Path
 from wsgiref.handlers import CGIHandler
 
 import flask
-from helpers.admin import (
-    DELTA_BETWEEN_LAST_LOG_AND_DURATION,
-    DURATION_FACTOR_BEFORE_CONSIDERED_ABNORMAL,
-    select_abnormally_long_jobs,
-    select_duration_mismatch,
-)
 from helpers.exceptions import NotFound, RunningJSONNotFound
 from helpers.utils import (
     get_all_releases,
     get_autopkgtest_cloud_conf,
-    get_indexed_packages,
     get_ppa_containers_cache,
     get_release_arches,
     get_repo_head_commit_hash,
@@ -69,7 +62,6 @@ def init_config():
         CONFIG["swift_container_url"] = cp["web"]["ExternalURL"] + "/autopkgtest-%s"
     except KeyError:
         CONFIG["swift_container_url"] = cp["web"]["SwiftURL"] + "/autopkgtest-%s"
-    CONFIG["indexed_packages"] = Path(cp["web"]["indexed_packages"])
     CONFIG["amqp_queue_cache"] = Path(cp["web"]["amqp_queue_cache"])
     CONFIG["running_cache"] = Path(cp["web"]["running_cache"])
     CONFIG["database"] = Path(cp["web"]["database_ro"])
@@ -376,7 +368,7 @@ def index_root():
         "FROM result, test "
         "WHERE test.id == result.test_id "
         "ORDER BY run_id DESC "
-        "LIMIT 15"
+        "LIMIT 10"
     ):
         hc = human_exitcode(row[0])
         res = hc if "code" not in hc else "fail"
@@ -547,64 +539,6 @@ def user_overview(user):
         offset=offset,
         user=user,
     )
-
-
-@app.route("/recent")
-@app.route("/api/experimental/recent.json")
-def recent():
-    """
-    This endpoint provides recent results where recent means that the test is
-    among the last limit results (default = 100 and 0 < limit <= 10000).
-    The page includes details such as version, triggers, requester, result,
-    log, ...
-    """
-
-    args = flask.request.args
-    try:
-        limit = int(args.get("limit", 100))
-        assert limit > 0
-        assert limit <= 10000
-    except (AssertionError, ValueError):
-        limit = 100
-
-    try:
-        offset = int(args.get("offset", 0))
-        assert offset > 0
-        assert isinstance(offset, int)
-    except (AssertionError, ValueError):
-        offset = 0
-
-    arch = args.get("arch")
-    release = args.get("release")
-    user = args.get("user")
-
-    recent_test_results = get_results(
-        limit, offset, arch=arch, release=release, user=user
-    )
-
-    if flask.request.path.endswith(".json"):
-        return flask.jsonify(recent_test_results)
-
-    else:
-        all_arches = set()
-        all_releases = []
-        for r, arches in get_release_arches(db_con).items():
-            all_releases.append(r)
-            for a in arches:
-                all_arches.add(a)
-
-        return render(
-            "browse-recent.html",
-            running_tests=[],
-            queued_tests=[],
-            recent_test_results=recent_test_results,
-            limit=limit,
-            offset=offset,
-            releases=all_releases,
-            all_arches=all_arches,
-            arch=arch or "",
-            release=release or "",
-        )
 
 
 @app.route("/user/<user>/ppa")
@@ -978,22 +912,6 @@ def running():
     )
 
 
-@app.route("/admin")
-def admin():
-    running_info = get_running_jobs()
-    too_long_jobs = select_abnormally_long_jobs(
-        running_info, get_test_id=get_test_id, db_con=db_con
-    )
-    stuck_jobs = select_duration_mismatch(running_info)
-    return render(
-        "browse-admin.html",
-        too_long_factor=DURATION_FACTOR_BEFORE_CONSIDERED_ABNORMAL,
-        too_long_jobs=too_long_jobs,
-        stuck_factor=DELTA_BETWEEN_LAST_LOG_AND_DURATION,
-        stuck_jobs=stuck_jobs,
-    )
-
-
 @app.route("/queue_size.json")
 def queuesize_json():
     queue_info = get_queues_info()[2]
@@ -1023,17 +941,6 @@ def queues_json():
 @app.route("/queued.json")
 def return_queued_exactly():
     return flask.send_file(CONFIG["amqp_queue_cache"], mimetype="application/json")
-
-
-@app.route("/testlist")
-def testlist():
-    indexed_pkgs = {}
-    try:
-        with open(CONFIG["indexed_packages"], "r") as f:
-            indexed_pkgs = json.load(f)
-    except FileNotFoundError:
-        indexed_pkgs = get_indexed_packages()
-    return render("browse-testlist.html", indexed_pkgs=indexed_pkgs)
 
 
 @app.route("/statistics")

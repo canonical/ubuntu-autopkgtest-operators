@@ -139,8 +139,7 @@ def configure(
         f.write(j2template.render(j2context))
 
     systemd.daemon_reload()
-    for unit in units_to_enable:
-        systemd.service_enable(unit)
+    systemd.service_enable("--now", *units_to_enable)
 
 
 def start() -> None:

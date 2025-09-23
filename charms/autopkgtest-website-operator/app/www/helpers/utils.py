@@ -244,25 +244,6 @@ def srchash(src: str) -> str:
         return src[0]
 
 
-def get_indexed_packages():
-    db_con = get_autopkgtest_db_conn()
-    indexed_packages = {}
-
-    for row in db_con.execute(
-        "SELECT package, MAX(version) "
-        "FROM test, result "
-        "WHERE id == test_id "
-        "AND version != 'unknown' "
-        "GROUP BY package "
-        "ORDER BY package"
-    ):
-        # strip off epoch
-        v = row[1][row[1].find(":") + 1 :]
-        indexed_packages.setdefault(srchash(row[0]), []).append((row[0], v))
-
-    return indexed_packages
-
-
 class timeout:
     def __init__(self, seconds=1, error_message="Timeout"):
         self.seconds = seconds
