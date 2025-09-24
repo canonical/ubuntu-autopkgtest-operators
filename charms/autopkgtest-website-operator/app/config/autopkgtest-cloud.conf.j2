@@ -2,11 +2,11 @@
 database={{ database }}
 database_ro={{ database_ro }}
 ExternalURL=http://127.0.0.1:5000/results
-stats_cache_dir=/tmp/autopkgtest-cloud-web
-ppa_containers_cache_dir=/tmp/autopkgtest-cloud-web
+stats_cache_dir={{ data }}
+ppa_containers_cache_dir={{ data }}
 archive_url=http://archive.ubuntu.com/ubuntu
-amqp_queue_cache=/tmp/autopkgtest-cloud-web/queued.json
-running_cache=/tmp/autopkgtest-cloud-web/running.json
+amqp_queue_cache={{ data }}/queued.json
+running_cache={{ data }}/running.json
 allowed_requestors=autopkgtest-requestors
 
 [amqp]

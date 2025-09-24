@@ -9,6 +9,7 @@ import logging
 import autopkgtest_website
 import config_types
 import ops
+from ops.framework import StoredState
 
 from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer as IngressRequirer
 
@@ -22,8 +23,12 @@ RABBITMQ_VHOST = "autopkgtest"
 class AutopkgtestWebsiteCharm(ops.CharmBase):
     """Charm the application."""
 
+    _stored = StoredState()
+
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
+
+        self._stored.set_default(got_amqp_creds=False)
 
         self.typed_config = self.load_config(
             config_types.WebsiteConfig, errors="blocked"
@@ -41,12 +46,15 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
 
     def _on_install(self, event: ops.InstallEvent):
         """Install the workload on the machine."""
-        self.unit.status = ops.MaintenanceStatus("installing website")
+
+        self.unit.status = ops.MaintenanceStatus("installing website software")
         autopkgtest_website.install()
 
     def _on_config_changed(self, event: ops.ConfigChangedEvent):
-        amqp_relation = self.model.get_relation("amqp")
-        if not amqp_relation:
+        """Configure/Reconfigure service"""
+
+        self.unit.status = ops.MaintenanceStatus("configuring service")
+        if not self._stored.got_amqp_creds:
             self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
             return
 
@@ -59,8 +67,14 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             amqp_password=self.amqp_password,
         )
 
+        self.on.start.emit()
+
     def _on_start(self, event: ops.StartEvent):
         """Handle start event."""
+
+        if isinstance(self.unit.status, ops.BlockedStatus):
+            return
+
         self.unit.status = ops.MaintenanceStatus("starting workload")
         autopkgtest_website.start()
         self.unit.open_port("tcp", 80)
@@ -76,6 +90,10 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         )
 
     def _on_amqp_relation_changed(self, event):
+        self.unit.status = ops.MaintenanceStatus(
+            f"Updating up {event.relation.name} connection"
+        )
+
         unit_data = event.relation.data[event.unit]
 
         if "password" not in unit_data:
@@ -84,8 +102,8 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
 
         self.amqp_hostname = unit_data["hostname"]
         self.amqp_password = unit_data["password"]
-
-        self.unit.status = ops.ActiveStatus()
+        self._stored.got_amqp_creds = True
+        self.on.config_changed.emit()
 
 
 if __name__ == "__main__":  # pragma: nocover

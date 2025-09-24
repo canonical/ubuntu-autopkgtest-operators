@@ -1,28 +1,32 @@
 <Directory {{ documentroot }}>
-        Require all granted
+  Require all granted
 </Directory>
 
 <VirtualHost *:{{ http_port }}>
-        DocumentRoot {{ documentroot }}
+  DocumentRoot {{ documentroot }}
 
-        RemoteIPHeader X-Forwarded-For
-        ErrorLog ${APACHE_LOG_DIR}/error.log
-        CustomLog ${APACHE_LOG_DIR}/access.log combined
-        AddType 'text/plain' .log
-        AddCharset UTF-8 .log
-        DirectoryIndex browse.cgi
-        RedirectMatch permanent "^/packages(.*)/$" "/packages$1"
-        Redirect permanent /running.shtml /running
+  RewriteEngine On
+  # Return 204 for favicon.ico
+  RewriteRule ^/favicon\.ico$ - [R=204,L]
 
-        # robots.txt for disallowing bots
-        Alias /robots.txt {{ documentroot }}/static/robots.txt
+  RemoteIPHeader X-Forwarded-For
+  ErrorLog ${APACHE_LOG_DIR}/error.log
+  CustomLog ${APACHE_LOG_DIR}/access.log combined
+  AddType 'text/plain' .log
+  AddCharset UTF-8 .log
+  DirectoryIndex browse.cgi
+  RedirectMatch permanent "^/packages(.*)/$" "/packages$1"
+  Redirect permanent /running.shtml /running
 
-        # webcontrol CGI scripts
-        ScriptAlias /request.cgi {{ documentroot }}/request.cgi/
-        ScriptAlias /login {{ documentroot }}/request.cgi/login
-        ScriptAlias /logout {{ documentroot }}/request.cgi/logout
-        ScriptAlias /private-results {{ documentroot }}/private-results.cgi/
-        ScriptAlias / {{ documentroot }}/browse.cgi/
+  # robots.txt for disallowing bots
+  Alias /robots.txt {{ documentroot }}/static/robots.txt
 
-        ServerName {{ servername }}
+  # webcontrol CGI scripts
+  ScriptAlias /request.cgi {{ documentroot }}/request.cgi/
+  ScriptAlias /login {{ documentroot }}/request.cgi/login
+  ScriptAlias /logout {{ documentroot }}/request.cgi/logout
+  ScriptAlias /private-results {{ documentroot }}/private-results.cgi/
+  ScriptAlias / {{ documentroot }}/browse.cgi/
+
+  ServerName {{ servername }}
 </VirtualHost>

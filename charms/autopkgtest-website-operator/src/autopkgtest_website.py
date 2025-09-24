@@ -21,7 +21,8 @@ import charms.operator_libs_linux.v1.systemd as systemd
 logger = logging.getLogger(__name__)
 
 # Unprivileged user and group
-# GROUP = "www-data"
+USER = "ubuntu"
+GROUP = "ubuntu"
 
 # Charm source path
 CHARM_SOURCE_PATH = Path(__file__).parent.parent
@@ -70,8 +71,8 @@ def install() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     PUBLIC_DATA_DIR.mkdir(exist_ok=True)
     WWW_DIR.mkdir(exist_ok=True)
-    shutil.chown(DATA_DIR, user="www-data", group="www-data")
-    shutil.chown(PUBLIC_DATA_DIR, user="www-data", group="www-data")
+    shutil.chown(DATA_DIR, user=USER, group=GROUP)
+    shutil.chown(PUBLIC_DATA_DIR, user=USER, group=GROUP)
 
     logger.info("Installing website")
     shutil.copytree(CHARM_APP_DATA / "www", WWW_DIR, dirs_exist_ok=True)
@@ -100,7 +101,16 @@ def configure(
     subprocess.check_call(["a2dissite", "000-default"])
     subprocess.check_call(["a2dismod", "mpm_event", "mpm_worker"])
     subprocess.check_call(
-        ["a2enmod", "mpm_prefork", "include", "cgi", "proxy", "proxy_http", "remoteip"]
+        [
+            "a2enmod",
+            "mpm_prefork",
+            "include",
+            "cgi",
+            "proxy",
+            "proxy_http",
+            "remoteip",
+            "rewrite",
+        ]
     )
 
     j2env = jinja2.Environment(
@@ -119,6 +129,7 @@ def configure(
     logger.info("Generating autopkgtest config")
     j2template = j2env.get_template("autopkgtest-cloud.conf.j2")
     j2context = {
+        "data": DATA_DIR,
         "database": DATA_DIR / "autopkgtest.db",
         "database_ro": PUBLIC_DATA_DIR / "autopkgtest.db",
         "rabbithost": amqp_hostname,
@@ -134,9 +145,15 @@ def configure(
     units_to_install = {
         "autopkgtest-web.target",
         "publish-db.timer",
-        "cache-amqp-timer",
+        "cache-amqp.timer",
+        "amqp-status-collector.timer",
     }
-    units_to_enable = {"autopkgtest-web.target", "publish-db.timer", "cache-amqp.timer"}
+    units_to_enable = {
+        "autopkgtest-web.target",
+        "publish-db.timer",
+        "cache-amqp.timer",
+        "amqp-status-collector.timer",
+    }
     for unit in units_to_install:
         shutil.copy(CHARM_APP_DATA / "units" / unit, system_units_dir)
 
@@ -144,9 +161,18 @@ def configure(
 
     j2template = j2env.get_template("publish-db.service.j2")
     j2context = {
+        "user": USER,
         "webcontrol": WWW_DIR,
     }
     with open(system_units_dir / "publish-db.service", "w") as f:
+        f.write(j2template.render(j2context))
+
+    j2template = j2env.get_template("amqp-status-collector.service.j2")
+    j2context = {
+        "user": USER,
+        "webcontrol": WWW_DIR,
+    }
+    with open(system_units_dir / "amqp-status-collector.service", "w") as f:
         f.write(j2template.render(j2context))
 
     systemd.daemon_reload()
@@ -156,5 +182,4 @@ def configure(
 def start() -> None:
     """Start the workload"""
 
-    logger.info("Starting apache2")
     systemd.service_start("apache2")
