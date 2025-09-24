@@ -3,7 +3,6 @@
 import argparse
 import json
 import logging
-from time import sleep
 
 from helpers.utils import (
     get_autopkgtest_db_conn,
@@ -11,7 +10,6 @@ from helpers.utils import (
     get_release_arches,
     get_source_versions,
     get_stats_cache,
-    is_db_empty,
 )
 from influxdb import InfluxDBClient
 
@@ -88,10 +86,6 @@ def calc_stats():
     if not db_con:
         logger.debug("Unable to get DB con")
         exit(1)
-
-    while is_db_empty(db_con):
-        logger.info("DB is empty, waiting for it to get populated")
-        sleep(5)
 
     logger.debug("Getting release arches")
     release_arches = get_release_arches(db_con)

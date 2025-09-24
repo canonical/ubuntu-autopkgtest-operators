@@ -947,16 +947,13 @@ def statistics():
 
     # try to load from both system cache and user cache in order
     # in case autopkgtest-cloud is running locally
-    data = None
+    data = dict()
     cache_dir = get_stats_cache()
     try:
         cache_path = cache_dir / "stats.json"
         data = json.load(cache_path.open())
     except (FileNotFoundError, json.JSONDecodeError):
         pass
-
-    if not data:
-        raise NotFound("stats", "file")
 
     return render("browse-statistics.html", release_arches=release_arches, data=data)
 
