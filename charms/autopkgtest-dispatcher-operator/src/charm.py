@@ -36,14 +36,24 @@ AUTOPKGTEST_PACKAGE_CONFIG_LOCATION = pathlib.Path(
     f"~{USER}/autopkgtest-package-configs"
 ).expanduser()
 
-DEB_DEPENDENCIES = ["autodep8"]
+DEB_DEPENDENCIES = [
+    "autodep8",
+    # some python dependencies of the worker don't provide prebuild binaries
+    # and should be installed here
+    "python3-amqp",
+    "python3-swiftclient",
+    "python3-novaclient",
+    "python3-influxdb",
+    "python3-osc-lib"
+    ]
 SNAP_DEPENDENCIES = [{"name": "lxd", "channel": "6/stable"}]
 
 RABBITMQ_USERNAME = "dispatcher"
-RABBITMQ_VHOST = "autopkgtest"
+RABBITMQ_VHOST = "/"
 RABBITMQ_CREDS_PATH = pathlib.Path(f"~{USER}/rabbitmq.cred").expanduser()
 
 WORKER_CONFIG_PATH = pathlib.Path(f"~{USER}/worker.conf").expanduser()
+SWIFT_CONFIG_PATH = pathlib.Path(f"~{USER}/swift-password.cred").expanduser()
 
 # this has to be a glob as part of the path depends on the unit revision number
 SYSTEMD_UNIT_FILES_PATH = (
@@ -199,21 +209,30 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         with open(WORKER_CONFIG_PATH, "w") as file:
             file.write(
                 textwrap.dedent(f"""\
-                                       [autopkgtest]
-                                       checkout_dir = ../../../../../../autopkgtest
-                                       releases = {self.typed_config.releases}
-                                       setup_command =
-                                       setup_command2 =
-                                       worker_upstream_percentage = {self.typed_config.worker_upstream_percentage}
-                                       stable_release_percentage = {self.typed_config.stable_release_percentage}
-                                       retry_delay = 300
-                                       debug = 0
-                                       architectures =
+                                [autopkgtest]
+                                checkout_dir = ../../../../../../autopkgtest
+                                per_package_config_dir = ../../../../../../autopkgtest-package-configs
+                                releases = {self.typed_config.releases}
+                                setup_command =
+                                setup_command2 =
+                                worker_upstream_percentage = {self.typed_config.worker_upstream_percentage}
+                                stable_release_percentage = {self.typed_config.stable_release_percentage}
+                                retry_delay = 300
+                                debug = 0
+                                architectures =
 
-                                       [virt]
-                                       args = lxd -r $LXD_REMOTE $LXD_REMOTE:autopkgtest/ubuntu/$RELEASE/$ARCHITECTURE
-                                       """)
+                                [virt]
+                                args = lxd -r $LXD_REMOTE $LXD_REMOTE:autopkgtest/ubuntu/$RELEASE/$ARCHITECTURE
+                                """)
             )
+
+    def write_swift_config(self):
+        with open(SWIFT_CONFIG_PATH, "w") as file:
+            for key in self.config:
+                if key.startswith("swift") and self.config[key] is not None:
+                    file.write(
+                        f'{key.upper().replace("-", "_")}={str(self.config[key]).strip()}\n'
+                    )
 
     # action hooks
 
@@ -248,9 +267,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         event.set_results({"results": f"{self._stored.workers}"})
 
     def _on_create_worker_units(self, event: ops.ActionEvent):
-        self.systemd_helper.set_up_systemd_units(
-            self._stored.workers, self.typed_config.releases.split(" ")
-        )
+        self.systemd_helper.set_up_systemd_units(self._stored.workers)
 
     # config hook
 
@@ -259,6 +276,13 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         if not changes:
             logger.debug("No configuration changes detected")
             return
+        
+        if any(
+            [
+                change.startswith("swift-") for change in changes
+            ]
+        ):
+            self.write_swift_config()
 
         if any(
             [

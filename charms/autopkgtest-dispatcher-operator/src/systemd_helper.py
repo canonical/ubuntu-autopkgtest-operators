@@ -9,7 +9,7 @@ class SystemdHelper:
         """Return the names of the autopkgtest worker unit files
         for the given arch and requested unit numbers
         """
-        return [f"autopkgtest@cluster-{arch}-{n}.service" for n in ns]
+        return [f"autopkgtest@worker-{arch}-{n}.service" for n in ns]
 
     def reload_all_units(self):
         systemd.daemon_reload()
@@ -20,10 +20,12 @@ class SystemdHelper:
     def enable_units(self, units):
         for unit in units:
             systemd.service_enable(unit)
+            systemd.service_start(unit)
         self.reload_all_units()
 
     def disable_units(self, units):
         for unit in units:
+            systemd.service_stop(unit)
             systemd.service_disable(unit)
         self.reload_all_units()
 
@@ -63,7 +65,7 @@ class SystemdHelper:
 
         return lxd_worker_names
 
-    def set_up_systemd_units(self, target_config, releases):
+    def set_up_systemd_units(self, target_config):
         """Enable requested units and remove unneeded ones.
         target_config is a dict which maps arches to number of workers.
         """

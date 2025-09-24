@@ -31,6 +31,8 @@ parts:
     charm-binary-python-packages:
       - amqp
       - pydantic
+      # this should hopefully get removed eventually
+      - influxdb
   systemd-units:
     plugin: dump
     source: .

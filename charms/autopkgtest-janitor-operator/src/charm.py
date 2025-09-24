@@ -36,6 +36,8 @@ ARCH_RELEASE_DISALLOW_MAPPING = {"bionic": ["riscv64"], "focal": ["riscv64"]}
 # this has to be a glob as part of the path depends on the unit revision number
 SYSTEMD_UNIT_FILES_PATH = "/var/lib/juju/agents/unit-autopkgtest-janitor-*/charm/units"
 
+DEB_DEPENDENCIES = ["retry"]
+
 
 class AutopkgtestJanitorCharm(ops.CharmBase):
     """Autopkgtest janitor charm class."""
@@ -98,6 +100,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
 
     def install_dependencies(self):
         apt.update()
+        apt.add_package(DEB_DEPENDENCIES)
         for dep in SNAP_DEPENDENCIES:
             snap.add(dep["name"], channel=dep["channel"])
 
