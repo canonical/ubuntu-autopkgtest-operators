@@ -84,7 +84,6 @@ def configure(
     *,
     hostname: str,
     amqp_hostname: str,
-    amqp_vhost: str,
     amqp_username: str,
     amqp_password: str,
 ) -> None:
@@ -142,38 +141,24 @@ def configure(
 
     logger.info("Installing systemd units")
     system_units_dir = Path("/etc/systemd/system/")
-    units_to_install = {
-        "autopkgtest-web.target",
-        "publish-db.timer",
-        "cache-amqp.timer",
-        "amqp-status-collector.timer",
-    }
-    units_to_enable = {
-        "autopkgtest-web.target",
-        "publish-db.timer",
-        "cache-amqp.timer",
-        "amqp-status-collector.timer",
-    }
-    for unit in units_to_install:
-        shutil.copy(CHARM_APP_DATA / "units" / unit, system_units_dir)
+    units_to_install = [u.name for u in (CHARM_APP_DATA / "units").glob("*")]
+    units_to_enable = [u.name for u in (CHARM_APP_DATA / "units").glob("*.timer")] + [
+        "download-results.service"
+    ]
 
     j2env = jinja2.Environment(loader=jinja2.FileSystemLoader(CHARM_APP_DATA / "units"))
-
-    j2template = j2env.get_template("publish-db.service.j2")
     j2context = {
         "user": USER,
         "webcontrol": WWW_DIR,
     }
-    with open(system_units_dir / "publish-db.service", "w") as f:
-        f.write(j2template.render(j2context))
-
-    j2template = j2env.get_template("amqp-status-collector.service.j2")
-    j2context = {
-        "user": USER,
-        "webcontrol": WWW_DIR,
-    }
-    with open(system_units_dir / "amqp-status-collector.service", "w") as f:
-        f.write(j2template.render(j2context))
+    for unit in units_to_install:
+        if unit.endswith(".j2"):
+            unit_basename = unit.removesuffix(".j2")
+            j2template = j2env.get_template(unit)
+            with open(system_units_dir / unit_basename, "w") as f:
+                f.write(j2template.render(j2context))
+        else:
+            shutil.copy(CHARM_APP_DATA / "units" / unit, system_units_dir)
 
     systemd.daemon_reload()
     systemd.service_enable("--now", *units_to_enable)

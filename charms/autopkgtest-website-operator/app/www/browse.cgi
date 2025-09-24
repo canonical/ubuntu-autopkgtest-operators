@@ -10,7 +10,6 @@ import re
 import sqlite3
 import sys
 import traceback
-import urllib
 from collections import OrderedDict
 from pathlib import Path
 from wsgiref.handlers import CGIHandler
@@ -25,7 +24,6 @@ from helpers.utils import (
     get_repo_head_commit_hash,
     get_stats_cache,
     get_supported_releases,
-    init_db,
     setup_key,
     srchash,
     swift_connect,
@@ -70,9 +68,9 @@ def init_config():
 def connect_db(db_uri: str):
     global db_con
 
-    db_path = Path(urllib.parse.urlparse(db_uri).path)
-    if not db_path.is_file():
-        init_db(db_path).close()
+    # XXXparide### db_path = Path(urllib.parse.urlparse(db_uri).path)
+    # XXXparide### if not db_path.is_file():
+    # XXXparide###     init_db(db_path).close()
 
     db_con = sqlite3.connect(db_uri, uri=True, check_same_thread=False)
 

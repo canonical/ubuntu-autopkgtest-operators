@@ -1,0 +1,13 @@
+[Unit]
+Description=Download results
+StartLimitIntervalSec=60s
+StartLimitBurst=60
+
+[Service]
+User={{ user }}
+ExecStart={{ webcontrol }}/download-results
+Restart=on-failure
+RestartSec=1s
+
+[Install]
+WantedBy=autopkgtest-web.target

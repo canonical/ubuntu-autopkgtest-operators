@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 
 RABBITMQ_USERNAME = "webservice"
-RABBITMQ_VHOST = "autopkgtest"
 
 
 class AutopkgtestWebsiteCharm(ops.CharmBase):
@@ -62,7 +61,6 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         autopkgtest_website.configure(
             hostname=self.typed_config.hostname,
             amqp_hostname=self.amqp_hostname,
-            amqp_vhost=RABBITMQ_VHOST,
             amqp_username=RABBITMQ_USERNAME,
             amqp_password=self.amqp_password,
         )
@@ -86,7 +84,7 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         )
 
         event.relation.data[self.unit].update(
-            {"username": RABBITMQ_USERNAME, "vhost": RABBITMQ_VHOST}
+            {"username": RABBITMQ_USERNAME, "vhost": "/"}
         )
 
     def _on_amqp_relation_changed(self, event):
