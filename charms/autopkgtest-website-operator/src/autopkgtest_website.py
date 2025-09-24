@@ -143,7 +143,9 @@ def configure(
     system_units_dir = Path("/etc/systemd/system/")
     units_to_install = [u.name for u in (CHARM_APP_DATA / "units").glob("*")]
     units_to_enable = [u.name for u in (CHARM_APP_DATA / "units").glob("*.timer")] + [
-        "download-results.service"
+        "download-results.service",
+        "sqlite-writer.service",
+        "autopkgtest-stats.service",
     ]
 
     j2env = jinja2.Environment(loader=jinja2.FileSystemLoader(CHARM_APP_DATA / "units"))

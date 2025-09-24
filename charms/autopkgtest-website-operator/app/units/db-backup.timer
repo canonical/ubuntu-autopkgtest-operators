@@ -1,0 +1,8 @@
+[Unit]
+Description=Backup sql database
+
+[Timer]
+OnCalendar=*-*-* 00:05:00
+
+[Install]
+WantedBy=autopkgtest-web.target

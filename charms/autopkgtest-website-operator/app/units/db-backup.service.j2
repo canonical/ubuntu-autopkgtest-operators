@@ -1,0 +1,7 @@
+[Unit]
+Description=Backup sql database
+
+[Service]
+Type=oneshot
+User={{ user }}
+ExecStart={{ webcontrol }}/db-backup

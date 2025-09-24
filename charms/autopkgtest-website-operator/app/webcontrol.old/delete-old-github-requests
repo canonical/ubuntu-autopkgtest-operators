@@ -1,2 +1,0 @@
-#!/bin/sh
-find /run/autopkgtest_webcontrol/github-pending/ -mtime +0 -exec echo "Deleting stale Github job: {}" \; -delete
