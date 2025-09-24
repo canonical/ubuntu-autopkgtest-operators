@@ -20,12 +20,10 @@ class SystemdHelper:
     def enable_units(self, units):
         for unit in units:
             systemd.service_enable(unit)
-            systemd.service_start(unit)
         self.reload_all_units()
 
     def disable_units(self, units):
         for unit in units:
-            systemd.service_stop(unit)
             systemd.service_disable(unit)
         self.reload_all_units()
 

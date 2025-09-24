@@ -42,9 +42,7 @@ DEB_DEPENDENCIES = [
     # and should be installed here
     "python3-amqp",
     "python3-swiftclient",
-    "python3-novaclient",
     "python3-influxdb",
-    "python3-osc-lib"
     ]
 SNAP_DEPENDENCIES = [{"name": "lxd", "channel": "6/stable"}]
 
@@ -182,7 +180,8 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             # TODO: the currently packaged version of pygit2 does not support cloning through
             # a proxy. the next release should hopefully include this feature.
             # pygit2.clone_repository(repo, location, checkout_branch=branch)
-            self.run_as_user(f"git clone -b {branch} {repo} {location}")
+            if not pathlib.Path(location).exists():
+                self.run_as_user(f"git clone -b {branch} {repo} {location}")
 
     def install_systemd_units(self):
         units_path = glob.glob(SYSTEMD_UNIT_FILES_PATH)
