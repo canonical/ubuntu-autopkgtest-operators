@@ -27,7 +27,11 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
 
-        self._stored.set_default(got_amqp_creds=False)
+        self._stored.set_default(
+            got_amqp_creds=False,
+            amqp_hostname=None,
+            amqp_password=None,
+        )
 
         self.typed_config = self.load_config(
             config_types.WebsiteConfig, errors="blocked"
@@ -60,9 +64,9 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         self.unit.status = ops.MaintenanceStatus("configuring website")
         autopkgtest_website.configure(
             hostname=self.typed_config.hostname,
-            amqp_hostname=self.amqp_hostname,
+            amqp_hostname=self._stored.amqp_hostname,
             amqp_username=RABBITMQ_USERNAME,
-            amqp_password=self.amqp_password,
+            amqp_password=self._stored.amqp_password,
         )
 
         self.on.start.emit()
@@ -98,8 +102,8 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             logger.info("rabbitmq-server has not sent password yet")
             return
 
-        self.amqp_hostname = unit_data["hostname"]
-        self.amqp_password = unit_data["password"]
+        self._stored.amqp_hostname = unit_data["hostname"]
+        self._stored.amqp_password = unit_data["password"]
         self._stored.got_amqp_creds = True
         self.on.config_changed.emit()
 

@@ -12,7 +12,7 @@ import urllib.parse
 
 import amqp
 from amqp.exceptions import AMQPError
-from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf, is_db_empty
+from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf
 
 AMQP_CONTEXTS = ["ubuntu", "huge", "ppa", "upstream"]
 
@@ -81,11 +81,6 @@ class AutopkgtestQueueContents:
         """
 
         db_con = sqlite3.connect("file:%s?mode=ro" % self.database, uri=True)
-        if is_db_empty(db_con=db_con):
-            logging.warning(
-                "Database is currently empty - waiting for it to be populated, exiting cache-amqp"
-            )
-            sys.exit(0)
 
         release_arches = {}
         releases = []
