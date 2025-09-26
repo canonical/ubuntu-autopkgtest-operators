@@ -29,10 +29,7 @@ parts:
     plugin: charm
     source: .
     charm-binary-python-packages:
-      - amqp
       - pydantic
-      # this should hopefully get removed eventually
-      - influxdb
   systemd-units:
     plugin: dump
     source: .
@@ -100,9 +97,6 @@ config:
     swift-password:
       type: string
       description: password for swift
-    swift-region:
-      type: string
-      description: swift region to use
     swift-project-domain-name:
       type: string
       description: swift project domain

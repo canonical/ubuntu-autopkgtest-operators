@@ -1,0 +1,25 @@
+[Unit]
+Description=autopkgtest worker %i
+ConditionFileNotEmpty=/etc/rabbitmq.cred
+ConditionFileNotEmpty=/etc/swift.cred
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+TimeoutStartSec=5min
+EnvironmentFile=/etc/influx.cred
+EnvironmentFile=/etc/rabbitmq.cred
+EnvironmentFile=/etc/swift.cred
+ExecStart=/bin/sh -ec 'REGION="%i"; REGION="$${REGION%-*}"; \
+    CONF="/etc/worker.conf"; \
+    LXD_ARCH=$${REGION#*-}; \
+    exec env REGION=$${REGION} /usr/local/bin/worker --config $$CONF -v LXD_ARCH=$$LXD_ARCH -v LXD_REMOTE=$$REGION -a $$LXD_ARCH'
+ExecReload=/bin/kill -HUP $MAINPID
+SuccessExitStatus=0 99 SIGTERM SIGHUP
+RestartSec=5min
+Restart=on-failure
+StartLimitInterval=10m
+StartLimitBurst=3
+
+[Install]
+WantedBy=autopkgtest.target

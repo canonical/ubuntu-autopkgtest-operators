@@ -1,8 +1,0 @@
-[Unit]
-Description=Cloud worker maintenance
-
-[Service]
-Type=oneshot
-User=ubuntu
-EnvironmentFile=/home/ubuntu/influx.cred
-ExecStart=/home/ubuntu/autopkgtest-cloud/tools/cloud-worker-maintenance

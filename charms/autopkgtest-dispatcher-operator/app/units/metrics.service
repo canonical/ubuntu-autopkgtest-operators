@@ -3,8 +3,6 @@ Description=Collect & submit metrics
 
 [Service]
 Type=oneshot
-User=ubuntu
-Group=ubuntu
-EnvironmentFile=/home/ubuntu/influx.cred
+EnvironmentFile=/etc/influx.cred
 ExecStart=/home/ubuntu/autopkgtest-cloud/tools/metrics
 TimeoutStartSec=10m

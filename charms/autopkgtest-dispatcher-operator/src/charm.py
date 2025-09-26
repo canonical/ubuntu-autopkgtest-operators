@@ -2,10 +2,10 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-import glob
 import logging
 import os
 import pathlib
+import shutil
 import subprocess
 import textwrap
 
@@ -43,20 +43,18 @@ DEB_DEPENDENCIES = [
     "python3-amqp",
     "python3-swiftclient",
     "python3-influxdb",
-    ]
+]
 SNAP_DEPENDENCIES = [{"name": "lxd", "channel": "6/stable"}]
 
 RABBITMQ_USERNAME = "dispatcher"
-RABBITMQ_VHOST = "/"
-RABBITMQ_CREDS_PATH = pathlib.Path(f"~{USER}/rabbitmq.cred").expanduser()
+RABBITMQ_CREDS_PATH = pathlib.Path("/etc/rabbitmq.cred").expanduser()
 
-WORKER_CONFIG_PATH = pathlib.Path(f"~{USER}/worker.conf").expanduser()
-SWIFT_CONFIG_PATH = pathlib.Path(f"~{USER}/swift-password.cred").expanduser()
+WORKER_CONFIG_PATH = pathlib.Path("/etc/worker.conf").expanduser()
+SWIFT_CONFIG_PATH = pathlib.Path("/etc/swift.cred").expanduser()
 
-# this has to be a glob as part of the path depends on the unit revision number
-SYSTEMD_UNIT_FILES_PATH = (
-    "/var/lib/juju/agents/unit-autopkgtest-dispatcher-*/charm/units"
-)
+# charm files path
+CHARM_SOURCE_PATH = pathlib.Path(__file__).parent.parent
+CHARM_APP_DATA = CHARM_SOURCE_PATH / "app"
 
 
 class AutopkgtestDispatcherCharm(ops.CharmBase):
@@ -67,7 +65,14 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
 
-        self._stored.set_default(config={}, workers={})
+        self._stored.set_default(
+            got_amqp_creds=False,
+            amqp_hostname=None,
+            amqp_password=None,
+            swift={},
+            config={},
+            workers={},
+        )
 
         self.typed_config = self.load_config(
             config_types.DispatcherConfig, errors="blocked"
@@ -94,6 +99,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         # relation hooks
         framework.observe(self.on.amqp_relation_joined, self._on_amqp_relation_joined)
         framework.observe(self.on.amqp_relation_changed, self._on_amqp_relation_changed)
+        framework.observe(self.on.amqp_relation_broken, self._on_amqp_relation_broken)
 
     # basic hooks
 
@@ -105,6 +111,8 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         self.install_dependencies()
         self.unit.status = ops.MaintenanceStatus("cloning repositories")
         self.clone_repositories()
+        self.unit.status = ops.MaintenanceStatus("installing worker")
+        self.install_worker()
         self.unit.status = ops.MaintenanceStatus("installing systemd units")
         self.install_systemd_units()
         self.unit.status = ops.MaintenanceStatus("writing worker config")
@@ -113,6 +121,9 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
     def _on_start(self, event: ops.StartEvent):
         """Handle start event."""
+        if isinstance(self.unit.status, ops.BlockedStatus):
+            return
+
         self.unit.status = ops.MaintenanceStatus("starting workload")
         self.unit.status = ops.ActiveStatus()
 
@@ -121,20 +132,16 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         # using shell=True to be able to use quotes in the command
         subprocess.run(f"su {USER} -c '{command}'", shell=True, check=True)
 
-    def set_rabbitmq_creds(self, host: str, username: str, password: str):
+    def set_rabbitmq_creds(self):
         """Set rabbitmq creds"""
-        self.rabbitmq_host = host
-        self.rabbitmq_username = username
-        self.rabbitmq_password = password
-
         self.unit.status = ops.MaintenanceStatus("writing rabbitmq creds")
         with open(RABBITMQ_CREDS_PATH, "w") as file:
             file.write(
                 textwrap.dedent(f"""\
-                                        RABBIT_HOST="{host}"
-                                        RABBIT_USER="{username}"
-                                        RABBIT_PASSWORD="{password}"
-                                       """)
+                                RABBIT_HOST="{self._stored.amqp_hostname}"
+                                RABBIT_USER="{RABBITMQ_USERNAME}"
+                                RABBIT_PASSWORD="{self._stored.amqp_password}"
+                                """)
             )
         self.unit.status = ops.ActiveStatus()
 
@@ -142,18 +149,18 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         with open("/etc/environment", "w") as env_file:
             env_file.write(
                 textwrap.dedent(f"""\
-                           PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
-                           http_proxy={os.environ["JUJU_CHARM_HTTP_PROXY"]}
-                           https_proxy={os.environ["JUJU_CHARM_HTTPS_PROXY"]}
-                           no_proxy={os.environ["JUJU_CHARM_NO_PROXY"]}
-                           """)
+                                PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
+                                http_proxy={os.getenv("JUJU_CHARM_HTTP_PROXY", "")}
+                                https_proxy={os.getenv("JUJU_CHARM_HTTPS_PROXY", "")}
+                                no_proxy={os.getenv("JUJU_CHARM_NO_PROXY", "")}
+                                """)
             )
 
         # changed environment variables don't get picked up by this file
         # so set them explicitly
-        os.environ["http_proxy"] = os.environ["JUJU_CHARM_HTTP_PROXY"]
-        os.environ["https_proxy"] = os.environ["JUJU_CHARM_HTTPS_PROXY"]
-        os.environ["no_proxy"] = os.environ["JUJU_CHARM_NO_PROXY"]
+        os.environ["http_proxy"] = os.getenv("JUJU_CHARM_HTTP_PROXY", "")
+        os.environ["https_proxy"] = os.getenv("JUJU_CHARM_HTTPS_PROXY", "")
+        os.environ["no_proxy"] = os.getenv("JUJU_CHARM_NO_PROXY", "")
 
     # basic hooks
 
@@ -183,10 +190,13 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             if not location.exists():
                 self.run_as_user(f"git clone -b {branch} {repo} {location}")
 
+    def install_worker(self):
+        worker_path = CHARM_APP_DATA / "worker" / "worker"
+        dest_dir = pathlib.Path("/usr/local/bin/")
+        shutil.copy(worker_path, dest_dir)
+
     def install_systemd_units(self):
-        units_path = glob.glob(SYSTEMD_UNIT_FILES_PATH)
-        assert len(units_path) == 1, "there should be one units directory"
-        units_path = units_path[0]
+        units_path = CHARM_APP_DATA / "units"
 
         dest_dir = pathlib.Path("/etc/systemd/system/")
 
@@ -209,8 +219,8 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             file.write(
                 textwrap.dedent(f"""\
                                 [autopkgtest]
-                                checkout_dir = ../../../../../../autopkgtest
-                                per_package_config_dir = ../../../../../../autopkgtest-package-configs
+                                checkout_dir = {AUTOPKGTEST_LOCATION}
+                                per_package_config_dir = {AUTOPKGTEST_PACKAGE_CONFIG_LOCATION}
                                 releases = {self.typed_config.releases}
                                 setup_command =
                                 setup_command2 =
@@ -225,12 +235,29 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
                                 """)
             )
 
+    def is_swift_defined(self):
+        required_creds = [
+            "swift-auth-url",
+            "swift-username",
+            "swift-password",
+            "swift-project-domain-name",
+            "swift-project-name",
+            "swift-user-domain-name",
+        ]
+        return all(
+            [
+                cred in self._stored.swift and self._stored.swift[cred] is not None
+                for cred in required_creds
+            ]
+        )
+
     def write_swift_config(self):
         with open(SWIFT_CONFIG_PATH, "w") as file:
             for key in self.config:
                 if key.startswith("swift") and self.config[key] is not None:
+                    self._stored.swift[key] = self.config[key]
                     file.write(
-                        f'{key.upper().replace("-", "_")}={str(self.config[key]).strip()}\n'
+                        f"{key.upper().replace('-', '_')}={str(self.config[key]).strip()}\n"
                     )
 
     # action hooks
@@ -275,13 +302,6 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         if not changes:
             logger.debug("No configuration changes detected")
             return
-        
-        if any(
-            [
-                change.startswith("swift-") for change in changes
-            ]
-        ):
-            self.write_swift_config()
 
         if any(
             [
@@ -291,6 +311,19 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             ]
         ):
             self.write_worker_config()
+
+        if any([change.startswith("swift-") for change in changes]):
+            self.write_swift_config()
+
+        self._stored.config = dict(self.config)
+
+        if not self._stored.got_amqp_creds:
+            self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
+            return
+
+        if not self.is_swift_defined():
+            self.unit.status = ops.BlockedStatus("waiting for swift credentials")
+            return
 
     def config_changes(self):
         new_config = self.config
@@ -310,10 +343,10 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         )
 
         event.relation.data[self.unit].update(
-            {"username": RABBITMQ_USERNAME, "vhost": RABBITMQ_VHOST}
+            {"username": RABBITMQ_USERNAME, "vhost": "/"}
         )
 
-    def _on_amqp_relation_changed(self, event):
+    def _on_amqp_relation_changed(self, event: ops.RelationChangedEvent):
         unit_data = event.relation.data[event.unit]
 
         if "password" not in unit_data:
@@ -323,8 +356,20 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         hostname = unit_data["hostname"]
         password = unit_data["password"]
 
-        self.set_rabbitmq_creds(hostname, RABBITMQ_USERNAME, password)
-        self.unit.status = ops.ActiveStatus()
+        self._stored.got_amqp_creds = True
+        self._stored.amqp_hostname = hostname
+        self._stored.amqp_password = password
+
+        self.set_rabbitmq_creds()
+        self.on.config_changed.emit()
+
+    def _on_amqp_relation_broken(self, event: ops.RelationBrokenEvent):
+        self._stored.got_amqp_creds = False
+        self._stored.amqp_hostname = None
+        self._stored.amqp_password = None
+        os.remove(RABBITMQ_CREDS_PATH)
+
+        self.on.config_changed.emit()
 
 
 if __name__ == "__main__":  # pragma: nocover

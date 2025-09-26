@@ -3,8 +3,6 @@ Description=Pull /home/ubuntu/autopkgtest-package-configs/
 
 [Service]
 Type=oneshot
-User=ubuntu
-Group=ubuntu
 WorkingDirectory=/home/ubuntu/autopkgtest-package-configs/
 ExecCondition=/usr/bin/git diff --quiet
 ExecStart=/usr/bin/git pull
