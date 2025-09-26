@@ -95,7 +95,7 @@ config:
       type: string
       description: username for swift
     swift-password:
-      type: string
+      type: secret
       description: password for swift
     swift-project-domain-name:
       type: string
