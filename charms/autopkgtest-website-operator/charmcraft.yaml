@@ -38,6 +38,29 @@ config:
       description: Website hostname, e.g. autopkgtest.ubuntu.com
       default: localhost
 
+    # swift options
+    swift-auth-url:
+      type: string
+      description: swift auth URL
+    swift-username:
+      type: string
+      description: username for swift
+    swift-password:
+      type: string
+      description: password for swift
+    swift-region:
+      type: string
+      description: swift region
+    swift-project-domain-name:
+      type: string
+      description: swift project domain
+    swift-project-name:
+      type: string
+      description: swift project name
+    swift-user-domain-name:
+      type: string
+      description: swift user domain name
+
 requires:
   amqp:
     interface: rabbitmq

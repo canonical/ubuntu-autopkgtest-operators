@@ -92,6 +92,7 @@ def configure(
     amqp_hostname: str,
     amqp_username: str,
     amqp_password: str,
+    swift: dict[str, str],
 ) -> None:
     """Configuring service"""
     logger.info("Stopping apache2")
@@ -140,6 +141,13 @@ def configure(
         "rabbithost": amqp_hostname,
         "rabbituser": amqp_username,
         "rabbitpassword": amqp_password,
+        "swiftregion": swift["swift-region"],
+        "swiftauthurl": swift["swift-auth-url"],
+        "swiftprojectdomain": swift["swift-project-domain-name"],
+        "swiftusername": swift["swift-username"],
+        "swiftuserdomain": swift["swift-user-domain-name"],
+        "swiftproject": swift["swift-project"],
+        "swiftpassword": swift["swift-password"],
     }
     conf_file = Path("/etc/autopkgtest-cloud.conf")
     with open(conf_file, "w") as f:

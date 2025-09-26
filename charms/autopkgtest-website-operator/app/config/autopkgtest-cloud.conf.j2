@@ -13,13 +13,13 @@ allowed_requestors=autopkgtest-requestors
 uri=amqp://{{ rabbituser }}:{{ rabbitpassword }}@{{ rabbithost }}
 
 [swift]
-os_region_name = canonistack-bos01
-os_auth_url = https://keystone.bos01.canonistack.canonical.com:5000/v3
-os_project_domain_name = default
-os_username = user
-os_user_domain_name = default
-os_project_name = user_project
-os_password = complicatedpassword
+os_region_name = {{ swiftregion }}
+os_auth_url = {{ swiftauthurl }}
+os_project_domain_name = {{ swiftprojectdomain }}
+os_username = {{ swiftusername }}
+os_user_domain_name = {{ swiftuserdomain }}
+os_project_name = {{ swiftproject }}
+os_password = {{ swiftpassword }}
 os_identity_api_version = 3
 
 [influxdb]
