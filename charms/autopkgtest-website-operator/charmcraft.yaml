@@ -1,5 +1,5 @@
 type: charm
-name: autopkgtest-website
+name: ubuntu-autopkgtest-website
 title: Charm Template
 summary: Website for the autopkgtest service
 description: Website for the autopkgtest service
