@@ -421,7 +421,6 @@ def swift_connect() -> swiftclient.Connection:
             "user": config["swift"]["os_username"],
             "key": config["swift"]["os_password"],
             "os_options": {
-                "region_name": config["swift"]["os_region_name"],
                 "project_domain_name": config["swift"]["os_project_domain_name"],
                 "project_name": config["swift"]["os_project_name"],
                 "user_domain_name": config["swift"]["os_user_domain_name"],

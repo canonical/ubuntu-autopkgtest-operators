@@ -54,6 +54,18 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         self.unit.status = ops.MaintenanceStatus("installing website software")
         autopkgtest_website.install()
 
+    def is_swift_defined(self):
+        required_creds = [
+            "swift-auth-url",
+            "swift-project-domain-name",
+            "swift-username",
+            "swift-user-domain-name",
+            "swift-project-name",
+            "swift-password",
+        ]
+
+        return all([cred in self.config for cred in required_creds])
+
     def _on_config_changed(self, event: ops.ConfigChangedEvent):
         """Configure/Reconfigure service"""
 
@@ -62,11 +74,12 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
             return
 
+        if not self.is_swift_defined():
+            self.unit.status = ops.BlockedStatus("waiting for swift creds")
+
         for key in self.config:
-            if key.startswith("swift-") and self.config[key] is None:
-                self.unit.status = ops.BlockedStatus("waiting for swift credentials")
-                return
-            self._stored.swift[key] = self.config[key]
+            if key.startswith("swift-") and self.config[key] is not None:
+                self._stored.swift_creds[key] = self.config[key]
 
         self.unit.status = ops.MaintenanceStatus("configuring website")
         autopkgtest_website.configure(
@@ -74,7 +87,7 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             amqp_hostname=self._stored.amqp_hostname,
             amqp_username=RABBITMQ_USERNAME,
             amqp_password=self._stored.amqp_password,
-            swift_creds=self._stored.swift,
+            swift_creds=self._stored.swift_creds,
         )
 
         self.on.start.emit()

@@ -13,13 +13,12 @@ allowed_requestors=autopkgtest-requestors
 uri=amqp://{{ rabbituser }}:{{ rabbitpassword }}@{{ rabbithost }}
 
 [swift]
-os_region_name = {{ swiftregion }}
-os_auth_url = {{ swiftauthurl }}
-os_project_domain_name = {{ swiftprojectdomain }}
-os_username = {{ swiftusername }}
-os_user_domain_name = {{ swiftuserdomain }}
-os_project_name = {{ swiftproject }}
-os_password = {{ swiftpassword }}
+os_auth_url = {{ swift["swift-auth-url"] }}
+os_project_domain_name = {{ swift["swift-project-domain-name"] }}
+os_username = {{ swift["swift-username"] }}
+os_user_domain_name = {{ swift["swift-user-domain-name"] }}
+os_project_name = {{ swift["swift-project-name"] }}
+os_password = {{ swift["swift-password"] }}
 os_identity_api_version = 3
 
 [influxdb]
@@ -28,4 +27,4 @@ influxdb_port = 8086
 influxdb_username = user
 influxdb_password = complicatedpassword
 influxdb_database = metrics
-influxdb_context = developmen
+influxdb_context = development
