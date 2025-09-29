@@ -28,8 +28,6 @@ parts:
   charm:
     plugin: charm
     source: .
-    charm-binary-python-packages:
-      - pydantic
   systemd-units:
     plugin: dump
     source: .
