@@ -6,6 +6,7 @@ Wants=network-online.target
 After=network-online.target
 
 [Service]
+User=ubuntu
 TimeoutStartSec=5min
 EnvironmentFile=-/etc/environment
 EnvironmentFile=-/etc/influx.cred

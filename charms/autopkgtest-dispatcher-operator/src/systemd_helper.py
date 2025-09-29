@@ -17,21 +17,26 @@ class SystemdHelper:
     def reload_unit(self, unit):
         systemd.service_reload(unit, restart_on_failure=True)
 
-    def enable_units(self, units):
-        for unit in units:
-            systemd.service_enable(unit)
+    def enable_units(self, units, start=False):
+        if start:
+            systemd.service_enable("--now", *units)
+        else:
+            systemd.service_enable(units)
         self.reload_all_units()
 
-    def disable_units(self, units):
-        for unit in units:
-            systemd.service_disable(unit)
+    def disable_units(self, units, stop=False):
+        if stop:
+            systemd.service_disable("--now", *units)
+        else:
+            systemd.service_disable(units)
         self.reload_all_units()
 
     def list_units_by_pattern(self, pattern):
         proc = subprocess.run(
-            ["systemctl", "list-units", f"{pattern}"],
+            f"systemctl list-units '{pattern}'",
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            shell=True,
             text=True,
             bufsize=1,
             encoding="utf-8",
@@ -42,21 +47,17 @@ class SystemdHelper:
         for line in proc.stdout.split("\n"):
             if "service" not in line or "masked" in line:
                 continue
-            units.append(line.split(" ")[1])
+            units.append(line.split(" ")[2])
 
         return units
 
     def get_autopkgtest_units(self):
-        """Return names for all autopkgtest services in the following tuple:
-        (lxd_workers, build_adt_image), where lxd_workers is a dict with keys lxd_worker[arch][n]
-        and build_adt_image is a dict with keys build_adt_keys[arch][release]
-        """
+        """Return names for all autopkgtest services in a dict with keys lxd_worker[arch][n]."""
         lxd_worker_names = defaultdict(lambda: defaultdict(dict))
 
         lxd_workers = self.list_units_by_pattern("autopkgtest@*")
 
-        for unit in lxd_workers:
-            (name, _, _, _, _, _, _, _, _, _) = unit
+        for name in lxd_workers:
             # worker unit names are autopkgtest@cluster-{arch}-{n}.service
             name_parts = name.split("-")
             lxd_worker_names[name_parts[1]][name_parts[2]] = name
@@ -79,12 +80,12 @@ class SystemdHelper:
                 unit_names = self.get_autopkgtest_unit_names(
                     arch, range(n_units + 1, target_units + 1)
                 )
-                self.enable_units(unit_names)
+                self.enable_units(unit_names, start=True)
             elif target_units < n_units:
                 unit_names = self.get_autopkgtest_unit_names(
                     arch, range(target_units + 1, n_units + 1)
                 )
-                self.disable_units(unit_names)
+                self.disable_units(unit_names, stop=True)
 
     def reload_worker_units(self):
         (lxd_worker_object_paths, _) = self.get_autopkgtest_units()

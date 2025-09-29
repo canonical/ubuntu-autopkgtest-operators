@@ -546,6 +546,8 @@ def send_status_info(
             "uuid": test_uuid,
         }
     )
+
+    logging.debug(f"Sending status update for {test_uuid}")
     queue.basic_publish(amqp.Message(msg, delivery_mode=2), status_exchange_name, "")
 
 
