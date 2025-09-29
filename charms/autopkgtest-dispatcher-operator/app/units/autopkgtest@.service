@@ -7,7 +7,8 @@ After=network-online.target
 
 [Service]
 TimeoutStartSec=5min
-EnvironmentFile=/etc/influx.cred
+EnvironmentFile=-/etc/environment
+EnvironmentFile=-/etc/influx.cred
 EnvironmentFile=/etc/rabbitmq.cred
 EnvironmentFile=/etc/swift.cred
 ExecStart=/bin/sh -ec 'REGION="%i"; REGION="$${REGION%-*}"; \
