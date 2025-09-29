@@ -1,4 +1,4 @@
-name: autopkgtest-janitor
+name: ubuntu-autopkgtest-janitor
 type: charm
 summary: A charm for performing maintenance for autopkgtest workers.
 description: A charm for performing maintenance for autopkgtest workers.
