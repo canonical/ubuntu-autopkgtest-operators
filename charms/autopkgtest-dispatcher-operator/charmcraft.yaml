@@ -14,8 +14,6 @@ platforms:
     build-on: [amd64]
     build-for: [amd64]
 
-# different components of operator_libs_linux are only available
-# in different versions of the library
 charm-libs:
   - lib: operator_libs_linux.apt
     version: "0"
