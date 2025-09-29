@@ -42,24 +42,24 @@ config:
     swift-auth-url:
       type: string
       description: swift auth URL
-    swift-username:
-      type: string
-      description: username for swift
     swift-password:
       type: secret
-      description: password for swift
-    swift-region:
-      type: string
-      description: swift region
+      description: swift password
     swift-project-domain-name:
       type: string
-      description: swift project domain
+      description: swift project domain name
     swift-project-name:
       type: string
       description: swift project name
+    swift-storage-url:
+      type: string
+      description: swift storage url
     swift-user-domain-name:
       type: string
       description: swift user domain name
+    swift-username:
+      type: string
+      description: swift username
 
 requires:
   amqp:

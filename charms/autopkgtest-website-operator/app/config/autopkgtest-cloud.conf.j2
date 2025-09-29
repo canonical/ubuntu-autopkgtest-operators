@@ -13,12 +13,12 @@ allowed_requestors=autopkgtest-requestors
 uri=amqp://{{ rabbituser }}:{{ rabbitpassword }}@{{ rabbithost }}
 
 [swift]
-os_auth_url = {{ swift["swift-auth-url"] }}
-os_project_domain_name = {{ swift["swift-project-domain-name"] }}
-os_username = {{ swift["swift-username"] }}
-os_user_domain_name = {{ swift["swift-user-domain-name"] }}
-os_project_name = {{ swift["swift-project-name"] }}
-os_password = {{ swift["swift-password"] }}
+os_auth_url = {{ swift_auth_url }}
+os_project_domain_name = {{ swift_project_domain_name }}
+os_username = {{ swift_username }}
+os_user_domain_name = {{ swift_user_domain_name }}
+os_project_name = {{ swift_project_name }}
+os_password = {{ swift_password }}
 os_identity_api_version = 3
 
 [influxdb]

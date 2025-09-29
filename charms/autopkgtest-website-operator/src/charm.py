@@ -74,12 +74,11 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
             return
 
-        if not self.is_swift_defined():
-            self.unit.status = ops.BlockedStatus("waiting for swift creds")
+        swift_creds = {k: v for k, v in self.config.items() if k.startswith("swift_")}
 
-        for key in self.config:
-            if key.startswith("swift-") and self.config[key] is not None:
-                self._stored.swift_creds[key] = self.config[key]
+        if not all(v for v in swift_creds.values()):
+            self.unit.status = ops.BlockedStatus("waiting for swift creds")
+            return
 
         self.unit.status = ops.MaintenanceStatus("configuring website")
         autopkgtest_website.configure(
@@ -87,7 +86,7 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             amqp_hostname=self._stored.amqp_hostname,
             amqp_username=RABBITMQ_USERNAME,
             amqp_password=self._stored.amqp_password,
-            swift_creds=self._stored.swift_creds,
+            swift_creds=swift_creds,
         )
 
         self.on.start.emit()
