@@ -106,3 +106,4 @@ config:
 requires:
   amqp:
     interface: rabbitmq
+    limit: 1

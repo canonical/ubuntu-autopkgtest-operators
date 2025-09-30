@@ -65,6 +65,6 @@ requires:
   amqp:
     interface: rabbitmq
     limit: 1
-  route_website:
+  route-website:
     interface: haproxy-route
     limit: 1

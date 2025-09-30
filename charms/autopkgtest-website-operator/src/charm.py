@@ -10,7 +10,6 @@ import autopkgtest_website
 import config_types
 import ops
 from ops.framework import StoredState
-from ops.model import Secret
 
 from charms.haproxy.v1.haproxy_route import HaproxyRouteRequirer
 
@@ -34,10 +33,11 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             service="autopkgtest_website",
             ports=[HTTP_PORT],
             paths=["/"],
-            relation_name="route_website",
+            relation_name="route-website",
         )
 
         self._stored.set_default(
+            installed=False,
             got_amqp_creds=False,
             amqp_hostname=None,
             amqp_password=None,
@@ -61,26 +61,38 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         self.unit.status = ops.MaintenanceStatus("installing website software")
         autopkgtest_website.install()
 
+        self._stored.installed = True
+
     def _on_config_changed(self, event: ops.ConfigChangedEvent):
         """Configure/Reconfigure service"""
+
+        # If we blocked during install, it may happen that a config_changed
+        # event gets processed before we installed. In this case, emit an
+        # install event.
+        if not self._stored.installed:
+            self.on.install.emit()
 
         self.unit.status = ops.MaintenanceStatus("configuring service")
         if not self._stored.got_amqp_creds:
             self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
             return
 
-        swift_secret_id = self.typed_config.swift_secret_id
+        # swift_secret_id = self.typed_config.swift_secret_id
         try:
-            swift_secret: Secret = self.model.get_secret(
-                id=swift_secret_id, label="swift-secret"
+            # swift_secret: Secret = self.model.get_secret(
+            #     id=swift_secret_id, label="swift-secret"
+            # )
+            swift_password = self.typed_config.swift_secret_id.get_content().get(
+                "password"
             )
-            swift_password = swift_secret.get_content().get("password")
         except (ops.SecretNotFoundError, ops.model.ModelError):
             self.unit.status = ops.BlockedStatus("swift secret not available")
             return
 
         swift_creds = {
-            k: v for k, v in self.typed_config.items() if k.startswith("swift_")
+            k: v
+            for k, v in self.typed_config.model_dump().items()
+            if k.startswith("swift_")
         }
         swift_creds["swift_passsword"] = swift_password
 

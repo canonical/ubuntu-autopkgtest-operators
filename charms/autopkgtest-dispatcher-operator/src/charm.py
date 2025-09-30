@@ -68,6 +68,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         super().__init__(framework)
 
         self._stored.set_default(
+            installed=False,
             got_amqp_creds=False,
             amqp_hostname=None,
             amqp_password=None,
@@ -114,6 +115,8 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         self.unit.status = ops.MaintenanceStatus("writing worker config")
         self.write_worker_config()
         self.unit.status = ops.ActiveStatus("ready")
+
+        self._stored.installed = True
 
     def _on_start(self, event: ops.StartEvent):
         """Handle start event."""
@@ -277,6 +280,9 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
     # config hook
 
     def _on_config_changed(self, event: ops.ConfigChangedEvent):
+        if not self._stored.installed:
+            self.on.install.emit()
+
         self.unit.status = ops.MaintenanceStatus("configuring service")
 
         if not self._stored.got_amqp_creds:
@@ -294,7 +300,9 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             return
 
         swift_creds = {
-            k: v for k, v in self.typed_config.items() if k.startswith("swift_")
+            k: v
+            for k, v in self.typed_config.dump_model().items()
+            if k.startswith("swift_")
         }
         swift_creds["swift_passsword"] = swift_password
 
