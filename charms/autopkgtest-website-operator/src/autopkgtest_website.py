@@ -90,9 +90,7 @@ def configure(
     *,
     hostname: str,
     http_port: int,
-    amqp_hostname: str,
-    amqp_username: str,
-    amqp_password: str,
+    amqp_creds: dict[str, str],
     swift_creds: dict[str, str],
 ) -> None:
     """Configuring service"""
@@ -139,10 +137,8 @@ def configure(
         "data": DATA_DIR,
         "database": DATA_DIR / "autopkgtest.db",
         "database_ro": PUBLIC_DATA_DIR / "autopkgtest.db",
-        "rabbithost": amqp_hostname,
-        "rabbituser": amqp_username,
-        "rabbitpassword": amqp_password,
-        "swift": swift_creds,
+        **amqp_creds,
+        **swift_creds,
     }
     conf_file = Path("/etc/autopkgtest-cloud.conf")
     with open(conf_file, "w") as f:

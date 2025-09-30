@@ -94,15 +94,19 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             for k, v in self.typed_config.model_dump().items()
             if k.startswith("swift_")
         }
-        swift_creds["swift_passsword"] = swift_password
+        swift_creds["swift_password"] = swift_password
+
+        amqp_creds = {
+            "rabbithost": self._stored.amqp_hostname,
+            "rabbituser": RABBITMQ_USERNAME,
+            "rabbitpassword": self._stored.amqp_password,
+        }
 
         self.unit.status = ops.MaintenanceStatus("configuring website")
         autopkgtest_website.configure(
             hostname=self.typed_config.hostname,
             http_port=HTTP_PORT,
-            amqp_hostname=self._stored.amqp_hostname,
-            amqp_username=RABBITMQ_USERNAME,
-            amqp_password=self._stored.amqp_password,
+            amqp_creds=amqp_creds,
             swift_creds=swift_creds,
         )
 
@@ -129,11 +133,17 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         )
 
     def _on_amqp_relation_changed(self, event: ops.RelationChangedEvent):
+        unit_data = event.relation.data[event.unit]
+
+        # the first relation_changed event does not contain credentials
+        if "password" not in unit_data:
+            logger.info("rabbitmq-server has not sent password yet")
+            return
+
         self.unit.status = ops.MaintenanceStatus(
             f"Updating up {event.relation.name} connection"
         )
 
-        unit_data = event.relation.data[event.unit]
         self._stored.amqp_hostname = unit_data["hostname"]
         self._stored.amqp_password = unit_data["password"]
         self._stored.got_amqp_creds = True

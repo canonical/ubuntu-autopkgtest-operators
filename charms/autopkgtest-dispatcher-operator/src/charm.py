@@ -304,7 +304,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             for k, v in self.typed_config.dump_model().items()
             if k.startswith("swift_")
         }
-        swift_creds["swift_passsword"] = swift_password
+        swift_creds["swift_password"] = swift_password
 
         self.write_worker_config()
         self.write_swift_config()
@@ -321,14 +321,15 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         )
 
     def _on_amqp_relation_changed(self, event: ops.RelationChangedEvent):
-        self.unit.status = ops.MaintenanceStatus(
-            f"Updating up {event.relation.name} connection"
-        )
         unit_data = event.relation.data[event.unit]
 
         if "password" not in unit_data:
             logger.info("rabbitmq-server has not sent password yet")
             return
+
+        self.unit.status = ops.MaintenanceStatus(
+            f"Updating up {event.relation.name} connection"
+        )
 
         hostname = unit_data["hostname"]
         password = unit_data["password"]
