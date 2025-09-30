@@ -68,7 +68,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         self.install_dependencies()
         self.unit.status = ops.MaintenanceStatus("cloning autopkgtest repository")
         subprocess.run(
-            f"su ubuntu -c 'git clone -b {AUTOPKGTEST_BRANCH} {AUTOPKGTEST_REPO} {AUTOPKGTEST_LOCATION}'",
+            f"su {USER} -c 'git clone -b {AUTOPKGTEST_BRANCH} {AUTOPKGTEST_REPO} {AUTOPKGTEST_LOCATION}'",
             shell=True,
             check=True,
         )
@@ -84,12 +84,14 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
     def set_up_proxy(self):
         with open("/etc/environment", "w") as env_file:
             env_file.write(
-                textwrap.dedent(f"""
-                           PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
-                           http_proxy={os.getenv("JUJU_CHARM_HTTP_PROXY", "")}
-                           https_proxy={os.getenv("JUJU_CHARM_HTTPS_PROXY", "")}
-                           no_proxy={os.getenv("JUJU_CHARM_NO_PROXY", "")}
-                           """)
+                textwrap.dedent(
+                    f"""
+                    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
+                    http_proxy={os.getenv("JUJU_CHARM_HTTP_PROXY", "")}
+                    https_proxy={os.getenv("JUJU_CHARM_HTTPS_PROXY", "")}
+                    no_proxy={os.getenv("JUJU_CHARM_NO_PROXY", "")}
+                    """
+                )
             )
 
         # changed environment variables don't get picked up by this file
@@ -200,7 +202,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
 
     def add_worker(self, arch: str, token: str):
         subprocess.run(
-            f"su ubuntu -c 'lxc remote add worker-{arch} {token}'",
+            f"su {USER} -c 'lxc remote add worker-{arch} {token}'",
             shell=True,
             check=True,
         )
@@ -211,7 +213,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         worker_arch = params.arch.value
 
         subprocess.run(
-            f"su ubuntu -c 'lxc remote remove worker-{worker_arch}'", shell=True
+            f"su {USER} -c 'lxc remote remove worker-{worker_arch}'", shell=True
         )
 
         # disable all image builders even if removing the worker failed
