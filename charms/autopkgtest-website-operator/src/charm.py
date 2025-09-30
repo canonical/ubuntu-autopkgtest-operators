@@ -78,7 +78,7 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             return
 
         try:
-            swift_password = self.typed_config.swift_secret_id.get_content().get(
+            swift_password = self.typed_config.swift_juju_secret.get_content().get(
                 "password"
             )
         except (ops.SecretNotFoundError, ops.model.ModelError):

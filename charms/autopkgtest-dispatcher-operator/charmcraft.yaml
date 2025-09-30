@@ -99,7 +99,7 @@ config:
     swift-user-domain-name:
       type: string
       description: swift user domain name
-    swift-secret-id:
+    swift-juju-secret:
       type: secret
       description: juju secret id holding the swift password
 

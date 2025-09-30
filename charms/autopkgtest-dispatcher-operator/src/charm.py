@@ -51,7 +51,7 @@ RABBITMQ_USERNAME = "dispatcher"
 RABBITMQ_CREDS_PATH = CONF_DIRECTORY / "rabbitmq.cred"
 
 WORKER_CONFIG_PATH = CONF_DIRECTORY / "worker.conf"
-SWIFT_CONFIG_PATH = CONF_DIRECTORY = "swift.cred"
+SWIFT_CONFIG_PATH = CONF_DIRECTORY / "swift.cred"
 
 # charm files path
 CHARM_SOURCE_PATH = Path(__file__).parent.parent
@@ -217,22 +217,24 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
     def write_worker_config(self):
         with open(WORKER_CONFIG_PATH, "w") as file:
             file.write(
-                textwrap.dedent(f"""\
-                                [autopkgtest]
-                                checkout_dir = {AUTOPKGTEST_LOCATION}
-                                per_package_config_dir = {AUTOPKGTEST_PACKAGE_CONFIG_LOCATION}
-                                releases = {self.typed_config.releases}
-                                setup_command =
-                                setup_command2 =
-                                worker_upstream_percentage = {self.typed_config.worker_upstream_percentage}
-                                stable_release_percentage = {self.typed_config.stable_release_percentage}
-                                retry_delay = 300
-                                debug = 0
-                                architectures =
+                textwrap.dedent(
+                    f"""\
+                    [autopkgtest]
+                    checkout_dir = {AUTOPKGTEST_LOCATION}
+                    per_package_config_dir = {AUTOPKGTEST_PACKAGE_CONFIG_LOCATION}
+                    releases = {self.typed_config.releases}
+                    setup_command =
+                    setup_command2 =
+                    worker_upstream_percentage = {self.typed_config.worker_upstream_percentage}
+                    stable_release_percentage = {self.typed_config.stable_release_percentage}
+                    retry_delay = 300
+                    debug = 0
+                    architectures =
 
-                                [virt]
-                                args = lxd -r $LXD_REMOTE $LXD_REMOTE:autopkgtest/ubuntu/$RELEASE/$ARCHITECTURE
-                                """)
+                    [virt]
+                    args = lxd -r $LXD_REMOTE $LXD_REMOTE:autopkgtest/ubuntu/$RELEASE/$ARCHITECTURE
+                    """
+                )
             )
 
     def write_swift_config(self):
@@ -288,7 +290,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             return
 
         try:
-            swift_password = self.typed_config.swift_secret_id.get_content().get(
+            swift_password = self.typed_config.swift_juju_secret.get_content().get(
                 "password"
             )
         except (ops.SecretNotFoundError, ops.model.ModelError):
@@ -304,6 +306,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
         self.write_worker_config()
         self.write_swift_config()
+        self.write_rabbitmq_creds()
 
         self.on.start.emit()
 
@@ -336,7 +339,6 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         self._stored.amqp_hostname = hostname
         self._stored.amqp_password = password
 
-        self.write_rabbitmq_creds()
         self.on.config_changed.emit()
 
     def _on_amqp_relation_broken(self, event: ops.RelationBrokenEvent):

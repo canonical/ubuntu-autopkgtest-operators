@@ -57,7 +57,7 @@ config:
     swift-username:
       type: string
       description: swift username
-    swift-secret-id:
+    swift-juju-secret:
       type: secret
       description: juju secret id holding the swift password
 
