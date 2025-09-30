@@ -14,7 +14,6 @@ import action_types
 import config_types
 import ops
 from ops.framework import StoredState
-from ops.model import Secret
 from systemd_helper import SystemdHelper
 
 import charms.operator_libs_linux.v0.apt as apt
@@ -289,12 +288,10 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
             return
 
-        swift_secret_id = self.typed_config.swift_secret_id
         try:
-            swift_secret: Secret = self.model.get_secret(
-                id=swift_secret_id, label="swift-secret"
+            swift_password = self.typed_config.swift_secret_id.get_content().get(
+                "password"
             )
-            swift_password = swift_secret.get_content().get("password")
         except (ops.SecretNotFoundError, ops.model.ModelError):
             self.unit.status = ops.BlockedStatus("swift secret not available")
             return

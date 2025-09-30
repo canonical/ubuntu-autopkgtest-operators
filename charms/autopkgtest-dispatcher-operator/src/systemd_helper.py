@@ -21,7 +21,7 @@ class SystemdHelper:
         if start:
             systemd.service_enable("--now", *units)
         else:
-            systemd.service_enable(units)
+            systemd.service_enable(*units)
         self.reload_all_units()
 
     def disable_units(self, units, stop=False):

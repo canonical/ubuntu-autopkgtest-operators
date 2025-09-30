@@ -77,11 +77,7 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
             return
 
-        # swift_secret_id = self.typed_config.swift_secret_id
         try:
-            # swift_secret: Secret = self.model.get_secret(
-            #     id=swift_secret_id, label="swift-secret"
-            # )
             swift_password = self.typed_config.swift_secret_id.get_content().get(
                 "password"
             )
