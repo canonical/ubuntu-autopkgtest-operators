@@ -115,7 +115,6 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         self.write_worker_config()
         self.unit.status = ops.MaintenanceStatus("installing systemd units")
         self.install_systemd_units()
-        self.unit.status = ops.ActiveStatus("ready")
 
         self._stored.installed = True
 
@@ -305,6 +304,8 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
         self.write_worker_config()
         self.write_swift_config()
+
+        self.on.start.emit()
 
     # relation hooks
 
