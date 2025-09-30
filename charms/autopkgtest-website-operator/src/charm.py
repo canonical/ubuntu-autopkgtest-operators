@@ -16,7 +16,7 @@ from charms.haproxy.v1.haproxy_route import HaproxyRouteRequirer
 logger = logging.getLogger(__name__)
 
 
-RABBITMQ_USERNAME = "webservice"
+RABBITMQ_USERNAME = "website"
 HTTP_PORT = 80
 
 
