@@ -300,7 +300,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         self.swift_creds = {
             k: v
             for k, v in self.typed_config.model_dump().items()
-            if k.startswith("swift_")
+            if k.startswith("swift_") and isinstance(v, str)
         }
         self.swift_creds["swift_password"] = swift_password
 
