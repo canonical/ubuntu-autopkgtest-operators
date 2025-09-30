@@ -4,11 +4,11 @@
 
 import logging
 import os
-import pathlib
 import shlex
 import shutil
 import subprocess
 import textwrap
+from pathlib import Path
 
 import action_types
 import config_types
@@ -25,15 +25,15 @@ USER = "ubuntu"
 
 AUTOPKGTEST_REPO = "https://salsa.debian.org/ubuntu-ci-team/autopkgtest.git"
 AUTOPKGTEST_BRANCH = "ubuntu/production-tip"
-AUTOPKGTEST_LOCATION = pathlib.Path(f"~{USER}/autopkgtest").expanduser()
+AUTOPKGTEST_LOCATION = Path(f"~{USER}/autopkgtest").expanduser()
 
 AUTOPKGTEST_CLOUD_REPO = "https://git.launchpad.net/autopkgtest-cloud"
 AUTOPKGTEST_CLOUD_BRANCH = "master"
-AUTOPKGTEST_CLOUD_LOCATION = pathlib.Path(f"~{USER}/autopkgtest-cloud").expanduser()
+AUTOPKGTEST_CLOUD_LOCATION = Path(f"~{USER}/autopkgtest-cloud").expanduser()
 
 AUTOPKGTEST_PACKAGE_CONFIG_REPO = "https://git.launchpad.net/~ubuntu-release/autopkgtest-cloud/+git/autopkgtest-package-configs"
 AUTOPKGTEST_PACKAGE_CONFIG_BRANCH = "main"
-AUTOPKGTEST_PACKAGE_CONFIG_LOCATION = pathlib.Path(
+AUTOPKGTEST_PACKAGE_CONFIG_LOCATION = Path(
     f"~{USER}/autopkgtest-package-configs"
 ).expanduser()
 
@@ -45,7 +45,7 @@ DEB_DEPENDENCIES = [
 ]
 SNAP_DEPENDENCIES = [{"name": "lxd", "channel": "6/stable"}]
 
-CONF_DIRECTORY = "/etc/autopkgtest-dispatcher"
+CONF_DIRECTORY = Path("/etc/autopkgtest-dispatcher")
 
 RABBITMQ_USERNAME = "dispatcher"
 RABBITMQ_CREDS_PATH = CONF_DIRECTORY / "rabbitmq.cred"
@@ -54,7 +54,7 @@ WORKER_CONFIG_PATH = CONF_DIRECTORY / "worker.conf"
 SWIFT_CONFIG_PATH = CONF_DIRECTORY = "swift.cred"
 
 # charm files path
-CHARM_SOURCE_PATH = pathlib.Path(__file__).parent.parent
+CHARM_SOURCE_PATH = Path(__file__).parent.parent
 CHARM_APP_DATA = CHARM_SOURCE_PATH / "app"
 
 
@@ -193,16 +193,16 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
     def install_worker(self):
         worker_path = CHARM_APP_DATA / "worker" / "worker"
-        dest_dir = pathlib.Path("/usr/local/bin/")
+        dest_dir = Path("/usr/local/bin/")
         shutil.copy(worker_path, dest_dir)
 
     def install_systemd_units(self):
         units_path = CHARM_APP_DATA / "units"
 
-        dest_dir = pathlib.Path("/etc/systemd/system/")
+        dest_dir = Path("/etc/systemd/system/")
 
         to_enable = []
-        for unit in pathlib.Path(units_path).iterdir():
+        for unit in Path(units_path).iterdir():
             dest = dest_dir.joinpath(unit.name)
             try:
                 os.symlink(unit, dest)
