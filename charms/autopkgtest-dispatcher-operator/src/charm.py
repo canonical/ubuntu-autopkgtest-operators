@@ -39,19 +39,19 @@ AUTOPKGTEST_PACKAGE_CONFIG_LOCATION = pathlib.Path(
 
 DEB_DEPENDENCIES = [
     "autodep8",
-    # some python dependencies of the worker don't provide prebuild binaries
-    # and should be installed here
     "python3-amqp",
     "python3-swiftclient",
     "python3-influxdb",
 ]
 SNAP_DEPENDENCIES = [{"name": "lxd", "channel": "6/stable"}]
 
-RABBITMQ_USERNAME = "dispatcher"
-RABBITMQ_CREDS_PATH = pathlib.Path("/etc/rabbitmq.cred").expanduser()
+CONF_DIRECTORY = "/etc/autopkgtest-dispatcher"
 
-WORKER_CONFIG_PATH = pathlib.Path("/etc/worker.conf").expanduser()
-SWIFT_CONFIG_PATH = pathlib.Path("/etc/swift.cred").expanduser()
+RABBITMQ_USERNAME = "dispatcher"
+RABBITMQ_CREDS_PATH = CONF_DIRECTORY / "rabbitmq.cred"
+
+WORKER_CONFIG_PATH = CONF_DIRECTORY / "worker.conf"
+SWIFT_CONFIG_PATH = CONF_DIRECTORY = "swift.cred"
 
 # charm files path
 CHARM_SOURCE_PATH = pathlib.Path(__file__).parent.parent
@@ -101,6 +101,8 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
     def _on_install(self, event: ops.InstallEvent):
         """Install the workload on the machine."""
+        self.unit.status = ops.MaintenanceStatus("creating directories")
+        CONF_DIRECTORY.mkdir(exist_ok=True)
         self.unit.status = ops.MaintenanceStatus("setting up proxy settings")
         self.set_up_proxy()
         self.unit.status = ops.MaintenanceStatus("installing dependencies")
@@ -109,10 +111,10 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         self.clone_repositories()
         self.unit.status = ops.MaintenanceStatus("installing worker")
         self.install_worker()
-        self.unit.status = ops.MaintenanceStatus("installing systemd units")
-        self.install_systemd_units()
         self.unit.status = ops.MaintenanceStatus("writing worker config")
         self.write_worker_config()
+        self.unit.status = ops.MaintenanceStatus("installing systemd units")
+        self.install_systemd_units()
         self.unit.status = ops.ActiveStatus("ready")
 
         self._stored.installed = True
@@ -145,12 +147,14 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
     def set_up_proxy(self):
         with open("/etc/environment", "w") as env_file:
             env_file.write(
-                textwrap.dedent(f"""\
-                                PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
-                                http_proxy={os.getenv("JUJU_CHARM_HTTP_PROXY", "")}
-                                https_proxy={os.getenv("JUJU_CHARM_HTTPS_PROXY", "")}
-                                no_proxy={os.getenv("JUJU_CHARM_NO_PROXY", "")}
-                                """)
+                textwrap.dedent(
+                    f"""\
+                    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
+                    http_proxy={os.getenv("JUJU_CHARM_HTTP_PROXY", "")}
+                    https_proxy={os.getenv("JUJU_CHARM_HTTPS_PROXY", "")}
+                    no_proxy={os.getenv("JUJU_CHARM_NO_PROXY", "")}
+                    """
+                )
             )
 
         # changed environment variables don't get picked up by this file
@@ -234,12 +238,8 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
     def write_swift_config(self):
         with open(SWIFT_CONFIG_PATH, "w") as file:
-            for key in self.config:
-                if key.startswith("swift") and self.config[key] is not None:
-                    self._stored.swift[key] = self.config[key]
-                    file.write(
-                        f"{key.upper().replace('-', '_')}={str(self.config[key]).strip()}\n"
-                    )
+            for k, v in self.swift_creds.items():
+                file.write(f"{k.upper().replace('-', '_')}={v}\n")
 
     # action hooks
 
@@ -296,12 +296,12 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             self.unit.status = ops.BlockedStatus("swift secret not available")
             return
 
-        swift_creds = {
+        self.swift_creds = {
             k: v
             for k, v in self.typed_config.model_dump().items()
             if k.startswith("swift_")
         }
-        swift_creds["swift_password"] = swift_password
+        self.swift_creds["swift_password"] = swift_password
 
         self.write_worker_config()
         self.write_swift_config()
