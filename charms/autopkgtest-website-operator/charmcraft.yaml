@@ -28,8 +28,8 @@ charm-libs:
     version: "0"
   - lib: operator_libs_linux.systemd
     version: "1"
-  - lib: traefik_k8s.ingress
-    version: "2"
+  - lib: haproxy.haproxy_route
+    version: "1"
 
 config:
   options:
@@ -42,9 +42,6 @@ config:
     swift-auth-url:
       type: string
       description: swift auth URL
-    swift-password:
-      type: secret
-      description: swift password
     swift-project-domain-name:
       type: string
       description: swift project domain name
@@ -60,10 +57,14 @@ config:
     swift-username:
       type: string
       description: swift username
+    swift-secret-id:
+      type: secret
+      description: juju secret id holding the swift password
 
 requires:
   amqp:
     interface: rabbitmq
-  ingress:
-    interface: ingress
+    limit: 1
+  route_website:
+    interface: haproxy-route
     limit: 1

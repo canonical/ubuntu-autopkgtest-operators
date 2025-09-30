@@ -89,6 +89,7 @@ def install() -> None:
 def configure(
     *,
     hostname: str,
+    http_port: int,
     amqp_hostname: str,
     amqp_username: str,
     amqp_password: str,
@@ -124,7 +125,7 @@ def configure(
     )
     j2template = j2env.get_template("a2-autopkgtest.conf.j2")
     j2context = {
-        "http_port": 80,
+        "http_port": http_port,
         "documentroot": WWW_DIR,
         "servername": hostname,
     }

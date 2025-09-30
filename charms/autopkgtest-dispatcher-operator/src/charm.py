@@ -5,6 +5,7 @@
 import logging
 import os
 import pathlib
+import shlex
 import shutil
 import subprocess
 import textwrap
@@ -13,6 +14,7 @@ import action_types
 import config_types
 import ops
 from ops.framework import StoredState
+from ops.model import Secret
 from systemd_helper import SystemdHelper
 
 import charms.operator_libs_linux.v0.apt as apt
@@ -69,8 +71,6 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             got_amqp_creds=False,
             amqp_hostname=None,
             amqp_password=None,
-            swift={},
-            config={},
             workers={},
         )
 
@@ -81,6 +81,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
         # basic hooks
         framework.observe(self.on.install, self._on_install)
+        framework.observe(self.on.config_changed, self._on_config_changed)
         framework.observe(self.on.start, self._on_start)
 
         # action hooks
@@ -93,15 +94,10 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             self.on.create_worker_units_action, self._on_create_worker_units
         )
 
-        # config hook
-        framework.observe(self.on.config_changed, self._on_config_changed)
-
         # relation hooks
         framework.observe(self.on.amqp_relation_joined, self._on_amqp_relation_joined)
         framework.observe(self.on.amqp_relation_changed, self._on_amqp_relation_changed)
         framework.observe(self.on.amqp_relation_broken, self._on_amqp_relation_broken)
-
-    # basic hooks
 
     def _on_install(self, event: ops.InstallEvent):
         """Install the workload on the machine."""
@@ -124,26 +120,25 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         if isinstance(self.unit.status, ops.BlockedStatus):
             return
 
-        self.unit.status = ops.MaintenanceStatus("starting workload")
         self.unit.status = ops.ActiveStatus()
 
     # utils
     def run_as_user(self, command: str):
         # using shell=True to be able to use quotes in the command
-        subprocess.run(f"su {USER} -c '{command}'", shell=True, check=True)
+        subprocess.run(["sudo", "-u", USER] + shlex.split(command))
 
-    def set_rabbitmq_creds(self):
+    def write_rabbitmq_creds(self):
         """Set rabbitmq creds"""
-        self.unit.status = ops.MaintenanceStatus("writing rabbitmq creds")
         with open(RABBITMQ_CREDS_PATH, "w") as file:
             file.write(
-                textwrap.dedent(f"""\
-                                RABBIT_HOST="{self._stored.amqp_hostname}"
-                                RABBIT_USER="{RABBITMQ_USERNAME}"
-                                RABBIT_PASSWORD="{self._stored.amqp_password}"
-                                """)
+                textwrap.dedent(
+                    f"""\
+                    RABBIT_HOST="{self._stored.amqp_hostname}"
+                    RABBIT_USER="{RABBITMQ_USERNAME}"
+                    RABBIT_PASSWORD="{self._stored.amqp_password}"
+                    """
+                )
             )
-        self.unit.status = ops.ActiveStatus()
 
     def set_up_proxy(self):
         with open("/etc/environment", "w") as env_file:
@@ -235,22 +230,6 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
                                 """)
             )
 
-    def is_swift_defined(self):
-        required_creds = [
-            "swift-auth-url",
-            "swift-username",
-            "swift-password",
-            "swift-project-domain-name",
-            "swift-project-name",
-            "swift-user-domain-name",
-        ]
-        return all(
-            [
-                cred in self._stored.swift and self._stored.swift[cred] is not None
-                for cred in required_creds
-            ]
-        )
-
     def write_swift_config(self):
         with open(SWIFT_CONFIG_PATH, "w") as file:
             for key in self.config:
@@ -298,42 +277,29 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
     # config hook
 
     def _on_config_changed(self, event: ops.ConfigChangedEvent):
-        changes = self.config_changes()
-        if not changes:
-            logger.debug("No configuration changes detected")
-            return
-
-        if any(
-            [
-                "releases" in changes,
-                "worker_upstream_percentage" in changes,
-                "stable_release_percentage" in changes,
-            ]
-        ):
-            self.write_worker_config()
-
-        if any([change.startswith("swift-") for change in changes]):
-            self.write_swift_config()
-
-        self._stored.config = dict(self.config)
+        self.unit.status = ops.MaintenanceStatus("configuring service")
 
         if not self._stored.got_amqp_creds:
             self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
             return
 
-        if not self.is_swift_defined():
-            self.unit.status = ops.BlockedStatus("waiting for swift credentials")
+        swift_secret_id = self.typed_config.swift_secret_id
+        try:
+            swift_secret: Secret = self.model.get_secret(
+                id=swift_secret_id, label="swift-secret"
+            )
+            swift_password = swift_secret.get_content().get("password")
+        except (ops.SecretNotFoundError, ops.model.ModelError):
+            self.unit.status = ops.BlockedStatus("swift secret not available")
             return
 
-    def config_changes(self):
-        new_config = self.config
-        old_config = self._stored.config
-        to_apply = {}
-        for k, v in new_config.items():
-            if k not in old_config or v != old_config[k]:
-                to_apply[k] = v
+        swift_creds = {
+            k: v for k, v in self.typed_config.items() if k.startswith("swift_")
+        }
+        swift_creds["swift_passsword"] = swift_password
 
-        return to_apply
+        self.write_worker_config()
+        self.write_swift_config()
 
     # relation hooks
 
@@ -347,6 +313,9 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         )
 
     def _on_amqp_relation_changed(self, event: ops.RelationChangedEvent):
+        self.unit.status = ops.MaintenanceStatus(
+            f"Updating up {event.relation.name} connection"
+        )
         unit_data = event.relation.data[event.unit]
 
         if "password" not in unit_data:
@@ -360,7 +329,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         self._stored.amqp_hostname = hostname
         self._stored.amqp_password = password
 
-        self.set_rabbitmq_creds()
+        self.write_rabbitmq_creds()
         self.on.config_changed.emit()
 
     def _on_amqp_relation_broken(self, event: ops.RelationBrokenEvent):
@@ -369,6 +338,9 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         self._stored.amqp_password = None
         os.remove(RABBITMQ_CREDS_PATH)
 
+        self.on.config_changed.emit()
+
+    def _on_secret_changed(self, event: ops.SecretChangedEvent):
         self.on.config_changed.emit()
 
 

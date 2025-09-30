@@ -90,9 +90,6 @@ config:
     swift-username:
       type: string
       description: username for swift
-    swift-password:
-      type: secret
-      description: password for swift
     swift-project-domain-name:
       type: string
       description: swift project domain
@@ -102,6 +99,9 @@ config:
     swift-user-domain-name:
       type: string
       description: swift user domain name
+    swift-secret-id:
+      type: secret
+      description: juju secret id holding the swift password
 
 requires:
   amqp:

@@ -10,13 +10,15 @@ import autopkgtest_website
 import config_types
 import ops
 from ops.framework import StoredState
+from ops.model import Secret
 
-from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer as IngressRequirer
+from charms.haproxy.v1.haproxy_route import HaproxyRouteRequirer
 
 logger = logging.getLogger(__name__)
 
 
 RABBITMQ_USERNAME = "webservice"
+HTTP_PORT = 80
 
 
 class AutopkgtestWebsiteCharm(ops.CharmBase):
@@ -27,44 +29,37 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
 
+        self.route_website = HaproxyRouteRequirer(
+            self,
+            service="autopkgtest_website",
+            ports=[HTTP_PORT],
+            paths=["/"],
+            relation_name="route_website",
+        )
+
         self._stored.set_default(
             got_amqp_creds=False,
             amqp_hostname=None,
             amqp_password=None,
-            swift_creds={},
         )
 
         self.typed_config = self.load_config(
             config_types.WebsiteConfig, errors="blocked"
         )
 
-        self.ingress = IngressRequirer(
-            self, port=80, strip_prefix=True, relation_name="ingress"
-        )
-
         framework.observe(self.on.install, self._on_install)
         framework.observe(self.on.start, self._on_start)
         framework.observe(self.on.config_changed, self._on_config_changed)
+        framework.observe(self.on.secret_changed, self._on_secret_changed)
         framework.observe(self.on.amqp_relation_joined, self._on_amqp_relation_joined)
         framework.observe(self.on.amqp_relation_changed, self._on_amqp_relation_changed)
+        framework.observe(self.on.amqp_relation_broken, self._on_amqp_relation_broken)
 
     def _on_install(self, event: ops.InstallEvent):
         """Install the workload on the machine."""
 
         self.unit.status = ops.MaintenanceStatus("installing website software")
         autopkgtest_website.install()
-
-    def is_swift_defined(self):
-        required_creds = [
-            "swift-auth-url",
-            "swift-project-domain-name",
-            "swift-username",
-            "swift-user-domain-name",
-            "swift-project-name",
-            "swift-password",
-        ]
-
-        return all([cred in self.config for cred in required_creds])
 
     def _on_config_changed(self, event: ops.ConfigChangedEvent):
         """Configure/Reconfigure service"""
@@ -74,15 +69,25 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
             return
 
-        swift_creds = {k: v for k, v in self.config.items() if k.startswith("swift_")}
-
-        if not all(v for v in swift_creds.values()):
-            self.unit.status = ops.BlockedStatus("waiting for swift creds")
+        swift_secret_id = self.typed_config.swift_secret_id
+        try:
+            swift_secret: Secret = self.model.get_secret(
+                id=swift_secret_id, label="swift-secret"
+            )
+            swift_password = swift_secret.get_content().get("password")
+        except (ops.SecretNotFoundError, ops.model.ModelError):
+            self.unit.status = ops.BlockedStatus("swift secret not available")
             return
+
+        swift_creds = {
+            k: v for k, v in self.typed_config.items() if k.startswith("swift_")
+        }
+        swift_creds["swift_passsword"] = swift_password
 
         self.unit.status = ops.MaintenanceStatus("configuring website")
         autopkgtest_website.configure(
             hostname=self.typed_config.hostname,
+            http_port=HTTP_PORT,
             amqp_hostname=self._stored.amqp_hostname,
             amqp_username=RABBITMQ_USERNAME,
             amqp_password=self._stored.amqp_password,
@@ -99,7 +104,7 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
 
         self.unit.status = ops.MaintenanceStatus("starting workload")
         autopkgtest_website.start()
-        self.unit.open_port("tcp", 80)
+        self.unit.open_port("tcp", HTTP_PORT)
         self.unit.status = ops.ActiveStatus()
 
     def _on_amqp_relation_joined(self, event: ops.RelationJoinedEvent):
@@ -111,20 +116,25 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             {"username": RABBITMQ_USERNAME, "vhost": "/"}
         )
 
-    def _on_amqp_relation_changed(self, event):
+    def _on_amqp_relation_changed(self, event: ops.RelationChangedEvent):
         self.unit.status = ops.MaintenanceStatus(
             f"Updating up {event.relation.name} connection"
         )
 
         unit_data = event.relation.data[event.unit]
-
-        if "password" not in unit_data:
-            logger.info("rabbitmq-server has not sent password yet")
-            return
-
         self._stored.amqp_hostname = unit_data["hostname"]
         self._stored.amqp_password = unit_data["password"]
         self._stored.got_amqp_creds = True
+        self.on.config_changed.emit()
+
+    def _on_amqp_relation_broken(self, event: ops.RelationBrokenEvent):
+        self._stored.got_amqp_creds = False
+        self._stored.amqp_hostname = None
+        self._stored.amqp_password = None
+
+        self.on.config_changed.emit()
+
+    def _on_secret_changed(self, event: ops.SecretChangedEvent):
         self.on.config_changed.emit()
 
 
