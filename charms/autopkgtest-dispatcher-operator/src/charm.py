@@ -284,7 +284,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         if not self._stored.installed:
             self.on.install.emit()
 
-        self.unit.status = ops.MaintenanceStatus("configuring service")
+        self.unit.status = ops.MaintenanceStatus("configure: gathering data")
 
         if not self._stored.got_amqp_creds:
             self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
@@ -299,6 +299,8 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             except (ops.SecretNotFoundError, ops.model.ModelError):
                 self.unit.status = ops.BlockedStatus("swift secret not yet available")
                 time.sleep(10)
+
+        self.unit.status = ops.MaintenanceStatus("configuring service")
 
         self.swift_creds = {
             k: v

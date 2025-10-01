@@ -73,6 +73,8 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         if not self._stored.installed:
             self.on.install.emit()
 
+        self.unit.status = ops.MaintenanceStatus("configure: gathering data")
+
         if not self._stored.got_amqp_creds:
             self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
             return
