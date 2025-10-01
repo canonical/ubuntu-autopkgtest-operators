@@ -8,6 +8,7 @@ import shlex
 import shutil
 import subprocess
 import textwrap
+import time
 from pathlib import Path
 
 import action_types
@@ -289,13 +290,15 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
             return
 
-        try:
-            swift_password = self.typed_config.swift_juju_secret.get_content().get(
-                "password"
-            )
-        except (ops.SecretNotFoundError, ops.model.ModelError):
-            self.unit.status = ops.BlockedStatus("swift secret not available")
-            return
+        # https://github.com/juju/terraform-provider-juju/issues/770#issuecomment-3051899587
+        while True:
+            try:
+                swift_password = self.typed_config.swift_juju_secret.get_content().get(
+                    "password"
+                )
+            except (ops.SecretNotFoundError, ops.model.ModelError):
+                self.unit.status = ops.BlockedStatus("swift secret not yet available")
+                time.sleep(10)
 
         self.swift_creds = {
             k: v
