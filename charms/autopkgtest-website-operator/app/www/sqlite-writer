@@ -8,16 +8,12 @@ import os
 import socket
 import sqlite3
 
-import swiftclient
 from helpers.utils import (
     SqliteWriterConfig,
     amqp_connect,
     get_db_path,
     get_test_id,
     init_db,
-    is_db_empty,
-    swift_connect,
-    zstd_decompress,
 )
 
 sqlite3.paramstyle = "named"
@@ -86,55 +82,11 @@ def msg_callback(msg, db_con):
     checkpoint_db_if_necessary(db_con)
 
 
-def restore_db_from_backup(db_con: sqlite3.Connection):
-    backups_container = "db-backups"
-    logging.info("Connecting to swift")
-    try:
-        swift_conn = swift_connect()
-        _, objects = swift_conn.get_container(container=backups_container)
-    except swiftclient.ClientException as e:
-        logging.warning(
-            (
-                f"Initialising swift connection failed with {e} - "
-                "continuing without restoring db from backup"
-            )
-        )
-        return
-    logging.info(
-        f"Connected to swift! Getting backups from container: {backups_container}"
-    )
-    db_con.execute("PRAGMA wal_checkpoint(TRUNCATE);")
-
-    latest = objects[-1]
-    _, compressed_db_dump = swift_conn.get_object(
-        container=backups_container, obj=latest["name"]
-    )
-    db_dump = zstd_decompress(compressed_db_dump)
-    logging.info(
-        (
-            "Restoring db from swift - "
-            f"container: {backups_container} - object: {latest['name']}"
-        )
-    )
-    for line in db_dump.splitlines():
-        try:
-            db_con.execute(line.decode("utf-8"))
-        except sqlite3.OperationalError as e:
-            logging.warning(
-                f"Running sql command: `{line.decode('utf-8')}` failed with {e}"
-            )
-    logging.info("db restored from backup!")
-
-
 def main():
     logging.basicConfig(
         level=(logging.DEBUG if "DEBUG" in os.environ else logging.INFO)
     )
     db_con = init_db(get_db_path())
-    if is_db_empty(db_con):
-        logging.info("DB is empty, indicating this unit has been recently deployed.")
-        logging.info("Restoring database from a swift backup")
-        restore_db_from_backup(db_con)
     amqp_con = amqp_connect()
     status_ch = amqp_con.channel()
     status_ch.exchange_declare(

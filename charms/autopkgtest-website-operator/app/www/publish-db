@@ -11,13 +11,12 @@ import hashlib
 import logging
 import os
 import sqlite3
-import sys
 import tempfile
 import urllib.request
 from pathlib import Path
 
 import apt_pkg
-from helpers.utils import get_autopkgtest_cloud_conf, is_db_empty
+from helpers.utils import get_autopkgtest_cloud_conf
 
 sqlite3.paramstyle = "named"
 
@@ -29,11 +28,6 @@ def init_db(path, path_current, path_rw):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path)
     db_rw = sqlite3.connect("file:%s?mode=ro" % path_rw, uri=True)
-
-    # checks if db is empty
-    if is_db_empty(db_rw):
-        logging.warning(f"Database at {path_rw} is empty")
-        sys.exit(0)
 
     # if no db, we need to copy /home/ubuntu/autopkgtest.db to /home/ubuntu/public/autopkgtest.db
     if not os.path.exists(path_current):
