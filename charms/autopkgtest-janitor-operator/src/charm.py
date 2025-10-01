@@ -2,12 +2,11 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details
 
-import glob
 import logging
 import os
-import pathlib
 import subprocess
 import textwrap
+from pathlib import Path
 
 import action_types
 import config_types
@@ -20,12 +19,13 @@ import charms.operator_libs_linux.v2.snap as snap
 
 logger = logging.getLogger(__name__)
 
+CHARM_SOURCE_PATH = Path(__file__).parent.parent
 
 USER = "ubuntu"
 
 AUTOPKGTEST_REPO = "https://salsa.debian.org/ubuntu-ci-team/autopkgtest.git"
 AUTOPKGTEST_BRANCH = "ubuntu/production-tip"
-AUTOPKGTEST_LOCATION = pathlib.Path(f"~{USER}/autopkgtest").expanduser()
+AUTOPKGTEST_LOCATION = Path(f"~{USER}/autopkgtest").expanduser()
 
 SNAP_DEPENDENCIES = [{"name": "lxd", "channel": "6/stable"}]
 
@@ -33,8 +33,7 @@ ARCH_RELEASE_ALLOW_MAPPING = {"trusty": ["amd64", "i386"], "xenial": ["amd64", "
 
 ARCH_RELEASE_DISALLOW_MAPPING = {"bionic": ["riscv64"], "focal": ["riscv64"]}
 
-# this has to be a glob as part of the path depends on the unit revision number
-SYSTEMD_UNIT_FILES_PATH = "/var/lib/juju/agents/unit-autopkgtest-janitor-*/charm/units"
+SYSTEMD_UNIT_FILES_PATH = CHARM_SOURCE_PATH / "units"
 
 DEB_DEPENDENCIES = ["retry"]
 
@@ -109,13 +108,11 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
     def install_systemd_units(self):
         # TODO: this doesn't do anything for now, but will install
         # other maintenance tasks in the future
-        units_path = glob.glob(SYSTEMD_UNIT_FILES_PATH)
-        assert len(units_path) == 1, "there should be one units directory"
-        units_path = units_path[0]
+        units_path = SYSTEMD_UNIT_FILES_PATH
 
-        dest_dir = pathlib.Path("/etc/systemd/system/")
+        dest_dir = Path("/etc/systemd/system/")
 
-        for unit in pathlib.Path(units_path).iterdir():
+        for unit in Path(units_path).iterdir():
             dest = dest_dir.joinpath(unit.name)
             try:
                 os.symlink(unit, dest)
