@@ -296,6 +296,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
                 swift_password = self.typed_config.swift_juju_secret.get_content().get(
                     "password"
                 )
+                break
             except (ops.SecretNotFoundError, ops.model.ModelError):
                 self.unit.status = ops.BlockedStatus("swift secret not yet available")
                 time.sleep(10)
