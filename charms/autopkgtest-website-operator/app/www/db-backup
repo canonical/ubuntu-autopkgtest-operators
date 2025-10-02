@@ -8,9 +8,7 @@ import atexit
 import datetime
 import hashlib
 import logging
-import os
 import sqlite3
-import sys
 from pathlib import Path
 
 import swiftclient
@@ -80,7 +78,7 @@ def upload_backup_to_swift(
     """
     Upload compressed database to swift storage under container db-backups
     """
-    now = datetime.datetime.utcnow().strftime("%Y/%m/%d/%H_%M_%S")
+    now = datetime.datetime.now(datetime.UTC).strftime("%Y/%m/%d/%H_%M_%S")
     checksum = get_db_backup_checksum()
     object_path = "%s/%s-%s.%s" % (
         now,
@@ -114,11 +112,13 @@ def delete_old_backups(
     """
     logging.info("Removing old db backups...")
     _, objects = swift_conn.get_container(CONTAINER_NAME)
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.UTC)
 
     for obj in objects:
         last_modified = obj["last_modified"]
-        timestamp = datetime.datetime.strptime(last_modified, "%Y-%m-%dT%H:%M:%S.%fZ")
+        timestamp = datetime.datetime.strptime(
+            last_modified, "%Y-%m-%dT%H:%M:%S.%fZ"
+        ).replace(tzinfo=datetime.UTC)
         diff = now - timestamp
         if diff > datetime.timedelta(days=MAX_DAYS):
             logging.info("Deleting %s" % obj["name"])
@@ -146,9 +146,6 @@ def cleanup():
 if __name__ == "__main__":
     # Only bother running script if this unit is the leader.
     logging.basicConfig(level="INFO")
-    if not os.path.isfile("/run/autopkgtest-web-is-leader"):
-        logging.info("unit is not leader, exiting...")
-        sys.exit(0)
     logging.info("Connecting to db")
     db_con = db_connect()
     logging.info("Creating a backup of the db...")
