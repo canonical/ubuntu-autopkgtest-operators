@@ -86,7 +86,7 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
                     "password"
                 )
                 break
-            except (ops.SecretNotFoundError, ops.ModelError):
+            except ops.ModelError:
                 self.unit.status = ops.BlockedStatus("swift secret not yet available")
                 time.sleep(10)
 

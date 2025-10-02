@@ -297,7 +297,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
                     "password"
                 )
                 break
-            except (ops.SecretNotFoundError, ops.model.ModelError):
+            except ops.model.ModelError:
                 self.unit.status = ops.BlockedStatus("swift secret not yet available")
                 time.sleep(10)
 
