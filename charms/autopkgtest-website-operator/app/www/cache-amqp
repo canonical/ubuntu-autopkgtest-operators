@@ -52,26 +52,19 @@ class AutopkgtestQueueContents:
                         code = e.code
                         if code != 404:
                             raise
-                        if os.path.exists("/run/autopkgtest-web-is-leader"):
-                            # 404s invalidate the channel for some reason
-                            self.amqp_channel = self.amqp_con.channel()
-                            # queue does not exist, create it
-                            logger.info(
-                                f"Semaphore queue {queue_name} does not exist, initialising..."
-                            )
-                            self.amqp_channel.queue_declare(queue_name, durable=True)
-                            # add a single message to the queue so only one run
-                            # of cache-amqp can read the actual queue contents
-                            self.amqp_channel.basic_publish(
-                                amqp.Message(f"{queue_name}", delivery_mode=2),
-                                routing_key=queue_name,
-                            )
-                        else:  # not the leader
-                            # pylint: disable=line-too-long
-                            logging.error(
-                                "We are not the leader, and there is no semaphore queue yet, we can't do anything - exiting."
-                            )
-                            sys.exit(0)
+                        # 404s invalidate the channel for some reason
+                        self.amqp_channel = self.amqp_con.channel()
+                        # queue does not exist, create it
+                        logger.info(
+                            f"Semaphore queue {queue_name} does not exist, initialising..."
+                        )
+                        self.amqp_channel.queue_declare(queue_name, durable=True)
+                        # add a single message to the queue so only one run
+                        # of cache-amqp can read the actual queue contents
+                        self.amqp_channel.basic_publish(
+                            amqp.Message(f"{queue_name}", delivery_mode=2),
+                            routing_key=queue_name,
+                        )
 
     @property
     def release_arches(self):
