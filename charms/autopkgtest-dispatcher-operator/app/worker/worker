@@ -2,7 +2,7 @@
 # autopkgtest cloud worker
 # Author: Martin Pitt <martin.pitt@ubuntu.com>
 #
-# Requirements: python3-amqp python3-swiftclient python3-influxdb
+# Requirements: python3-amqp python3-swiftclient
 # Requirements for running autopkgtest from git: python3-debian libdpkg-perl
 #
 # pylint: disable=too-many-lines,line-too-long
@@ -29,28 +29,9 @@ import amqp
 import distro_info
 import swiftclient
 import systemd.journal
-from influxdb import InfluxDBClient
-from influxdb.exceptions import InfluxDBClientError
 
 ALL_RELEASES = distro_info.UbuntuDistroInfo().get_all(result="object")
 
-try:
-    INFLUXDB_CONTEXT = os.environ["INFLUXDB_CONTEXT"]
-    INFLUXDB_DATABASE = os.environ["INFLUXDB_DATABASE"]
-    INFLUXDB_HOSTNAME = os.environ["INFLUXDB_HOSTNAME"]
-    INFLUXDB_PASSWORD = os.environ["INFLUXDB_PASSWORD"]
-    INFLUXDB_PORT = os.environ["INFLUXDB_PORT"]
-    INFLUXDB_USERNAME = os.environ["INFLUXDB_USERNAME"]
-
-    influx_client = InfluxDBClient(
-        INFLUXDB_HOSTNAME,
-        INFLUXDB_PORT,
-        INFLUXDB_USERNAME,
-        INFLUXDB_PASSWORD,
-        INFLUXDB_DATABASE,
-    )
-except KeyError:
-    influx_client = None
 
 my_path = os.path.dirname(__file__)
 root_path = os.path.dirname(os.path.abspath(my_path))
@@ -183,36 +164,6 @@ OK_PKG_STRINGS = {
     "dnspython": ["Temporary failure in name resolution"],
     "systemd*": ["Temporary failure in name resolution"],
 }
-
-
-def submit_metric(architecture, code, pkgname, current_region, retry, release):
-    if influx_client is None:
-        return
-
-    region = (
-        current_region
-        if current_region.startswith("lxd")
-        else current_region.split("-")[0]
-    )
-
-    point = {
-        "measurement": "autopkgtest_exit_event",
-        "fields": {"exited": True},
-        "tags": {
-            "arch": architecture,
-            "exit_status": code,
-            "instance": INFLUXDB_CONTEXT,
-            "package": pkgname,
-            "region": region,
-            "retry": retry,
-            "series": release,
-        },
-    }
-    try:
-        influx_client.write_points([point])
-    except InfluxDBClientError as err:
-        logging.error("Write to InfluxDB failed: %s" % err)
-        return
 
 
 def getglob(d, glob, default=None):
@@ -1134,14 +1085,6 @@ def request(msg):
                         retrying,
                     )
                     logging.error(contents)
-                    submit_metric(
-                        architecture,
-                        code,
-                        pkgname,
-                        current_region,
-                        True,
-                        release,
-                    )
                     cleanup_and_sleep(out_dir)
                 elif is_failure:
                     contents = log_contents(out_dir)
@@ -1161,14 +1104,6 @@ def request(msg):
                         logging.warning("%sLog follows:", retrying)
                         logging.error(contents)
                         if retry < 2:
-                            submit_metric(
-                                architecture,
-                                code,
-                                pkgname,
-                                current_region,
-                                True,
-                                release,
-                            )
                             cleanup_and_sleep(out_dir)
                     else:
                         break
@@ -1215,14 +1150,6 @@ def request(msg):
                     logging.warning("Testbed failure. %sLog follows:", retrying)
                     logging.error(contents)
                     if retry < 2:
-                        submit_metric(
-                            architecture,
-                            code,
-                            pkgname,
-                            current_region,
-                            True,
-                            release,
-                        )
                         cleanup_and_sleep(out_dir)
                 else:
                     # This block is reached in edge cases with undefined failures,
@@ -1266,7 +1193,6 @@ def request(msg):
             duration = int(time.time() - retry_start_time)
 
         logging.info("autopkgtest exited with code %i", code)
-        submit_metric(architecture, code, pkgname, current_region, False, release)
         if code == 1:
             logging.error("autopkgtest exited with unexpected error code 1")
             sys.exit(1)

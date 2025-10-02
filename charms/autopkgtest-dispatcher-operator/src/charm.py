@@ -42,7 +42,6 @@ DEB_DEPENDENCIES = [
     "autodep8",
     "python3-amqp",
     "python3-swiftclient",
-    "python3-influxdb",
 ]
 SNAP_DEPENDENCIES = [{"name": "lxd", "channel": "6/stable"}]
 

@@ -51,7 +51,6 @@ PACKAGES = [
     "python3-distro-info",
     "python3-flask",
     "python3-flask-openid",
-    "python3-influxdb",
     "python3-pygit2",
     "python3-swiftclient",
     "python3-werkzeug",

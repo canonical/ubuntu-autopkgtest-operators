@@ -113,12 +113,6 @@ def get_autopkgtest_cloud_conf():
                 ) from fnfe
 
 
-def get_influx_creds():
-    # we never need the individual fields of the influx creds,
-    # so return the whole config section at once
-    return get_autopkgtest_cloud_conf()["influxdb"]
-
-
 def get_autopkgtest_db_conn():
     """Get connection to autopkgtest db from config
 

@@ -6,12 +6,10 @@ import logging
 
 from helpers.utils import (
     get_autopkgtest_db_conn,
-    get_influx_creds,
     get_release_arches,
     get_source_versions,
     get_stats_cache,
 )
-from influxdb import InfluxDBClient
 
 STAT_NUMPKGS = "numpkgs"
 STAT_NUMPKGSPASS = "numpkgspass"
@@ -192,11 +190,6 @@ def parse_args():
 
 
 def main():
-    try:
-        influx_creds = get_influx_creds()
-    except KeyError:
-        logger.warning("Could not load InfluxDB credentials, writing to DB will fail")
-
     cache_directory = get_stats_cache()
     cache_directory.mkdir(parents=True, exist_ok=True)
 
@@ -205,21 +198,6 @@ def main():
 
     cache_file = cache_directory / "stats.json"
     cache_file.write_text(json.dumps(data))
-
-    try:
-        influx_client = InfluxDBClient(
-            influx_creds["influxdb_hostname"],
-            influx_creds["influxdb_port"],
-            influx_creds["influxdb_username"],
-            influx_creds["influxdb_password"],
-            influx_creds["influxdb_database"],
-        )
-        influx_client.write_points(
-            make_submission(data, influx_creds["influxdb_context"])
-        )
-    except Exception:
-        # leaving this as general exception to cover all possible failures
-        logger.warning("Cannot write to InfluxDB")
 
 
 if __name__ == "__main__":
