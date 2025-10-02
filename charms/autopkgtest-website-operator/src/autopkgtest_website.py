@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from textwrap import dedent
 
 import jinja2
 
@@ -60,6 +61,23 @@ PACKAGES = [
 
 def install() -> None:
     """Install website"""
+    logger.info("Installing proxy")
+    if (
+        "JUJU_CHARM_HTTP_PROXY" in os.environ
+        and "JUJU_CHARM_HTTPS_PROXY" in os.environ
+        and "JUJU_CHARM_NO_PROXY" in os.environ
+    ):
+        Path("/etc/environment.d").mkdir(exist_ok=True)
+        with open("/etc/environment.d/proxy.conf") as file:
+            file.write(
+                dedent(
+                    f"""
+                http_proxy={os.environ["JUJU_CHARM_HTTP_PROXY"]}
+                https_proxy={os.environ["JUJU_CHARM_HTTPS_PROXY"]}
+                no_proxy={os.environ["JUJU_CHARM_NO_PROXY"]}
+                """
+                )
+            )
 
     logger.info("Updating package index")
     apt.update()
