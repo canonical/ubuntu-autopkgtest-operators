@@ -12,7 +12,7 @@ import config_types
 import ops
 from ops.framework import StoredState
 
-from charms.haproxy.v1.haproxy_route import HaproxyRouteRequirer
+from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer as IngressRequirer
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +29,11 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
     def __init__(self, framework: ops.Framework):
         super().__init__(framework)
 
-        self.route_website = HaproxyRouteRequirer(
+        self.ingress = IngressRequirer(
             self,
-            service="autopkgtest_website",
-            ports=[HTTP_PORT],
-            paths=["/"],
-            relation_name="route-website",
+            port=HTTP_PORT,
+            strip_prefix=True,
+            relation_name="ingress",
         )
 
         self._stored.set_default(

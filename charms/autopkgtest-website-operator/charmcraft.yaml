@@ -28,8 +28,8 @@ charm-libs:
     version: "0"
   - lib: operator_libs_linux.systemd
     version: "1"
-  - lib: haproxy.haproxy_route
-    version: "1"
+  - lib: traefik_k8s.ingress
+    version: "2"
 
 config:
   options:
@@ -65,6 +65,6 @@ requires:
   amqp:
     interface: rabbitmq
     limit: 1
-  route-website:
-    interface: haproxy-route
+  ingress:
+    interface: ingress
     limit: 1
