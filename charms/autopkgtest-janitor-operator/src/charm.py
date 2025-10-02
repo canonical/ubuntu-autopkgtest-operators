@@ -86,7 +86,6 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             file.write(
                 textwrap.dedent(
                     f"""
-                    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
                     http_proxy={os.getenv("JUJU_CHARM_HTTP_PROXY", "")}
                     https_proxy={os.getenv("JUJU_CHARM_HTTPS_PROXY", "")}
                     no_proxy={os.getenv("JUJU_CHARM_NO_PROXY", "")}
