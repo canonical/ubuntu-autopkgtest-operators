@@ -145,8 +145,9 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             )
 
     def set_up_proxy(self):
-        with open("/etc/environment", "w") as env_file:
-            env_file.write(
+        Path("/etc/environment.d").mkdir(exist_ok=True)
+        with open("/etc/environment.d/proxy.conf") as file:
+            file.write(
                 textwrap.dedent(
                     f"""\
                     PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"

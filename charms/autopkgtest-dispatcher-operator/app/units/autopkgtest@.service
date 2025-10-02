@@ -8,7 +8,7 @@ After=network-online.target
 [Service]
 User=ubuntu
 TimeoutStartSec=5min
-EnvironmentFile=-/etc/environment
+EnvironmentFile=-/etc/environment.d/proxy.conf
 EnvironmentFile=/etc/autopkgtest-dispatcher/rabbitmq.cred
 EnvironmentFile=/etc/autopkgtest-dispatcher/swift.cred
 ExecStart=/bin/sh -ec 'REGION="%i"; REGION="$${REGION%-*}"; \

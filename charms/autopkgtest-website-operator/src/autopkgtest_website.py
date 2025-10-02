@@ -61,7 +61,8 @@ PACKAGES = [
 
 def install() -> None:
     """Install website"""
-    logger.info("Installing proxy")
+
+    logger.info("Installing proxy environment file")
     if (
         "JUJU_CHARM_HTTP_PROXY" in os.environ
         and "JUJU_CHARM_HTTPS_PROXY" in os.environ
@@ -71,11 +72,11 @@ def install() -> None:
         with open("/etc/environment.d/proxy.conf") as file:
             file.write(
                 dedent(
-                    f"""
-                http_proxy={os.environ["JUJU_CHARM_HTTP_PROXY"]}
-                https_proxy={os.environ["JUJU_CHARM_HTTPS_PROXY"]}
-                no_proxy={os.environ["JUJU_CHARM_NO_PROXY"]}
-                """
+                    f"""\
+                    http_proxy={os.environ["JUJU_CHARM_HTTP_PROXY"]}
+                    https_proxy={os.environ["JUJU_CHARM_HTTPS_PROXY"]}
+                    no_proxy={os.environ["JUJU_CHARM_NO_PROXY"]}
+                    """
                 )
             )
 
