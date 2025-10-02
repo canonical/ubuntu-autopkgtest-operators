@@ -61,8 +61,12 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         framework.observe(self.on.config_changed, self._on_config_changed)
 
     def _on_install(self, event: ops.InstallEvent):
-        self.unit.status = ops.MaintenanceStatus("setting up proxy settings")
-        self.set_up_proxy()
+        if (
+            "JUJU_CHARM_HTTPS_PROXY" in os.environ
+            or "JUJU_CHARM_HTTP_PROXY" in os.environ
+        ):
+            self.unit.status = ops.MaintenanceStatus("setting up proxy settings")
+            self.set_up_proxy()
         self.unit.status = ops.MaintenanceStatus("installing system dependencies")
         self.install_dependencies()
         self.unit.status = ops.MaintenanceStatus("cloning autopkgtest repository")

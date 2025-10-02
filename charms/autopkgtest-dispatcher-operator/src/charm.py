@@ -103,8 +103,12 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         """Install the workload on the machine."""
         self.unit.status = ops.MaintenanceStatus("creating directories")
         CONF_DIRECTORY.mkdir(exist_ok=True)
-        self.unit.status = ops.MaintenanceStatus("setting up proxy settings")
-        self.set_up_proxy()
+        if (
+            "JUJU_CHARM_HTTPS_PROXY" in os.environ
+            or "JUJU_CHARM_HTTP_PROXY" in os.environ
+        ):
+            self.unit.status = ops.MaintenanceStatus("setting up proxy settings")
+            self.set_up_proxy()
         self.unit.status = ops.MaintenanceStatus("installing dependencies")
         self.install_dependencies()
         self.unit.status = ops.MaintenanceStatus("cloning repositories")

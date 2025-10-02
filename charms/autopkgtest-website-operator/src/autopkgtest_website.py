@@ -61,18 +61,19 @@ PACKAGES = [
 def install() -> None:
     """Install website"""
 
-    logger.info("Installing proxy environment file")
-    Path("/etc/environment.d").mkdir(exist_ok=True)
-    with open("/etc/environment.d/proxy.conf", "w") as file:
-        file.write(
-            dedent(
-                f"""\
-                http_proxy={os.getenv("JUJU_CHARM_HTTP_PROXY", "")}
-                https_proxy={os.getenv("JUJU_CHARM_HTTPS_PROXY", "")}
-                no_proxy={os.getenv("JUJU_CHARM_NO_PROXY", "")}
-                """
+    if "JUJU_CHARM_HTTPS_PROXY" in os.environ or "JUJU_CHARM_HTTP_PROXY" in os.environ:
+        logger.info("Installing proxy environment file")
+        Path("/etc/environment.d").mkdir(exist_ok=True)
+        with open("/etc/environment.d/proxy.conf", "w") as file:
+            file.write(
+                dedent(
+                    f"""\
+                    http_proxy={os.getenv("JUJU_CHARM_HTTP_PROXY", "")}
+                    https_proxy={os.getenv("JUJU_CHARM_HTTPS_PROXY", "")}
+                    no_proxy={os.getenv("JUJU_CHARM_NO_PROXY", "")}
+                    """
+                )
             )
-        )
 
     logger.info("Updating package index")
     apt.update()
