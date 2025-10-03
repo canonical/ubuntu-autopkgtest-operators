@@ -604,6 +604,64 @@ def list_ppa_runs(user, ppa):
     )
 
 
+@app.route("/recent")
+@app.route("/api/experimental/recent.json")
+def recent():
+    """
+    This endpoint provides recent results where recent means that the test is
+    among the last limit results (default = 100 and 0 < limit <= 10000).
+    The page includes details such as version, triggers, requester, result,
+    log, ...
+    """
+
+    args = flask.request.args
+    try:
+        limit = int(args.get("limit", 100))
+        assert limit > 0
+        assert limit <= 10000
+    except (AssertionError, ValueError):
+        limit = 100
+
+    try:
+        offset = int(args.get("offset", 0))
+        assert offset > 0
+        assert isinstance(offset, int)
+    except (AssertionError, ValueError):
+        offset = 0
+
+    arch = args.get("arch")
+    release = args.get("release")
+    user = args.get("user")
+
+    recent_test_results = get_results(
+        limit, offset, arch=arch, release=release, user=user
+    )
+
+    if flask.request.path.endswith(".json"):
+        return flask.jsonify(recent_test_results)
+
+    else:
+        all_arches = set()
+        all_releases = []
+        for r, arches in get_release_arches(db_con).items():
+            all_releases.append(r)
+            for a in arches:
+                all_arches.add(a)
+
+        return render(
+            "browse-recent.html",
+            running_tests=[],
+            queued_tests=[],
+            recent_test_results=recent_test_results,
+            limit=limit,
+            offset=offset,
+            releases=all_releases,
+            all_arches=all_arches,
+            arch=arch or "",
+            release=release or "",
+        )
+
+
 # backwards-compatible path with debci that specifies the source hash
 @app.route("/packages/<_>/<package>/<release>/<arch>")
 @app.route("/packages/<package>/<release>/<arch>")
