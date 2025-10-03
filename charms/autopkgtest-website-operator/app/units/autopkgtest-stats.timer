@@ -1,0 +1,8 @@
+[Unit]
+Description=Collect & submit package stats
+
+[Timer]
+OnCalendar=hourly
+
+[Install]
+WantedBy=autopkgtest-web.target
