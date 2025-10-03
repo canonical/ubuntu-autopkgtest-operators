@@ -1,0 +1,67 @@
+{% extends "browse-layout.html" %}
+{% block content %}
+  <div class="container">
+    <div class="row">
+      <div class="col-md-12">
+        <h1 class="page-header">List of packages with tests</h1>
+
+        <p>
+          Click on a source package to get to the current autopkgtest results.
+          Versions link to the current source package, which can be downloaded with
+          <a href="https://manpages.ubuntu.com/dget">dget</a>.
+        </p>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-5">
+        <table class="table-condensed table-striped">
+          <tr>
+            <th>Source package</th>
+            <th>Version</th>
+          </tr>
+          {% for i, pkglist in indexed_pkgs|dictsort %}
+            {% set next_id = True %}
+            {% for (p, v) in pkglist %}
+              {% if next_id %}
+                <tr id="index-{{i}}">
+                  {% set next_id = False %}
+                {% else %}
+                  <tr>
+                  {% endif %}
+                  <td>
+                    <a href="{{base_url}}packages/{{p}}">{{p}}</a>
+                  </td>
+                  <td>
+                    <a href="https://launchpad.net/ubuntu/+archive/primary/+files/{{p}}_{{v}}.dsc">{{v}}</a>
+                  </td>
+                </tr>
+              </tr>
+            {% endfor %}
+          {% endfor %}
+        </table>
+      </div>
+      <div class="col-md-2"></div>
+      <div class="col-md-3">
+        <div class="panel panel-default">
+          <div class="panel-heading">Package Index</div>
+          <div class="panel-body">
+            <ul class="list-inline">
+
+              {% for i in indexed_pkgs|sort %}
+                <li>
+                  <h5>
+                    <a href="#index-{{i}}">{{i}}</a>
+                  </h5>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <!-- class='container' -->
+
+{% endblock content %}
