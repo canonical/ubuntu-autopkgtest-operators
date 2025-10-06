@@ -129,6 +129,7 @@ def configure(
             "proxy_http",
             "remoteip",
             "rewrite",
+            "ssl",
         ]
     )
 
