@@ -32,7 +32,6 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         self.ingress = IngressRequirer(
             self,
             port=HTTP_PORT,
-            strip_prefix=True,
             relation_name="ingress",
         )
 
