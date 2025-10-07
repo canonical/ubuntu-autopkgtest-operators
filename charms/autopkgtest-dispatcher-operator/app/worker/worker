@@ -59,119 +59,9 @@ ARCH_RELEASE_ALLOW_MAPPING = {
     "xenial": ["amd64", "i386", "s390x"],
 }
 
-FAIL_CODES = (4, 6, 12, 14, 20)
 SUCCESS_CODES = (0, 2, 8)
 
 KEYS_FOR_ADDITIONAL_PARAMS = ["all-proposed", "testname"]
-
-# In the case of a tmpfail, look for these strings in the log and if they're
-# found, consider this a real failure instead. This is useful if the test
-# breaks the testbed so much that autopkgtest can't report a failure properly -
-# in this case the nova script will output the console log.
-
-# Note that you get *three* tries, and you need to fail in this way every time
-# for the failure to be converted from a tmpfail to a real one.
-FAIL_STRINGS = [
-    "Kernel panic - not syncing:",
-    "Freezing execution.",
-    "Out of memory: Kill process",
-    "error: you need to load the kernel first.",
-    "Faulting instruction address:",
-    "Call Trace:",
-]
-TEMPORARY_TEST_FAIL_STRINGS = [
-    "Could not connect to ftpmaster.internal:80",
-    "Cannot initiate the connection to ppa.launchpad.net:80",
-    "Failed to fetch http://ftpmaster.internal/",
-    '" failed with stderr "error: Get https://0.0.0.0/1.0/operations/',
-    "RecursionError: maximum recursion depth exceeded in comparison",  # LP: #1908506
-    "Temporary failure resolving 'archive.ubuntu.com'",
-    "Temporary failure resolving 'ports.ubuntu.com'",
-    "Temporary failure resolving 'ftpmaster.internal'",
-    "Temporary failure in name resolution",
-    "Unable to connect to ftpmaster.internal:http:",
-    "/tmp/autopkgtest-run-wrapper: command not found",  # LP: #1896466
-    ": error cleaning up:",
-    " has modification time ",  # clock skew, LP: #1880839
-    "OSError: [Errno 28] No space left on device",
-    "keystoneauth1.exceptions.connection.ConnectFailure",
-    "novaclient.exceptions.ResourceInErrorState",  # failure with the VM
-]
-
-# If we repeatedly time out when installing, there's probably a problem with
-# one of the packages' maintainer scripts.
-FAIL_STRINGS_REGEX = [
-    r"timed out on command.*apt-get install",
-    r"Removing (?:ubuntu-minimal|netplan\.io)",
-]
-
-# Some packages can provoke specific breakage. For most packages, this would be
-# a sign of infrastructure trouble, but for these we should play it safe and
-# consider these to be regressions. If they *are* infrastructure problems,
-# we'll have to retry them.
-FAIL_PKG_STRINGS = {
-    "systemd*": [
-        "timed out waiting for testbed to reboot",
-        "Timed out on waiting for ssh connection",
-        "Temporary failure resolving",
-        "VirtSubproc.Timeout",
-        "ERROR: testbed failure: testbed auxverb failed with exit code 255",
-        "ERROR: testbed failure: rules extract failed with exit code 100 (apt failure)",
-    ],
-    "linux-*": [
-        "timed out waiting for testbed to reboot",
-        "Timed out on waiting for ssh connection",
-        "ERROR: testbed failure: testbed auxverb failed",
-        "/bin/bash: No such file or directory",
-    ],
-    "libnfs": [
-        "timed out waiting for testbed to reboot",
-        "Timed out on waiting for ssh connection",
-        "ERROR: testbed failure: testbed auxverb failed",
-    ],
-    "cluster-glue": ["timed out waiting for testbed to reboot"],
-    "lxc": ["Error starting container"],
-    "nplan": ["VirtSubproc.Timeout"],
-    "netplan.io": [
-        "VirtSubproc.Timeout",
-        "Timed out on waiting for ssh connection",
-        "Temporary failure resolving",
-    ],
-    "dnspython": ["dns.exception.Timeout"],
-    "pcapfix": ["Cannot open input file: No such file or directory"],
-    "makedumpfile": [
-        "This does not look like a tar archive",
-        "Timed out on waiting for ssh connection",
-    ],
-    "kdump-tools": [
-        "This does not look like a tar archive",
-        "Timed out on waiting for ssh connection",
-    ],
-    "llvm-toolchain-*": [
-        "clang: error: unable to execute command: Segmentation fault (core dumped)"
-    ],
-}
-
-# Exemptions from TEMPORARY_TEST_FAIL_STRINGS / FAIL_{PKG_,}STRINGS
-# Adding dbconfig-common here is a hack of sorts LP: #2001714
-OK_PKG_STRINGS = {
-    "dbconfig-common": ["Temporary failure in name resolution"],
-    "debspawn": [
-        "Temporary failure resolving 'archive.ubuntu.com'",
-        "Temporary failure resolving 'ports.ubuntu.com'",
-        "Temporary failure resolving 'ftpmaster.internal'",
-    ],
-    "dnspython": ["Temporary failure in name resolution"],
-    "systemd*": ["Temporary failure in name resolution"],
-}
-
-
-def getglob(d, glob, default=None):
-    for k in d:
-        if fnmatch.fnmatch(glob, k):
-            return d[k]
-
-    return default
 
 
 def term_handler(signum, frame):
@@ -302,7 +192,7 @@ def process_output_dir(
     # In failure cases where we don't know the version, write 'unknown' out as
     # the version, so that frontends (e.g. autopkgtest-web, or britney) can
     # display the result.
-    if (code in FAIL_CODES or code == 16) and "testpkg-version" not in files:
+    if (code not in SUCCESS_CODES) and "testpkg-version" not in files:
         logging.warning(
             'Code %d returned and no testpkg-version - returning "unknown" for %s'
             % (code, pkgname)
@@ -576,14 +466,6 @@ def log_contents(out_dir):
     except IOError as e:
         logging.error("Could not read log file: %s" % str(e))
         return ""
-
-
-def cleanup_and_sleep(out_dir):
-    """Empty the output dir for the next run, otherwise autopkgtest complains"""
-    shutil.rmtree(out_dir, ignore_errors=True)
-    os.mkdir(out_dir)
-    retry_delay = int(cfg.get("autopkgtest", "retry_delay", fallback=30))
-    time.sleep(retry_delay)
 
 
 def request(msg):
@@ -1047,150 +929,24 @@ def request(msg):
         if private:
             container = "private-{}".format(container)
 
-        # run autopkgtest; retry up to three times on tmpfail issues
+        # run autopkgtest
         if not dont_run:
             global running_test
             running_test = True
             start_time = time.time()
-            num_failures = 0
-            for retry in range(3):
-                retry_start_time = time.time()
-                logging.info("Running %s", " ".join(argv))
-                code = call_autopkgtest(
-                    argv,
-                    release,
-                    architecture,
-                    pkgname,
-                    params,
-                    out_dir,
-                    start_time,
-                    test_uuid,
-                    private,
-                )
-                is_failure = code in FAIL_CODES
-                is_success = code in SUCCESS_CODES
-                files = set(os.listdir(out_dir))
-                is_unknown_version = "testpkg-version" not in files
-
-                retrying = "Retrying in 5 minutes... " if retry < 2 else ""
-
-                if is_success:
-                    break
-                elif is_failure and is_unknown_version and retry < 2:
-                    # this is an 'unknown' result; try three times but fail
-                    # properly after that (do not tmpfail)
-                    contents = log_contents(out_dir)
-                    logging.warning(
-                        "Test run failed with no version. %sLog follows:",
-                        retrying,
-                    )
-                    logging.error(contents)
-                    cleanup_and_sleep(out_dir)
-                elif is_failure:
-                    contents = log_contents(out_dir)
-                    temp_fails = [
-                        s
-                        for s in (
-                            set(TEMPORARY_TEST_FAIL_STRINGS)
-                            - set(getglob(OK_PKG_STRINGS, pkgname, []))
-                        )
-                        if s in contents
-                    ]
-                    if temp_fails:
-                        logging.warning(
-                            "Saw %s in log, which is a sign of a temporary failure.",
-                            " and ".join(temp_fails),
-                        )
-                        logging.warning("%sLog follows:", retrying)
-                        logging.error(contents)
-                        if retry < 2:
-                            cleanup_and_sleep(out_dir)
-                    else:
-                        break
-                elif code == 16:
-                    contents = log_contents(out_dir)
-                    if exit_requested is not None:
-                        logging.warning(
-                            "Testbed failure and exit %i requested. Log follows:",
-                            exit_requested,
-                        )
-                        logging.error(contents)
-                        sys.exit(exit_requested)
-                    # Get the package-specific string for triggers too, since they might have broken the run
-                    trigs = [t.split("/", 1)[0] for t in params.get("triggers", [])]
-                    fail_trigs = [
-                        j
-                        for i in [getglob(FAIL_PKG_STRINGS, trig, []) for trig in trigs]
-                        for j in i
-                    ]
-
-                    # Or if all-proposed, just give up and accept everything
-                    fail_all_proposed = [
-                        j for i in FAIL_PKG_STRINGS.values() for j in i
-                    ]
-
-                    allowed_fail_strings = set(
-                        FAIL_STRINGS
-                        + getglob(FAIL_PKG_STRINGS, pkgname, [])
-                        + fail_trigs
-                        + (fail_all_proposed if "all-proposed" in params else [])
-                    ) - set(getglob(OK_PKG_STRINGS, pkgname, []))
-
-                    fails = [s for s in allowed_fail_strings if s in contents] + [
-                        s for s in FAIL_STRINGS_REGEX if re.search(s, contents)
-                    ]
-
-                    if fails:
-                        num_failures += 1
-                        logging.warning(
-                            "Saw %s in log, which is a sign of a real (not tmp) failure - seen %d so far",
-                            " and ".join(fails),
-                            num_failures,
-                        )
-                    logging.warning("Testbed failure. %sLog follows:", retrying)
-                    logging.error(contents)
-                    if retry < 2:
-                        cleanup_and_sleep(out_dir)
-                else:
-                    # This block is reached in edge cases with undefined failures,
-                    # and also when a test is requested to be killed by an admin
-                    # tests can be requested to be killed with:
-                    # kill -15 $pid
-                    logging.warning(
-                        "autopkgtest exited with code: %i",
-                        code,
-                    )
-                    running_test = False
-                    # we ack the message so it doesn't go back in the queue
-                    if exit_requested is not None:
-                        logging.info(
-                            "An exit has been requested via systemd, placing message %s back in queue",
-                            body.encode(),
-                        )
-                        msg.channel.basic_reject(msg.delivery_tag, requeue=True)
-                        return
-                    else:
-                        logging.warning(
-                            "autopkgtest has failed with an unknown code (%i), trying test %s again...",
-                            code,
-                            body.encode(),
-                        )
-            else:
-                if num_failures >= 3:
-                    logging.warning(
-                        "Three fails in a row - considering this a failure rather than tmpfail"
-                    )
-                    code = 4
-                else:
-                    logging.warning(
-                        (
-                            "Three testbed failures in a row - considering this a legitimate "
-                            f"testbed failure rather than tmpfail. Not retrying the following message: {body}"
-                        )
-                    )
-                    code = 16
-
-            duration = int(time.time() - retry_start_time)
+            logging.info("Running %s", " ".join(argv))
+            code = call_autopkgtest(
+                argv,
+                release,
+                architecture,
+                pkgname,
+                params,
+                out_dir,
+                start_time,
+                test_uuid,
+                private,
+            )
+            duration = int(time.time() - start_time)
 
         logging.info("autopkgtest exited with code %i", code)
         if code == 1:
