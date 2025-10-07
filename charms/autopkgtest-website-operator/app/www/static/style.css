@@ -49,7 +49,7 @@
 
 .fail:before,
 .fail-with-skipped-tests:before,
-.denylisted:before {
+.denylisted:before,
 .unknown-failure:before {
   content: "✖ ";
   color: #ef2929;
