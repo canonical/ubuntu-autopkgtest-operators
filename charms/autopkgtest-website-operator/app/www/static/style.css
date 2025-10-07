@@ -50,6 +50,7 @@
 .fail:before,
 .fail-with-skipped-tests:before,
 .denylisted:before {
+.unknown-failure:before {
   content: "✖ ";
   color: #ef2929;
   font-size: 18px;

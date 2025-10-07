@@ -138,19 +138,20 @@ def human_sec(secs):
 def human_exitcode(code):
     if code in (0, 2):
         return "pass"
-    if code in (4, 6, 12):
+    elif code in (4, 6, 12):
         return "fail"
-    if code in (8,):
+    elif code == 8:
         return "neutral"
-    if code == 99:
+    elif code == 99:
         return "denylisted"
-    if code == 16:
+    elif code == 16:
         return "tmpfail"
-    if code == 20:
+    elif code == 20:
         return "error"
-    if code == 14:
+    elif code == 14:
         return "fail-with-skipped-tests"
-    return "exit code %i" % code
+    else:
+        return "unknown-failure"
 
 
 def get_queues_info():
