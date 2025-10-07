@@ -163,3 +163,86 @@ th.sticky-table-headers {
 .test-run th {
   font-weight: bold;
 }
+
+/* log viewer */
+.log-view .log-divider {
+  background-color: #2e3436;
+}
+
+.log-view .log-divider a {
+  font-family: monospace;
+  font-size: smaller;
+  color: #66ff66;
+  font-weight: bold;
+  padding-left: 50px;
+}
+
+.log-view .log-divider-fail a {
+  color: #ff6666;
+}
+
+.log-view .log-divider .log-open {
+  display: none;
+}
+
+.log-view .line-number {
+  float: left;
+  width: 50px;
+  font-family: monospace;
+  font-size: smaller;
+  text-align: right;
+  color: #eeeeec;
+  user-select: none;
+}
+
+.line-number a,
+.line-number a:visited {
+  padding-right: 0.5em;
+  display: block;
+  color: #eeeeec;
+}
+.line-number a:hover {
+  background-color: #ffc;
+  color: #888a85;
+}
+
+.log-view .log-line {
+  margin-left: 50px;
+  padding-left: 0.5em;
+  padding-right: 0.5em;
+  font-family: monospace;
+  font-size: smaller;
+  background-color: #2e3436;
+  color: #eeeeec;
+  white-space: pre-wrap;
+}
+
+.log-section > .line-number:first-child + .log-line,
+.log-section > .line-number:first-child {
+  padding-top: 0.5em;
+}
+
+.log-section .log-line:last-child {
+  padding-bottom: 0.5em;
+}
+
+.log-view {
+  border: 1px solid #040000;
+}
+
+.log-section {
+  background-color: #555753;
+}
+
+.log-view .log-nav {
+  float: right;
+  margin-right: 1em;
+}
+
+#logview-index .section-index-group {
+  margin-top: 1em;
+}
+
+#logview-index a:hover {
+  background-color: #ffc;
+}

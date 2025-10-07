@@ -4,6 +4,7 @@
 
 # pylint: disable=too-many-lines
 
+import gzip
 import json
 import os
 import re
@@ -887,6 +888,109 @@ def get_by_uuid(uuid):
         arch=arch,
         test_results=test_results,
         title_suffix="- %s/%s/%s" % (package, release, arch),
+    )
+
+
+@app.route("/run/<uuid>/log")
+def display_run_logs(uuid):
+    cursor = db_con.cursor()
+    cursor.row_factory = sqlite3.Row
+    result = cursor.execute(
+        "SELECT run_id, version, triggers, duration, exitcode, requester, "
+        "env, uuid, package, release, arch FROM result "
+        "LEFT JOIN test ON result.test_id = test.id "
+        "WHERE uuid = ?",
+        (uuid,),
+    ).fetchone()
+
+    if result is None:
+        raise NotFound("uuid", uuid)
+
+    arch = result["arch"]
+    duration = result["duration"]
+    package = result["package"]
+    requester = result["requester"]
+    release = result["release"]
+    run_id = result["run_id"]
+
+    conn = swift_connect()
+
+    object_name = f"{release}/{arch}/{package[0]}/{package}/{run_id}/log.gz"
+
+    gz_log = conn.get_object(container=f"autopkgtest-{release}", obj=object_name)[1]
+    text_log = gzip.decompress(gz_log).decode("utf-8")
+
+    # split log into sections
+    sections = []
+    for line in text_log.split("\n"):
+        if re.match(
+            r"^\s*\d+s autopkgtest \[\d\d:\d\d:\d\d\]: starting date and time", line
+        ):
+            sections.append({"name": "Preparation", "subsections": []})
+            sections[-1]["subsections"].append({"name": "start run", "lines": []})
+        elif re.match(
+            r"^\s*\d+s autopkgtest \[\d\d:\d\d:\d\d\]: @@@@@@@@@@@@@@@@@@@@ apt-source",
+            line,
+        ):
+            sections[-1]["subsections"].append({"name": "apt-source", "lines": []})
+        elif re.match(
+            r"^\s*\d+s autopkgtest \[\d\d:\d\d:\d\d\]: @@@@@@@@@@@@@@@@@@@@ test bed setup",
+            line,
+        ):
+            sections[-1]["subsections"].append({"name": "test bed setup", "lines": []})
+
+        elif re.match(
+            r"^\s*\d+s autopkgtest \[\d\d:\d\d:\d\d\]: test (.*): preparing testbed",
+            line,
+        ):
+            match = re.match(
+                r"^\s*\d+s autopkgtest \[\d\d:\d\d:\d\d\]: test (.*): preparing testbed",
+                line,
+            )
+            sections.append(
+                {"name": f"test {match.group(1)}", "subsections": [], "result": "skip"}
+            )
+            sections[-1]["subsections"].append(
+                {"name": "preparing testbed", "lines": []}
+            )
+        elif re.match(
+            r"^\s*\d+s autopkgtest \[\d\d:\d\d:\d\d\]: test (.*): \[-----------------------",
+            line,
+        ):
+            sections[-1]["subsections"].append({"name": "test run", "lines": []})
+        elif re.match(
+            r"^\s*\d+s autopkgtest \[[0-9:]+\]: test (\S+):  - - - - - - - - - - results - - - - - - - - - -",
+            line,
+        ):
+            sections[-1]["subsections"].append({"name": "test results", "lines": []})
+        elif re.match(
+            r"^\s*\d+s autopkgtest \[\d\d:\d\d:\d\d\]: @@@@@@@@@@@@@@@@@@@@ (summary)",
+            line,
+        ):
+            sections.append({"name": "Closing", "subsections": []})
+            sections[-1]["subsections"].append({"name": "summary", "lines": []})
+        elif re.match(r"^\s*\d+s\s+badpkg:\s+", line):
+            if "result" in sections[-1] and sections[-1]["name"] != "closing":
+                sections[-1]["result"] = "fail"
+
+        if (
+            re.match(r"^\s*\d+s\s+\S+\s*(PASS|FAIL|SKIP)", line)
+            and "result" in sections[-1]
+        ):
+            match = re.match(r"^\s*\d+s\s+\S+\s*(PASS|FAIL|SKIP)", line)
+            sections[-1]["result"] = match.group(1).lower()
+
+        sections[-1]["subsections"][-1]["lines"].append(line)
+
+    return render(
+        "browse-log.html",
+        arch=arch,
+        duration=duration,
+        package=package,
+        requester=requester,
+        release=release,
+        sections=sections,
+        uuid=uuid,
     )
 
 
