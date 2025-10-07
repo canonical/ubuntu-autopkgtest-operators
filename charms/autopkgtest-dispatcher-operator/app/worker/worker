@@ -417,13 +417,11 @@ def call_autopkgtest(
     autopkgtest = subprocess.Popen(
         argv, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
     )
-    # FIXME: Use autopkgtest.wait(timeout=10) once moving to Python 3
-    # only send status update every 30s, but check if program has finished every 1s
-    status_update_counter = 0
-    while autopkgtest.poll() is None:
-        time.sleep(1)
-        status_update_counter = (status_update_counter + 1) % 30
-        if status_update_counter == 0:
+    while True:
+        try:
+            autopkgtest.wait(timeout=10)
+            break
+        except subprocess.TimeoutExpired:
             send_status_info(
                 status_amqp,
                 release,
