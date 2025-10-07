@@ -994,59 +994,6 @@ def display_run_logs(uuid):
     )
 
 
-@app.route("/releases/<release>")
-@app.route("/releases/<release>/<arch>")
-def release(release, arch=None):
-    arches = sorted([arch] if arch else get_release_arches(db_con)[release])
-    reference_results = {}
-    # The query gives us all packages that have autopkgtests (are in the test column),
-    # but the result columns may be NULL thanks to the left join, so we can print N/A.
-    # We order by ascending run_id so a later run overrides an earlier one.
-    for package, version, run_id, run_arch, raw_code in db_con.execute(
-        "SELECT current_version.package, current_version.version, run_id, arch, exitcode "
-        "FROM current_version "
-        "JOIN test ON test.release = current_version.release "
-        "             AND test.package = current_version.package "
-        "LEFT JOIN result ON test.id = result.test_id "
-        "             AND result.version = current_version.version "
-        "WHERE current_version.release = ? "
-        "AND (triggers = 'migration-reference/0' OR triggers IS NULL) "
-        "ORDER BY current_version.package, run_id ASC",
-        (release,),
-    ):
-        code = None
-        show_retry = False
-        url = None
-        if run_id:
-            code = human_exitcode(raw_code)
-            # Version + triggers uniquely identifies this result
-            show_retry = code != "pass"
-            url = os.path.join(
-                CONFIG["swift_container_url"] % release,
-                release,
-                run_arch,
-                srchash(package),
-                package,
-                run_id,
-            )
-        reference_results.setdefault((package, version), {})[run_arch] = {
-            "version": version,
-            "run_id": run_id,
-            "code": code,
-            "show_retry": show_retry,
-            "url": url,
-        }
-
-    return render(
-        "browse-health.html",
-        release=release,
-        arches=arches,
-        arch=arch,
-        reference_results=reference_results,
-        title_suffix="- %s/%s" % (release, arch) if arch else "- %s" % release,
-    )
-
-
 @app.route("/running")
 def running():
     (releases, arches, queues_info) = get_queues_info()
