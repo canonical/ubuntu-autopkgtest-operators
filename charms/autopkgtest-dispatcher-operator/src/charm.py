@@ -12,13 +12,12 @@ import time
 from pathlib import Path
 
 import action_types
+import charms.operator_libs_linux.v0.apt as apt
+import charms.operator_libs_linux.v2.snap as snap
 import config_types
 import ops
 from ops.framework import StoredState
 from systemd_helper import SystemdHelper
-
-import charms.operator_libs_linux.v0.apt as apt
-import charms.operator_libs_linux.v2.snap as snap
 
 logger = logging.getLogger(__name__)
 

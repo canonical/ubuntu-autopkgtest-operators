@@ -9,13 +9,12 @@ import textwrap
 from pathlib import Path
 
 import action_types
-import config_types
-import ops
-from ops.framework import StoredState
-
 import charms.operator_libs_linux.v0.apt as apt
 import charms.operator_libs_linux.v1.systemd as systemd
 import charms.operator_libs_linux.v2.snap as snap
+import config_types
+import ops
+from ops.framework import StoredState
 
 logger = logging.getLogger(__name__)
 

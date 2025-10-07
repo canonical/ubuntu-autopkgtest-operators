@@ -10,9 +10,8 @@ import time
 import autopkgtest_website
 import config_types
 import ops
-from ops.framework import StoredState
-
 from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer as IngressRequirer
+from ops.framework import StoredState
 
 logger = logging.getLogger(__name__)
 
