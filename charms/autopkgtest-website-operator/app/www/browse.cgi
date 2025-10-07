@@ -981,7 +981,8 @@ def display_run_logs(uuid):
             match = re.match(r"^\s*\d+s\s+\S+\s*(PASS|FAIL|SKIP)", line)
             sections[-1]["result"] = match.group(1).lower()
 
-        sections[-1]["subsections"][-1]["lines"].append(line)
+        if line.strip() != "":
+            sections[-1]["subsections"][-1]["lines"].append(line)
 
     return render(
         "browse-log.html",
