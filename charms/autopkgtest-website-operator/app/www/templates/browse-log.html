@@ -65,7 +65,8 @@ document.addEventListener('DOMContentLoaded', function() {
         var is_test = $(this).find(".log-section-name").html().match(/test run/)
         var is_failure = $(this).hasClass("log-divider-fail")
         var siblings = $(this).data("siblings")
-        if (!is_test && !(is_failure && siblings == 0)) {
+        var is_summary = $(this).find(".log-section-name").html() === "summary"
+        if ((!is_test && !is_summary) && !(is_failure && siblings == 0)) {
             if (anchor != "#" + $(this).attr("id")) {
                 toggleLogSection(this)
             }
