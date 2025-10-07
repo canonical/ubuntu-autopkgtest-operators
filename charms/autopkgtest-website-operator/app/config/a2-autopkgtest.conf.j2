@@ -20,18 +20,24 @@
 
   # robots.txt for disallowing bots
   Alias /robots.txt {{ documentroot }}/static/robots.txt
-  {% if https_proxy or http_proxy %}
+
   # egress forward proxy settings
+  {%- if https_proxy %}
   SetEnv HTTPS_PROXY "{{ https_proxy }}"
+  {%- if swift_storage_url.startswith('https://') %}
+  ProxyRemote "{{ swift_storage_url }}" "{{ https_proxy }}"
+  {%- endif %}
+  {%- endif %}
+  {%- if http_proxy %}
   SetEnv HTTP_PROXY "{{ http_proxy }}"
+  {%- if swift_storage_url.startswith('http://') %}
+  ProxyRemote "{{ swift_storage_url }}" "{{ http_proxy }}"
+  {%- endif %}
+  {%- endif %}
+  {%- if no_proxy %}
   SetEnv NO_PROXY "{{ no_proxy }}"
-  {% endif -%}
-  {% if https_proxy -%}
-  ProxyRemote https "{{ https_proxy }}"
-  {% endif -%}
-  {% if http_proxy -%}
-  ProxyRemote http "{{ http_proxy }}"
-  {% endif %}
+  {%- endif %}
+
   # webcontrol CGI scripts
   ScriptAlias /request.cgi {{ documentroot }}/request.cgi/
   ScriptAlias /login {{ documentroot }}/request.cgi/login
@@ -42,6 +48,7 @@
   # reverse proxy rules
   SSLProxyEngine on
   ProxyPass "/results/" "{{ swift_storage_url }}"
+  ProxyPass "/rabbitmq-management/" "http://{{ rabbithost }}:15672/"
 
   ServerName {{ servername }}
 </VirtualHost>

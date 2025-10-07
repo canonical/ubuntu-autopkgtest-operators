@@ -175,6 +175,7 @@ def configure(
     j2context = {
         "user": USER,
         "webcontrol": WWW_DIR,
+        **amqp_creds,
         **swift_creds,
     }
     for unit in units_to_install:
