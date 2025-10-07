@@ -414,8 +414,9 @@ def call_autopkgtest(
         status_exchange_name, "fanout", durable=False, auto_delete=True
     )
 
-    null_fd = open("/dev/null", "w")
-    autopkgtest = subprocess.Popen(argv, stdout=null_fd, stderr=subprocess.STDOUT)
+    autopkgtest = subprocess.Popen(
+        argv, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
+    )
     # FIXME: Use autopkgtest.wait(timeout=10) once moving to Python 3
     # only send status update every 30s, but check if program has finished every 1s
     status_update_counter = 0
