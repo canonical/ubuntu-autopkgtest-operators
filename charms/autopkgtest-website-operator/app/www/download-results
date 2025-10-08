@@ -15,9 +15,8 @@ EXCHANGE_NAME = "testcomplete.fanout"
 amqp_con = None
 
 
-def process_message(msg):
+def process_message(channel, method, properties, body):
     global amqp_con
-    body = msg.body
     if isinstance(body, bytes):
         body = body.decode("UTF-8", errors="replace")
     info = json.loads(body)
@@ -38,7 +37,7 @@ def process_message(msg):
     # formatted like autopkgtest-$release-$user-$ppaname
     if container != ("autopkgtest-{}".format(release)):
         logging.debug("Ignoring non-distro request: {}".format(info))
-        msg.channel.basic_ack(msg.delivery_tag)
+        channel.basic_ack(delivery_tag=method.delivery_tag)
         return
 
     try:
@@ -52,7 +51,7 @@ def process_message(msg):
             arch,
             release,
         )
-        msg.channel.basic_ack(msg.delivery_tag)
+        channel.basic_ack(delivery_tag=method.delivery_tag)
         return
 
     start = datetime.datetime.now()
@@ -87,7 +86,7 @@ def process_message(msg):
                     ),
                 )
 
-                msg.channel.basic_ack(msg.delivery_tag)
+                channel.basic_ack(delivery_tag=method.delivery_tag)
                 return
         except Exception:
             time.sleep(3)
@@ -117,6 +116,9 @@ if __name__ == "__main__":
     status_ch.queue_bind(queue_name, EXCHANGE_NAME, queue_name)
 
     logging.info("Listening to requests on %s" % queue_name)
-    status_ch.basic_consume("", callback=process_message)
+    status_ch.basic_consume(
+        queue="",
+        on_message_callback=process_message,
+    )
     while status_ch.callbacks:
-        amqp_con.drain_events()
+        amqp_con.process_data_events()

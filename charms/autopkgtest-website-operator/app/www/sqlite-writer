@@ -43,8 +43,7 @@ def checkpoint_db_if_necessary(db_con):
             LAST_CHECKPOINT = now
 
 
-def process_message(msg, db_con):
-    body = msg.body
+def process_message(channel, method, properties, body, db_con):
     if isinstance(body, bytes):
         body = body.decode("UTF-8", errors="replace")
     info = json.loads(body)
@@ -76,9 +75,9 @@ def process_message(msg, db_con):
     logging.info("Inserted the following entry into the db:\n%s" % json.dumps(info))
 
 
-def msg_callback(msg, db_con):
-    process_message(msg, db_con)
-    msg.channel.basic_ack(msg.delivery_tag)
+def msg_callback(channel, method, properties, body, db_con):
+    process_message(channel, method, properties, body, db_con)
+    channel.basic_ack(delivery_tag=method.delivery_tag)
     checkpoint_db_if_necessary(db_con)
 
 
@@ -100,9 +99,14 @@ def main():
         queue_name, SqliteWriterConfig.writer_exchange_name, queue_name
     )
     logging.info("Listening to requests on %s" % queue_name)
-    status_ch.basic_consume("", callback=lambda msg: msg_callback(msg, db_con))
+    status_ch.basic_consume(
+        queue="",
+        on_message_callback=lambda channel, method, properties, body: msg_callback(
+            channel, method, properties, body, db_con
+        ),
+    )
     while status_ch.callbacks:
-        amqp_con.drain_events()
+        amqp_con.process_data_events()
 
 
 if __name__ == "__main__":

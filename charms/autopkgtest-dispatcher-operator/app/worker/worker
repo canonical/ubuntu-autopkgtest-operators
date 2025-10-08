@@ -476,7 +476,7 @@ def log_contents(out_dir):
         return ""
 
 
-def request(msg):
+def request(channel, method, properties, body):
     """Callback for AMQP queue request"""
 
     # Cleanup extras
@@ -492,15 +492,13 @@ def request(msg):
     private = False
 
     # FIXME: make this more elegant
-    fields = msg.delivery_info["routing_key"].split("-")
+    fields = method.routine_key.split("-")
     if len(fields) == 4:
         release, architecture = fields[2:4]
     elif len(fields) == 3:
         release, architecture = fields[1:3]
     else:
-        raise NotImplementedError(
-            "cannot parse queue name %s" % msg.delivery_info["routing_key"]
-        )
+        raise NotImplementedError("cannot parse queue name %s" % method.routing_key)
 
     systemd_logging_handler._extra["ADT_RELEASE"] = release
     systemd_logging_handler._extra["ADT_ARCH"] = architecture
@@ -534,7 +532,10 @@ def request(msg):
                 "Stable release test request and 1d100 rolled above %i, skipping for now",
                 stable_release_percentage,
             )
-            msg.channel.basic_reject(msg.delivery_tag, requeue=True)
+            channel.basic_reject(
+                delivery_tag=method.delivery_tag,
+                requeue=True,
+            )
             return
         else:
             logging.info(
@@ -542,7 +543,7 @@ def request(msg):
                 stable_release_percentage,
             )
 
-    if msg.delivery_info["routing_key"].startswith("debci-upstream-"):
+    if method.routing_key.startswith("debci-upstream-"):
         # crude way to not allow upstream tests to monopolise resources - only X%
         # of chances to really run them
         # This percentage is a juju config option.
@@ -551,7 +552,10 @@ def request(msg):
                 "Upstream job detected and 1d100 rolled above %i, skipping for now",
                 worker_upstream_percentage,
             )
-            msg.channel.basic_reject(msg.delivery_tag, requeue=True)
+            channel.basic_reject(
+                delivery_tag=method.delivery_tag,
+                requeue=True,
+            )
             return
         else:
             logging.info(
@@ -559,13 +563,15 @@ def request(msg):
                 worker_upstream_percentage,
             )
 
-    body = msg.body
     if isinstance(body, bytes):
         try:
-            body = msg.body.decode("UTF-8")
+            body = body.decode("UTF-8")
         except UnicodeDecodeError as e:
-            logging.error('Bad encoding in request "%s": %s', msg.body, e)
-            msg.channel.basic_reject(msg.delivery_tag, requeue=False)
+            logging.error('Bad encoding in request "%s": %s', body, e)
+            channel.basic_reject(
+                delivery_tag=method.delivery_tag,
+                requeue=False,
+            )
             return
 
     # request is either a single string pkgname or "pkg_name json_params"
@@ -578,12 +584,18 @@ def request(msg):
             params = {}
     except (ValueError, IndexError) as e:
         logging.error('Received invalid request format "%s" (%s)', body, repr(e))
-        msg.channel.basic_reject(msg.delivery_tag, requeue=False)
+        channel.basic_reject(
+            delivery_tag=method.delivery_tag,
+            requeue=False,
+        )
         return
     test_uuid = params.get("uuid", str(uuid.uuid4()))
     if not re.match("[a-zA-Z0-9.+-]+$", pkgname):
         logging.error('Request contains invalid package name, dropping: "%s"', body)
-        msg.channel.basic_reject(msg.delivery_tag, requeue=False)
+        channel.basic_reject(
+            delivery_tag=method.delivery_tag,
+            requeue=False,
+        )
         return
 
     systemd_logging_handler._extra["ADT_PACKAGE"] = pkgname
@@ -743,7 +755,10 @@ def request(msg):
                     logging.error(
                         "Invalid PPA specification, must be [user:token@]lpuser/ppa_name[:fingerprint]"
                     )
-                    msg.channel.basic_reject(msg.delivery_tag, requeue=False)
+                    channel.basic_reject(
+                        delivery_tag=method.delivery_tag,
+                        requeue=False,
+                    )
                     return
                 logging.debug(
                     "Request states that PPA user '%s', name '%s' has GPG fingerprint '%s'"
@@ -931,7 +946,10 @@ def request(msg):
             logging.error(
                 "Private autopkgtest run detected but no swiftuser identity provided."
             )
-            msg.channel.basic_reject(msg.delivery_tag, requeue=False)
+            channel.basic_reject(
+                delivery_tag=method.delivery_tag,
+                requeue=False,
+            )
             return
 
         if private:
@@ -1133,7 +1151,7 @@ def request(msg):
     complete_amqp.close()
 
     logging.info("Acknowledging request %s" % body)
-    msg.channel.basic_ack(msg.delivery_tag)
+    channel.basic_ack(delivery_tag=method.delivery_tag)
     running_test = False
 
 
@@ -1156,11 +1174,10 @@ def amqp_connect(cfg):
             ),
         ),
     )
-    amqp_con.connect()
-    queue = amqp_con.channel()
-    queue.confirm_delivery()
+    channel = amqp_con.channel()
+    channel.confirm_delivery()
     # avoids greedy grabbing of the entire queue while being too busy
-    queue.basic_qos(0, 1, True)
+    channel.basic_qos(0, 1, True)
 
     arch = args.architecture
 
@@ -1178,8 +1195,8 @@ def amqp_connect(cfg):
 
     for queue_name in queues:
         logging.info("Setting up and listening to AMQP queue %s", queue_name)
-        queue.queue_declare(queue_name, durable=True, auto_delete=False)
-        queue.basic_consume(queue=queue_name, callback=request)
+        channel.queue_declare(queue=queue_name, durable=True, auto_delete=False)
+        channel.basic_consume(queue=queue_name, on_message_callback=request)
 
     return amqp_con
 
@@ -1261,7 +1278,7 @@ def main():
     try:
         while exit_requested is None:
             logging.info("Waiting for and processing AMQP requests")
-            amqp_con.drain_events()
+            amqp_con.process_data_events()
     except IOError:
         if exit_requested is None:
             raise
