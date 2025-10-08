@@ -1167,6 +1167,7 @@ def amqp_connect(cfg):
                 username=os.environ["RABBIT_USER"],
                 password=os.environ["RABBIT_PASSWORD"],
             ),
+            heartbeat=0,
         ),
     )
     return amqp_con
