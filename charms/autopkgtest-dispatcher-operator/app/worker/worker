@@ -1278,7 +1278,7 @@ def main():
     try:
         while exit_requested is None:
             logging.info("Waiting for and processing AMQP requests")
-            amqp_con.process_data_events()
+            amqp_con.start_consuming()
     except IOError:
         if exit_requested is None:
             raise
