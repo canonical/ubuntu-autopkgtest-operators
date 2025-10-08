@@ -162,18 +162,6 @@ def request_matches_per_package(package, arch, release, s):
     )
 
 
-def inject_info_into_testinfo(
-    testinfo: dict,
-    additional_params: dict,
-    test_uuid: str,
-) -> dict:
-    testinfo["uuid"] = test_uuid
-    for key in KEYS_FOR_ADDITIONAL_PARAMS:
-        testinfo[key] = additional_params.get(key)
-    testinfo["worker-unit"] = hostname
-    return testinfo
-
-
 def process_output_dir(
     dir,
     pkgname,
@@ -222,7 +210,6 @@ def process_output_dir(
                     json_err,
                 )
                 d = {}
-    d = inject_info_into_testinfo(d, additional_params, test_uuid)
     with open(os.path.join(dir, "testinfo.json"), "w") as testinfo:
         json.dump(d, testinfo, indent=True)
 
