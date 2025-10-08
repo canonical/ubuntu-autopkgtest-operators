@@ -480,7 +480,7 @@ def callback(channel, method, properties, body):
     t.start()
 
 
-def request(channel, method, properties, body):
+def request(channel, method, body):
     """Callback for AMQP queue request"""
 
     # Cleanup extras
@@ -536,9 +536,10 @@ def request(channel, method, properties, body):
                 "Stable release test request and 1d100 rolled above %i, skipping for now",
                 stable_release_percentage,
             )
-            channel.basic_reject(
-                delivery_tag=method.delivery_tag,
-                requeue=True,
+            channel.connection.add_callback_threadsafe(
+                lambda: channel.basic_reject(
+                    delivery_tag=method.delivery_tag, requeue=True
+                )
             )
             return
         else:
@@ -556,9 +557,10 @@ def request(channel, method, properties, body):
                 "Upstream job detected and 1d100 rolled above %i, skipping for now",
                 worker_upstream_percentage,
             )
-            channel.basic_reject(
-                delivery_tag=method.delivery_tag,
-                requeue=True,
+            channel.connection.add_callback_threadsafe(
+                lambda: channel.basic_reject(
+                    delivery_tag=method.delivery_tag, requeue=True
+                )
             )
             return
         else:
@@ -572,9 +574,10 @@ def request(channel, method, properties, body):
             body = body.decode("UTF-8")
         except UnicodeDecodeError as e:
             logging.error('Bad encoding in request "%s": %s', body, e)
-            channel.basic_reject(
-                delivery_tag=method.delivery_tag,
-                requeue=False,
+            channel.connection.add_callback_threadsafe(
+                lambda: channel.basic_reject(
+                    delivery_tag=method.delivery_tag, requeue=False
+                )
             )
             return
 
@@ -588,17 +591,19 @@ def request(channel, method, properties, body):
             params = {}
     except (ValueError, IndexError) as e:
         logging.error('Received invalid request format "%s" (%s)', body, repr(e))
-        channel.basic_reject(
-            delivery_tag=method.delivery_tag,
-            requeue=False,
+        channel.connection.add_callback_threadsafe(
+            lambda: channel.basic_reject(
+                delivery_tag=method.delivery_tag, requeue=False
+            )
         )
         return
     test_uuid = params.get("uuid", str(uuid.uuid4()))
     if not re.match("[a-zA-Z0-9.+-]+$", pkgname):
         logging.error('Request contains invalid package name, dropping: "%s"', body)
-        channel.basic_reject(
-            delivery_tag=method.delivery_tag,
-            requeue=False,
+        channel.connection.add_callback_threadsafe(
+            lambda: channel.basic_reject(
+                delivery_tag=method.delivery_tag, requeue=False
+            )
         )
         return
 
@@ -759,9 +764,10 @@ def request(channel, method, properties, body):
                     logging.error(
                         "Invalid PPA specification, must be [user:token@]lpuser/ppa_name[:fingerprint]"
                     )
-                    channel.basic_reject(
-                        delivery_tag=method.delivery_tag,
-                        requeue=False,
+                    channel.connection.add_callback_threadsafe(
+                        lambda: channel.basic_reject(
+                            delivery_tag=method.delivery_tag, requeue=False
+                        )
                     )
                     return
                 logging.debug(
@@ -950,9 +956,10 @@ def request(channel, method, properties, body):
             logging.error(
                 "Private autopkgtest run detected but no swiftuser identity provided."
             )
-            channel.basic_reject(
-                delivery_tag=method.delivery_tag,
-                requeue=False,
+            channel.connection.add_callback_threadsafe(
+                lambda: channel.basic_reject(
+                    delivery_tag=method.delivery_tag, requeue=False
+                )
             )
             return
 
@@ -1154,7 +1161,9 @@ def request(channel, method, properties, body):
     complete_amqp.close()
 
     logging.info("Acknowledging request %s" % body)
-    channel.basic_ack(delivery_tag=method.delivery_tag)
+    channel.connection.add_callback_threadsafe(
+        lambda: channel.basic_ack(delivery_tag=method.delivery_tag)
+    )
     running_test = False
 
 
