@@ -143,6 +143,7 @@ def configure(
         "https_proxy": os.getenv("JUJU_CHARM_HTTPS_PROXY", ""),
         "http_proxy": os.getenv("JUJU_CHARM_HTTP_PROXY", ""),
         "no_proxy": os.getenv("JUJU_CHARM_NO_PROXY", ""),
+        **swift_creds,
     }
     with open(SITES_AVAILABLE_PATH / "autopkgtest.conf", "w") as f:
         f.write(j2template.render(j2context))
@@ -174,7 +175,6 @@ def configure(
     j2context = {
         "user": USER,
         "webcontrol": WWW_DIR,
-        **amqp_creds,
         **swift_creds,
     }
     for unit in units_to_install:
