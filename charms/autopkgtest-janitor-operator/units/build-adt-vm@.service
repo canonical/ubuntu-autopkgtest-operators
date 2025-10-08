@@ -10,6 +10,6 @@ WorkingDirectory=~
 # riscv64 can take quite some time!
 TimeoutStartSec=4h
 ExecStart=sh -ec 'PARAMS="%i"; REMOTE="$${PARAMS%-*}"; \
-    RELEASE="$${PARAMS##*-}"; \
-    MIRROR=http://ftpmaster.internal/ubuntu/ /home/ubuntu/autopkgtest/tools/autopkgtest-build-lxd --vm -r $$REMOTE ubuntu-daily:$$RELEASE'
+    ARCH="$${REMOTE##*-}"; RELEASE="$${PARAMS##*-}"; \
+    MIRROR=http://ftpmaster.internal/ubuntu/ /home/ubuntu/autopkgtest/tools/autopkgtest-build-lxd --vm -r $$REMOTE ubuntu-daily:$$RELEASE/$$ARCH'
 SyslogIdentifier=%N
