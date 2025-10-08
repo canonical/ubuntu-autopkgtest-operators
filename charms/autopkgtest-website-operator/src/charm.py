@@ -46,6 +46,7 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         )
 
         framework.observe(self.on.install, self._on_install)
+        framework.observe(self.on.upgrade_charm, self._on_install)
         framework.observe(self.on.start, self._on_start)
         framework.observe(self.on.config_changed, self._on_config_changed)
         framework.observe(self.on.secret_changed, self._on_secret_changed)

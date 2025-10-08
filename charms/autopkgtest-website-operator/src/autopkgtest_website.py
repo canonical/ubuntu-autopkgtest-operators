@@ -83,7 +83,8 @@ def install() -> None:
     logger.info("Creating directories")
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     PUBLIC_DATA_DIR.mkdir(exist_ok=True)
-    WWW_DIR.mkdir(exist_ok=True)
+    shutil.rmtree(WWW_DIR, ignore_errors=True)
+    WWW_DIR.mkdir()
     shutil.chown(DATA_DIR, user=USER, group=GROUP)
     shutil.chown(PUBLIC_DATA_DIR, user=USER, group=GROUP)
 
