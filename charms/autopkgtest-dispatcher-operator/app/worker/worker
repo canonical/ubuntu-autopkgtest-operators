@@ -415,7 +415,6 @@ def call_autopkgtest(
     Return exit code.
     """
     # set up status AMQP exchange
-    global amqp_con
     status_amqp = amqp_con.channel()
     status_amqp.exchange_declare(
         exchange=status_exchange_name,
@@ -1115,7 +1114,6 @@ def request(channel, method, properties, body):
         else:
             logging.info("Keeping results in %s", work_dir)
 
-    global amqp_con
     complete_amqp = amqp_con.channel()
     complete_amqp.exchange_declare(
         exchange=complete_exchange_name,
@@ -1160,8 +1158,6 @@ def amqp_connect(cfg):
 
     Connect `request` to queues for all configured releases and
     architectures.
-
-    Return queue object.
     """
     global amqp_con
     logging.info("Connecting to AMQP server %s", os.environ["RABBIT_HOST"])
@@ -1174,6 +1170,11 @@ def amqp_connect(cfg):
             ),
         ),
     )
+    return amqp_con
+
+
+def amqp_queues_channel():
+    """Create channel for consuming the queues"""
     channel = amqp_con.channel()
     channel.confirm_delivery()
     # avoids greedy grabbing of the entire queue while being too busy
@@ -1198,7 +1199,7 @@ def amqp_connect(cfg):
         channel.queue_declare(queue=queue_name, durable=True, auto_delete=False)
         channel.basic_consume(queue=queue_name, on_message_callback=request)
 
-    return amqp_con
+    return channel
 
 
 def main():
@@ -1272,13 +1273,14 @@ def main():
         swiftclient.Connection(**swift_creds).close()
 
     # connect to AMQP queues
-    amqp_con = amqp_connect(cfg)
+    amqp_connect(cfg)
+    channel = amqp_queues_channel()
 
     # process queues forever
     try:
         while exit_requested is None:
             logging.info("Waiting for and processing AMQP requests")
-            amqp_con.start_consuming()
+            channel.start_consuming()
     except IOError:
         if exit_requested is None:
             raise

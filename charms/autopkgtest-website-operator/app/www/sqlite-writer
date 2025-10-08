@@ -105,8 +105,7 @@ def main():
             channel, method, properties, body, db_con
         ),
     )
-    while status_ch.callbacks:
-        amqp_con.start_consuming()
+    amqp_con.start_consuming()
 
 
 if __name__ == "__main__":
