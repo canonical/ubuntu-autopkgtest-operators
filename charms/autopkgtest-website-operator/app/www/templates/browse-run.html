@@ -65,7 +65,7 @@
       <th></th>
       <td>
         {% if test_results["result"] not in ["running", "queued"] %}
-          <a href="{{ url_for(get_by_uuid, uuid=test_results['uuid']) }}/log">log</a>
+          <a href="{{ url_for('get_by_uuid', uuid=test_results['uuid']) }}/log">log</a>
           (<a href="{{ test_results['url'] }}/log.gz">raw</a>) &emsp;
           <a href="{{ test_results['url'] }}/artifacts.tar.gz">artifacts</a> &emsp;
 
