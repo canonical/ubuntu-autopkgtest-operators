@@ -604,18 +604,13 @@ def request(channel, method, properties, body):
             # these will be written later on
             code = 99
             duration = 0
-            logging.info(
-                f"Only running {','.join(ARCH_RELEASE_ALLOW_MAPPING[release.lower()])} tests for release: {release.lower()}, test requests {architecture}"
-            )
+            errormessage = f"Only running {','.join(ARCH_RELEASE_ALLOW_MAPPING[release.lower()])} tests for release: {release.lower()}, test requests {architecture}"
+            logging.info(errormessage)
             # fake a log file
             with open(os.path.join(out_dir, "log"), "w") as log:
-                log.write(
-                    f"Only running {','.join(ARCH_RELEASE_ALLOW_MAPPING[release.lower()])} tests for release: {release.lower()}, you have requested {architecture}"
-                )
+                log.write(errormessage)
             with open(os.path.join(out_dir, "testpkg-version"), "w") as testpkg_version:
-                testpkg_version.write(
-                    f"Package blacklisted we only run {','.join(ARCH_RELEASE_ALLOW_MAPPING[release.lower()])} tests for {release.lower()}"
-                )
+                testpkg_version.write(errormessage)
             dont_run = True
         elif request_matches_per_package(pkgname, architecture, release, never_run):
             logging.warning("Marked to never run, ignoring")
