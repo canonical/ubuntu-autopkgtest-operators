@@ -39,7 +39,7 @@ AUTOPKGTEST_PACKAGE_CONFIG_LOCATION = Path(
 
 DEB_DEPENDENCIES = [
     "autodep8",
-    "python3-amqp",
+    "python3-pika",
     "python3-swiftclient",
 ]
 SNAP_DEPENDENCIES = [{"name": "lxd", "channel": "6/stable"}]

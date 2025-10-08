@@ -2,7 +2,7 @@
 # autopkgtest cloud worker
 # Author: Martin Pitt <martin.pitt@ubuntu.com>
 #
-# Requirements: python3-amqp python3-swiftclient
+# Requirements: python3-pika python3-swiftclient
 # Requirements for running autopkgtest from git: python3-debian libdpkg-perl
 #
 # pylint: disable=too-many-lines,line-too-long
@@ -25,8 +25,8 @@ import tempfile
 import time
 import uuid
 
-import amqp
 import distro_info
+import pika
 import swiftclient
 import systemd.journal
 
@@ -389,7 +389,14 @@ def send_status_info(
     )
 
     logging.debug(f"Sending status update for {test_uuid}")
-    queue.basic_publish(amqp.Message(msg, delivery_mode=2), status_exchange_name, "")
+    queue.basic_publish(
+        exchange=status_exchange_name,
+        routing_key="",
+        body=msg,
+        properties=pika.BasicProperties(
+            delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
+        ),
+    )
 
 
 def call_autopkgtest(
@@ -411,7 +418,9 @@ def call_autopkgtest(
     global amqp_con
     status_amqp = amqp_con.channel()
     status_amqp.exchange_declare(
-        status_exchange_name, "fanout", durable=False, auto_delete=True
+        exchange=status_exchange_name,
+        exchange_type="fanout",
+        auto_delete=True,
     )
 
     autopkgtest = subprocess.Popen(
@@ -1091,7 +1100,9 @@ def request(msg):
     global amqp_con
     complete_amqp = amqp_con.channel()
     complete_amqp.exchange_declare(
-        complete_exchange_name, "fanout", durable=True, auto_delete=False
+        exchange=complete_exchange_name,
+        exchange_type="fanout",
+        durable=True,
     )
     complete_msg = json.dumps(
         {
@@ -1112,7 +1123,12 @@ def request(msg):
         }
     )
     complete_amqp.basic_publish(
-        amqp.Message(complete_msg, delivery_mode=2), complete_exchange_name, ""
+        exchange=complete_exchange_name,
+        routing_key="",
+        body=complete_msg,
+        properties=pika.BasicProperties(
+            delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
+        ),
     )
     complete_amqp.close()
 
@@ -1131,14 +1147,18 @@ def amqp_connect(cfg):
     """
     global amqp_con
     logging.info("Connecting to AMQP server %s", os.environ["RABBIT_HOST"])
-    amqp_con = amqp.Connection(
-        os.environ["RABBIT_HOST"],
-        userid=os.environ["RABBIT_USER"],
-        password=os.environ["RABBIT_PASSWORD"],
-        confirm_publish=True,
+    amqp_con = pika.BlockingConnection(
+        parameters=pika.ConnectionParameters(
+            host=os.environ["RABBIT_HOST"],
+            credentials=pika.PlainCredentials(
+                username=os.environ["RABBIT_USER"],
+                password=os.environ["RABBIT_PASSWORD"],
+            ),
+        ),
     )
     amqp_con.connect()
     queue = amqp_con.channel()
+    queue.confirm_delivery()
     # avoids greedy grabbing of the entire queue while being too busy
     queue.basic_qos(0, 1, True)
 

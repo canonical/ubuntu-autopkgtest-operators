@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from time import time
 from urllib.error import HTTPError
 
-import amqp
+import pika
 from distro_info import UbuntuDistroInfo
 from helpers.cache import KeyValueCache
 from helpers.exceptions import (
@@ -317,8 +317,12 @@ class Submit:
                 with amqp_connect() as amqp_con:
                     with amqp_con.channel() as ch:
                         ch.basic_publish(
-                            amqp.Message(body, delivery_mode=2),  # persistent
+                            exchange="",
                             routing_key=queue,
+                            body=body,
+                            properties=pika.BasicProperties(
+                                delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
+                            ),
                         )
                 return params["uuid"]
         except (TimeoutError, UnboundLocalError, OSError) as e:

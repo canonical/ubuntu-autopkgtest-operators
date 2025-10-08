@@ -10,7 +10,7 @@ In this current folder:
 
 Install the main dependencies (Others are usually less important. Have a look at
 the charm definition for an exhaustive list.):
-`sudo apt install python3-amqp python3-flask python3-distro-info libjs-jquery libjs-bootstrap`
+`sudo apt install python3-pika python3-flask python3-distro-info libjs-jquery libjs-bootstrap`
 
 Then you can start each script individually, without argument.
 Here is a quick non exhaustive list of the main ones:

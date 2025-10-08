@@ -20,8 +20,8 @@ import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 
-import amqp
 import distro_info
+import pika
 import pygit2
 import swiftclient
 
@@ -350,10 +350,15 @@ def amqp_connect():
     cp = get_autopkgtest_cloud_conf()
     amqp_uri = cp["amqp"]["uri"]
     parts = urllib.parse.urlsplit(amqp_uri, allow_fragments=False)
-    amqp_con = amqp.Connection(
-        parts.hostname, userid=parts.username, password=parts.password
+    amqp_con = pika.BlockingConnection(
+        parameters=pika.ConnectionParameters(
+            host=parts.hostname,
+            credentials=pika.PlainCredentials(
+                username=parts.username,
+                password=parts.password,
+            ),
+        ),
     )
-    amqp_con.connect()
     logging.info("Connected to AMQP server at %s@%s", parts.username, parts.hostname)
 
     return amqp_con

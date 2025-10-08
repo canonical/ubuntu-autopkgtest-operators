@@ -90,10 +90,9 @@ def main():
     amqp_con = amqp_connect()
     status_ch = amqp_con.channel()
     status_ch.exchange_declare(
-        SqliteWriterConfig.writer_exchange_name,
-        "fanout",
+        exchange=SqliteWriterConfig.writer_exchange_name,
+        exchange_type="fanout",
         durable=True,
-        auto_delete=False,
     )
     queue_name = "sqlite-writer-listener-%s" % socket.getfqdn()
     status_ch.queue_declare(queue_name, durable=True, auto_delete=False)

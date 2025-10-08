@@ -10,9 +10,9 @@ import tempfile
 import time
 import urllib.parse
 
-import amqp
-from amqp.exceptions import AMQPError
+import pika
 from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf
+from pika.exceptions import AMQPError
 
 AMQP_CONTEXTS = ["ubuntu", "huge", "ppa", "upstream"]
 
@@ -62,8 +62,12 @@ class AutopkgtestQueueContents:
                         # add a single message to the queue so only one run
                         # of cache-amqp can read the actual queue contents
                         self.amqp_channel.basic_publish(
-                            amqp.Message(f"{queue_name}", delivery_mode=2),
+                            exchange="",
                             routing_key=queue_name,
+                            body=f"{queue_name}",
+                            properties=pika.BasicProperties(
+                                delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
+                            ),
                         )
 
     @property

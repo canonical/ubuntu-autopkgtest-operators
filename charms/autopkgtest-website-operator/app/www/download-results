@@ -8,7 +8,7 @@ import socket
 import sys
 import time
 
-import amqp
+import pika
 from helpers.utils import SqliteWriterConfig, amqp_connect
 
 EXCHANGE_NAME = "testcomplete.fanout"
@@ -61,10 +61,9 @@ def process_message(msg):
             # add to queue instead of writing to db
             with amqp_con.channel() as complete_amqp:
                 complete_amqp.exchange_declare(
-                    SqliteWriterConfig.writer_exchange_name,
-                    "fanout",
+                    exchange=SqliteWriterConfig.writer_exchange_name,
+                    exchange_type="fanout",
                     durable=True,
-                    auto_delete=False,
                 )
                 write_me_msg = {
                     "run_id": run_id,
@@ -80,9 +79,12 @@ def process_message(msg):
                     "package": package,
                 }
                 complete_amqp.basic_publish(
-                    amqp.Message(json.dumps(write_me_msg), delivery_mode=2),
-                    SqliteWriterConfig.writer_exchange_name,
-                    "",
+                    exchange=SqliteWriterConfig.writer_exchange_name,
+                    routing_key="",
+                    body=json.dumps(write_me_msg),
+                    properties=pika.BasicProperties(
+                        delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
+                    ),
                 )
 
                 msg.channel.basic_ack(msg.delivery_tag)
@@ -105,7 +107,11 @@ if __name__ == "__main__":
 
     amqp_con = amqp_connect()
     status_ch = amqp_con.channel()
-    status_ch.exchange_declare(EXCHANGE_NAME, "fanout", durable=True, auto_delete=False)
+    status_ch.exchange_declare(
+        exchange=EXCHANGE_NAME,
+        exchange_type="fanout",
+        durable=True,
+    )
     queue_name = "complete-listener-%s" % socket.getfqdn()
     status_ch.queue_declare(queue_name, durable=True, auto_delete=False)
     status_ch.queue_bind(queue_name, EXCHANGE_NAME, queue_name)
