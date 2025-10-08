@@ -49,7 +49,7 @@ long_tests = set()
 never_run = set()
 esm_specials = set()
 
-ARCH_RELEASE_ALLOW_MAPPING = {
+ARCH_RELEASE_RESTRICTION_MAPPING = {
     "trusty": ["amd64", "i386"],
     "xenial": ["amd64", "i386", "s390x"],
 }
@@ -594,8 +594,8 @@ def request(channel, method, properties, body):
     try:
         out_dir = os.path.join(work_dir, "out")
         if (
-            release.lower() in ARCH_RELEASE_ALLOW_MAPPING
-            and architecture not in ARCH_RELEASE_ALLOW_MAPPING[release.lower()]
+            release.lower() in ARCH_RELEASE_RESTRICTION_MAPPING
+            and architecture not in ARCH_RELEASE_RESTRICTION_MAPPING[release.lower()]
             and not request_matches_per_package(
                 pkgname, architecture, release, esm_specials
             )
@@ -604,7 +604,7 @@ def request(channel, method, properties, body):
             # these will be written later on
             code = 99
             duration = 0
-            errormessage = f"Only running {','.join(ARCH_RELEASE_ALLOW_MAPPING[release.lower()])} tests for release: {release.lower()}, test requests {architecture}"
+            errormessage = f"Only running {','.join(ARCH_RELEASE_RESTRICTION_MAPPING[release.lower()])} tests for release: {release.lower()}, test requests {architecture}"
             logging.info(errormessage)
             # fake a log file
             with open(os.path.join(out_dir, "log"), "w") as log:
