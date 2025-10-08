@@ -14,9 +14,8 @@ from flask import Flask, redirect, request, session
 from flask_openid import OpenID
 from helpers.exceptions import WebControlException
 from helpers.utils import get_github_context, setup_key
-from werkzeug.middleware.proxy_fix import ProxyFix
-
 from request.submit import Submit
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # map multiple GET vars to AMQP JSON request parameter list
 MULTI_ARGS = {"trigger": "triggers", "ppa": "ppas", "env": "env"}
