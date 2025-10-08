@@ -784,10 +784,8 @@ def request(channel, method, properties, body):
         # this provides better isolation between -proposed packages; but only do
         # that for Ubuntu itself, not for things from git, PPAs, etc.
         if cfg.get("virt", "args") != "null":
-            if (
-                "test-git" not in params
-                and "test-bzr" not in params
-                and ("ppas" not in params or "all-proposed" in params)
+            if "test-git" not in params and (
+                "ppas" not in params or "all-proposed" in params
             ):
                 pocket_arg = "--apt-pocket=proposed"
                 if "all-proposed" not in params:
@@ -809,18 +807,6 @@ def request(channel, method, properties, body):
             testargs = ["--no-built-binaries", params["test-git"]]
         elif "build-git" in params:
             testargs = [params["build-git"]]
-        elif "test-bzr" in params:
-            checkout_dir = os.path.join(work_dir, "checkout")
-            subprocess.check_call(
-                [
-                    "bzr",
-                    "checkout",
-                    "--lightweight",
-                    params["test-bzr"],
-                    checkout_dir,
-                ]
-            )
-            testargs = ["--no-built-binaries", checkout_dir]
         else:
             testargs = [pkgname]
 
