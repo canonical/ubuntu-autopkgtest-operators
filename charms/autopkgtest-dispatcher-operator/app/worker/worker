@@ -28,9 +28,6 @@ import pika
 import swiftclient
 import systemd.journal
 
-ALL_RELEASES = distro_info.UbuntuDistroInfo().get_all(result="object")
-
-
 my_path = os.path.dirname(__file__)
 root_path = os.path.dirname(os.path.abspath(my_path))
 debug = False
@@ -266,17 +263,13 @@ def process_output_dir(
     return (testpkg_version, duration, requester)
 
 
-def series_to_version(series):
-    versions = [x.version for x in ALL_RELEASES if x.series == series]
-    if len(versions) < 1:
-        return None
-    return versions[0].strip(" LTS")
-
-
 def i386_cross_series(series):
     # the first version where i386 is a partiel architecture and only cross
     # testing is done is 20.04
-    return series_to_version(series) > "19.10"
+    version = distro_info.UbuntuDistroInfo().version(series)
+    if not version:
+        return True
+    return version > "19.10"
 
 
 def host_arch(release, architecture):
