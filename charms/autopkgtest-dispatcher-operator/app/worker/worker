@@ -783,8 +783,6 @@ def request(channel, method, properties, body):
         # only install the triggering package from -proposed, rest from -release
         # this provides better isolation between -proposed packages; but only do
         # that for Ubuntu itself, not for things from git, PPAs, etc.
-        # also skip that for the kernel as the linux vs. linux-meta split always
-        # screws up the apt pinning
         if cfg.get("virt", "args") != "null":
             if (
                 "test-git" not in params
@@ -792,7 +790,7 @@ def request(channel, method, properties, body):
                 and ("ppas" not in params or "all-proposed" in params)
             ):
                 pocket_arg = "--apt-pocket=proposed"
-                if "all-proposed" not in params and not pkgname.startswith("linux"):
+                if "all-proposed" not in params:
                     trigs = [
                         "src:" + t.split("/", 1)[0]
                         for t in params.get("triggers", [])
