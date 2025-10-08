@@ -98,12 +98,12 @@ class AutopkgtestQueueContents:
 
         # non-acking read of all requests to inspect the queue
         while True:
-            r = self.amqp_channel.basic_get(queue_name)
-            if r is None:
+            method, properties, body = self.amqp_channel.basic_get(queue_name)
+            if body is None:
                 break
-            requests.append(r.body)
-            logging.debug("queue_name: found %s", r.body)
-            delivery_tags.append(r.delivery_tag)
+            requests.append(body)
+            logging.debug("queue_name: found %s", body)
+            delivery_tags.append(method.delivery_tag)
         # now explicitly reject the requests so that they become available again
         # for real workers
         for t in delivery_tags:

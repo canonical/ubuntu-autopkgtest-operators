@@ -12,10 +12,9 @@ from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf
 logging.basicConfig(level=(logging.DEBUG if "DEBUG" in os.environ else logging.INFO))
 
 
-def process_message(msg, running_tests):
+def process_message(body, running_tests):
     """Process AMQP status message, update running_tests"""
 
-    body = msg.body
     if isinstance(body, bytes):
         body = body.decode("UTF-8", errors="replace")
     info = json.loads(body)
@@ -67,12 +66,12 @@ def main():
     running_tests = {}
     queue_empty = False
     while not queue_empty:
-        msg = status_ch.basic_get(queue_name)
-        if msg is None:
+        method, properties, body = status_ch.basic_get(queue_name)
+        if body is None:
             queue_empty = True
             continue
-        running_tests = process_message(msg, running_tests)
-        status_ch.basic_ack(msg.delivery_tag)
+        running_tests = process_message(body, running_tests)
+        status_ch.basic_ack(method.delivery_tag)
 
     cp = get_autopkgtest_cloud_conf()
     running_name = cp["web"]["running_cache"]

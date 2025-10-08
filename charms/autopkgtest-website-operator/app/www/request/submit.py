@@ -283,19 +283,19 @@ class Submit:
         with amqp_connect() as amqp_con:
             with amqp_con.channel() as ch:
                 while True:
-                    message = ch.basic_get(queue)
-                    if message is None:
+                    method, properties, body = ch.basic_get(queue)
+                    if body is None:
                         break
-                    if isinstance(message.body, str):
-                        body = message.body
+                    if isinstance(body, str):
+                        body = body
                     else:
-                        body = message.body.decode("UTF-8")
+                        body = body.decode("UTF-8")
                     this_package, this_params = body.split(None, 1)
                     this_params = json.loads(this_params)
                     del this_params["submit-time"]
 
                     if this_package == package and this_params == params:
-                        ch.basic_ack(message.delivery_tag)
+                        ch.basic_ack(method.delivery_tag)
                         count += 1
         return count
 
