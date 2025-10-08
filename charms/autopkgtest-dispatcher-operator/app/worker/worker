@@ -306,6 +306,7 @@ def subst(s, big_package, release, architecture, hostarch, pkgname, test_uuid):
 
 
 def send_status_info(
+    *,
     queue,
     release,
     architecture,
@@ -408,30 +409,30 @@ def call_autopkgtest(
             break
         except subprocess.TimeoutExpired:
             send_status_info(
-                status_amqp,
-                release,
-                architecture,
-                pkgname,
-                params,
-                out_dir,
-                True,
-                int(time.time() - start_time),
-                test_uuid,
-                private,
+                queue=status_amqp,
+                release=release,
+                architecture=architecture,
+                pkgname=pkgname,
+                params=params,
+                out_dir=out_dir,
+                running=True,
+                duration=int(time.time() - start_time),
+                test_uuid=test_uuid,
+                private=private,
             )
 
     ret = autopkgtest.wait()
     send_status_info(
-        status_amqp,
-        release,
-        architecture,
-        pkgname,
-        params,
-        out_dir,
-        False,
-        int(time.time() - start_time),
-        test_uuid,
-        private,
+        queue=status_amqp,
+        release=release,
+        architecture=architecture,
+        pkgname=pkgname,
+        params=params,
+        out_dir=out_dir,
+        running=False,
+        duration=int(time.time() - start_time),
+        test_uuid=test_uuid,
+        private=private,
     )
 
     status_amqp.close()
