@@ -55,7 +55,6 @@ def list_remote_container(container_name, swift_conn, marker, limit=1000):
 def list_our_results(release):
     LOGGER.debug("Finding already recorded results for %s", release)
     c = db_con.cursor()
-    # pylint: disable=line-too-long
     c.execute(
         "SELECT run_id FROM result INNER JOIN test ON test.id = result.test_id WHERE test.release=?",
         (release,),

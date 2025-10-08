@@ -1,13 +1,11 @@
-# pylint: disable=no-value-for-parameter,no-member
 """Test the Flask app."""
 
 import os
 from unittest import TestCase
 from unittest.mock import mock_open, patch
 
-from helpers.exceptions import WebControlException
-
 import request.app
+from helpers.exceptions import WebControlException
 from request.submit import Submit
 
 

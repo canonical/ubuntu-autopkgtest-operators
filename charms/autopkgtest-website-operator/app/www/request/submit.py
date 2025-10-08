@@ -83,7 +83,6 @@ class Submit:
                 "migration-reference/0 and all-proposed=1 are not compatible arguments."
             )
 
-    # pylint: disable=dangerous-default-value
     def validate_distro_request(
         self, release, arch, package, triggers, requester, ppas=[], **kwargs
     ):
@@ -215,7 +214,6 @@ class Submit:
         ):
             raise ForbiddenRequest(package, ",".join(triggers))
 
-    # pylint: disable=dangerous-default-value
     def validate_git_request(self, release, arch, package, ppas=[], env=[], **kwargs):
         """Validate parameters for an upstream git test request
 
@@ -484,7 +482,6 @@ class Submit:
         )
         return code >= 200 and code < 300
 
-    # pylint: disable=dangerous-default-value
     def in_allowed_team(self, person):
         """Check if person is allowed to queue tests"""
         cached_entry = self.allowed_user_cache.get(person)

@@ -67,7 +67,6 @@ def populate_dummy_amqp_cache(path: Path):
     supported_releases = get_supported_releases()
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
-        # pylint: disable=line-too-long
         json.dump(
             {
                 "arches": ["amd64", "ppc64el"],

@@ -3,8 +3,6 @@ utilities for autopkgtest-web webcontrol
 """
 
 import configparser
-
-# pylint: disable=protected-access
 import logging
 import os
 import pathlib
@@ -15,8 +13,6 @@ import subprocess
 import time
 import typing
 import urllib.parse
-
-# introduced in python3.7, we use 3.8
 from dataclasses import dataclass
 from pathlib import Path
 

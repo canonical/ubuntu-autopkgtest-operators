@@ -158,7 +158,6 @@ def get_sources(db_con, release, archive_url):
                     )
                     temp_file.seek(0)
                     with gzip.open(temp_file) as fd:
-                        # pylint: disable=c-extension-no-member
                         for section in apt_pkg.TagFile(fd):
                             db_con.execute(
                                 "INSERT INTO current_version "

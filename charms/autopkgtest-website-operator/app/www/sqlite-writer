@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-# pylint: disable=wrong-import-position
 
 import datetime
 import json

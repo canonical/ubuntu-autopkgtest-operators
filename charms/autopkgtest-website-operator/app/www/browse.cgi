@@ -2,8 +2,6 @@
 
 """Browse autopkgtest results"""
 
-# pylint: disable=too-many-lines
-
 import gzip
 import json
 import os
@@ -434,7 +432,6 @@ def package_overview(package, _=None):
         package=package,
         releases=[
             release
-            # pylint: disable=consider-iterating-dictionary
             for release in results.keys()
             if release in SUPPORTED_UBUNTU_RELEASES
         ],
@@ -1027,10 +1024,9 @@ def running():
 def queuesize_json():
     queue_info = get_queues_info()[2]
     # Strip the number of queue items, this is just their contents
-    for context in queue_info:  # pylint: disable=consider-using-dict-items
+    for context in queue_info:
         for release in queue_info[context]:
             for arch in queue_info[context][release]:
-                # pylint: disable=unused-variable
                 (queue_size, queue_items) = queue_info[context][release][arch]
                 queue_info[context][release][arch] = len(queue_items)
     return flask.Response(json.dumps(queue_info, indent=2), mimetype="application/json")
@@ -1040,10 +1036,9 @@ def queuesize_json():
 def queues_json():
     queue_info = get_queues_info()[2]
     # Strip the number of queue items, this is just their contents
-    for context in queue_info:  # pylint: disable=consider-using-dict-items
+    for context in queue_info:
         for release in queue_info[context]:
             for arch in queue_info[context][release]:
-                # pylint: disable=unused-variable
                 (queue_size, queue_items) = queue_info[context][release][arch]
                 queue_info[context][release][arch] = queue_items
     return flask.Response(json.dumps(queue_info, indent=2), mimetype="application/json")

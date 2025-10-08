@@ -16,9 +16,6 @@ STAT_NUMPKGSPASS = "numpkgspass"
 STAT_FAILRUNS = "failruns"
 STAT_PASSRUNS = "passruns"
 
-# to silence pylint errors
-logger = None
-
 
 def success_count_for_release_and_arch(db, release, arch, src_versions):
     """Return number of packages with tests that pass"""
@@ -30,7 +27,6 @@ def success_count_for_release_and_arch(db, release, arch, src_versions):
     # but succeeded for a trigger that is not published), don't count it as
     # success
     cur_pkg = None
-    # pylint: disable=unused-variable
     for pkg, triggers, code in db.execute(
         "SELECT test.package, triggers, exitcode "
         "FROM test, result, current_version "
@@ -59,7 +55,6 @@ def success_count_for_release_and_arch(db, release, arch, src_versions):
             # it can happen that src_versions does not have a trigger source
             # package if that trigger source got removed in the final release
             if src_versions.get(src) != ver:
-                # pylint: disable=line-too-long
                 logger.debug(
                     "%s/%s/%s: ignoring non-current trigger %s",
                     release,
@@ -89,7 +84,7 @@ def calc_stats():
     release_arches = get_release_arches(db_con)
 
     data = {}
-    for release in release_arches:  # pylint: disable=consider-using-dict-items
+    for release in release_arches:
         data[release] = {}
         for arch in release_arches[release]:
             data[release][arch] = {
@@ -124,7 +119,7 @@ def calc_stats():
             pass
 
     logger.debug("Collating stats")
-    for release in release_arches:  # pylint: disable=consider-using-dict-items
+    for release in release_arches:
         sources = get_source_versions(db_con, release)
         for arch in release_arches[release]:
             data[release][arch][STAT_NUMPKGSPASS] = success_count_for_release_and_arch(

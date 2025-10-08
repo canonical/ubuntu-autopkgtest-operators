@@ -4,8 +4,6 @@
 #
 # Requirements: python3-pika python3-swiftclient
 # Requirements for running autopkgtest from git: python3-debian libdpkg-perl
-#
-# pylint: disable=too-many-lines,line-too-long
 
 import argparse
 import configparser
