@@ -107,7 +107,10 @@ class AutopkgtestQueueContents:
         # now explicitly reject the requests so that they become available again
         # for real workers
         for t in delivery_tags:
-            self.amqp_channel.basic_reject(t, True)
+            self.amqp_channel.basic_reject(
+                delivery_tag=method.delivery_tag,
+                requeue=True,
+            )
 
         res = []
         for r in requests:
@@ -148,10 +151,12 @@ class AutopkgtestQueueContents:
                     logging.info(
                         f"Trying to lock semaphore queue {semaphore_queue_name}..."
                     )
-                    r = None
-                    while r is None:
-                        r = channel.basic_get(semaphore_queue_name)
-                        if r is None:
+                    body = None
+                    while body is None:
+                        method, properties, body = channel.basic_get(
+                            semaphore_queue_name
+                        )
+                        if body is None:
                             logging.debug("...can't lock, sleeping...")
                             time.sleep(1)
                     logging.info("...locked.")
@@ -183,7 +188,10 @@ class AutopkgtestQueueContents:
                     }
                     all_arches.add(arch)
                     logging.debug(f"Releasing semaphore lock {semaphore_queue_name}")
-                    channel.basic_reject(r.delivery_tag, True)
+                    channel.basic_reject(
+                        delivery_tag=method.delivery_tag,
+                        requeue=True,
+                    )
 
         queued = {
             "releases": list(release_arches.keys()),
