@@ -419,7 +419,6 @@ def call_autopkgtest(
     status_amqp.exchange_declare(
         exchange=status_exchange_name,
         exchange_type="fanout",
-        auto_delete=True,
     )
 
     autopkgtest = subprocess.Popen(
@@ -491,7 +490,7 @@ def request(channel, method, properties, body):
     private = False
 
     # FIXME: make this more elegant
-    fields = method.routine_key.split("-")
+    fields = method.routing_key.split("-")
     if len(fields) == 4:
         release, architecture = fields[2:4]
     elif len(fields) == 3:
