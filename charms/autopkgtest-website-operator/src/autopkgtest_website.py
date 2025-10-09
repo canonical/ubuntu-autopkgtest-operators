@@ -144,6 +144,7 @@ def configure(
         "https_proxy": os.getenv("JUJU_CHARM_HTTPS_PROXY", ""),
         "http_proxy": os.getenv("JUJU_CHARM_HTTP_PROXY", ""),
         "no_proxy": os.getenv("JUJU_CHARM_NO_PROXY", ""),
+        **amqp_creds,
         **swift_creds,
     }
     with open(SITES_AVAILABLE_PATH / "autopkgtest.conf", "w") as f:
