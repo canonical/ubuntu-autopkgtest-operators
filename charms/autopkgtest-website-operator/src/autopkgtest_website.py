@@ -153,6 +153,7 @@ def configure(
     logger.info("Generating autopkgtest config")
     j2template = j2env.get_template("autopkgtest-cloud.conf.j2")
     j2context = {
+        "hostname": hostname,
         "data": DATA_DIR,
         "database": DATA_DIR / "autopkgtest.db",
         "database_ro": PUBLIC_DATA_DIR / "autopkgtest.db",

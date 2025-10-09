@@ -56,10 +56,7 @@ def init_config():
 
     cp = get_autopkgtest_cloud_conf()
 
-    try:
-        CONFIG["swift_container_url"] = cp["web"]["ExternalURL"] + "/autopkgtest-%s"
-    except KeyError:
-        CONFIG["swift_container_url"] = cp["web"]["SwiftURL"] + "/autopkgtest-%s"
+    CONFIG["swift_container_url"] = cp["web"]["external_swift_url"] + "/autopkgtest-%s"
     CONFIG["amqp_queue_cache"] = Path(cp["web"]["amqp_queue_cache"])
     CONFIG["indexed_packages"] = Path(cp["web"]["indexed_packages"])
     CONFIG["running_cache"] = Path(cp["web"]["running_cache"])
