@@ -140,13 +140,17 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
 
     def disable_image_builders(self, arch, releases):
         for release in releases:
-            systemd.service_stop(f"build-adt-container@worker-{arch}-{release}.timer")
-            systemd.service_stop(f"build-adt-vm@worker-{arch}-{release}.timer")
+            systemd.service_stop(
+                f"build-autopkgtest-container@worker-{arch}-{release}.timer"
+            )
+            systemd.service_stop(f"build-autopkgtest-vm@worker-{arch}-{release}.timer")
             try:
                 systemd.service_disable(
-                    f"build-adt-container@worker-{arch}-{release}.timer"
+                    f"build-autopkgtest-container@worker-{arch}-{release}.timer"
                 )
-                systemd.service_disable(f"build-adt-vm@worker-{arch}-{release}.timer")
+                systemd.service_disable(
+                    f"build-autopkgtest-vm@worker-{arch}-{release}.timer"
+                )
             except systemd.SystemdError:
                 # fine if this fails, probably disabling a release we weren't building on this arch
                 pass
