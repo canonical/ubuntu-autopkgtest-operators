@@ -133,8 +133,8 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
     def run_as_user(self, command: str):
         # using shell=True to be able to use quotes in the command
         subprocess.run(
-            ["sudo", "-u", USER] + shlex.split(command),
-            env=open("/etc/environment.d/proxy.conf").read(),
+            ["sudo", "--preserve-env=https_proxy,http_proxy,no_proxy", "-u", USER]
+            + shlex.split(command),
         )
 
     def write_rabbitmq_creds(self):
