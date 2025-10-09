@@ -82,6 +82,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         framework.observe(self.on.install, self._on_install)
         framework.observe(self.on.config_changed, self._on_config_changed)
         framework.observe(self.on.start, self._on_start)
+        framework.observe(self.on.upgrade_charm, self._on_install)
 
         # action hooks
         framework.observe(self.on.add_worker_action, self._on_add_worker)
@@ -190,11 +191,11 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
                 AUTOPKGTEST_PACKAGE_CONFIG_LOCATION,
             ),
         ]:
+            shutil.rmtree(location, ignore_errors=True)
             # TODO: the currently packaged version of pygit2 does not support cloning through
             # a proxy. the next release should hopefully include this feature.
             # pygit2.clone_repository(repo, location, checkout_branch=branch)
-            if not location.exists():
-                self.run_as_user(f"git clone -b {branch} {repo} {location}")
+            self.run_as_user(f"git clone -b {branch} {repo} {location}")
 
     def install_worker(self):
         worker_path = CHARM_APP_DATA / "worker" / "worker"
@@ -209,12 +210,8 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         to_enable = []
         for unit in Path(units_path).iterdir():
             dest = dest_dir.joinpath(unit.name)
-            try:
-                os.symlink(unit, dest)
-            except FileExistsError:
-                if not os.path.islink(dest):
-                    os.unlink(dest)
-                    os.symlink(unit, dest)
+            dest.unlink(missing_ok=True)
+            os.symlink(unit, dest)
             if "@" not in unit.name:
                 to_enable.append(unit.name)
 
