@@ -159,9 +159,11 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         for release in releases:
             if self.is_release_allowed(arch, release):
                 systemd.service_enable(
-                    f"build-adt-container@worker-{arch}-{release}.timer"
+                    f"build-autopkgtest-container@worker-{arch}-{release}.timer"
                 )
-                systemd.service_enable(f"build-adt-vm@worker-{arch}-{release}.timer")
+                systemd.service_enable(
+                    f"build-autopkgtest-vm@worker-{arch}-{release}.timer"
+                )
 
                 # trigger image build immediately upon starting the timer
                 try:
@@ -169,7 +171,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
                         [
                             "systemctl",
                             "start",
-                            f"build-adt-container@worker-{arch}-{release}.service",
+                            f"build-autopkgtest-container@worker-{arch}-{release}.service",
                             "--no-block",
                         ]
                     )
@@ -177,7 +179,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
                         [
                             "systemctl",
                             "start",
-                            f"build-adt-vm@worker-{arch}-{release}.service",
+                            f"build-autopkgtest-vm@worker-{arch}-{release}.service",
                             "--no-block",
                         ]
                     )
