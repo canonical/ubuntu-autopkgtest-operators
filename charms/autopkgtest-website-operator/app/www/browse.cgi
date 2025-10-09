@@ -913,7 +913,12 @@ def display_run_logs(uuid):
 
     conn = swift_connect()
 
-    object_name = f"{release}/{arch}/{package[0]}/{package}/{run_id}/log.gz"
+    if package.startswith("lib") and len(package) > 3:
+        prefix = package[:4]
+    else:
+        prefix = package[0]
+
+    object_name = f"{release}/{arch}/{prefix}/{package}/{run_id}/log.gz"
 
     gz_log = conn.get_object(container=f"autopkgtest-{release}", obj=object_name)[1]
     text_log = gzip.decompress(gz_log).decode("utf-8")
