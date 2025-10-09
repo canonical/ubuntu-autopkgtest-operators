@@ -65,11 +65,6 @@ def init_config():
 
 def connect_db(db_uri: str):
     global db_con
-
-    # XXXparide### db_path = Path(urllib.parse.urlparse(db_uri).path)
-    # XXXparide### if not db_path.is_file():
-    # XXXparide###     init_db(db_path).close()
-
     db_con = sqlite3.connect(db_uri, uri=True, check_same_thread=False)
 
 
