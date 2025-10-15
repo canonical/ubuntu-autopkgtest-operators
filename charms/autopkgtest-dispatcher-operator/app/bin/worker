@@ -87,7 +87,7 @@ def parse_args():
         "-a",
         "--architecture",
         default=subprocess.check_output(
-            ["dpkg", "--print-architecture"], universal_newlines=True
+            ["dpkg", "--print-architecture"], text=True
         ).strip(),
         help="architecture to watch queues for (default: machine arch)",
     )
