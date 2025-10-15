@@ -10,6 +10,6 @@ TimeoutStartSec=18h
 EnvironmentFile=-/etc/environment.d/proxy.conf
 ExecStart=sh -ec '\
     PARAMS="%i"; REMOTE="$${PARAMS%-*}"; ARCH="$${REMOTE##*-}"; RELEASE="$${PARAMS##*-}"; BASE="$$RELEASE"; \
-    if ! lxc image info "ubuntu-daily:$$BASE/$$ARCH" >/dev/null 2>&1 && [ "$$RELEASE" = "$$(ubuntu-distro-info --devel)" ]; then BASE=$$(ubuntu-distro-info --stable); fi; \
+    if ! lxc image info "ubuntu-daily:$$BASE/$$ARCH" >/dev/null 2>&1 && [ "$$RELEASE" = "$$(ubuntu-distro-info --latest)" ]; then BASE=$$(ubuntu-distro-info --stable); fi; \
     RELEASE="$$RELEASE" MIRROR="{{ mirror }}" /usr/bin/flock "/run/lock/%p-$$ARCH" \
     "{{ autopkgtest_location }}/tools/autopkgtest-build-lxd" -r "$$REMOTE" "ubuntu-daily:$$BASE/$$ARCH"'
