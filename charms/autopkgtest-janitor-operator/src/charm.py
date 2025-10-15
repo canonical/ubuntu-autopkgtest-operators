@@ -185,7 +185,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         with open("/etc/environment.d/proxy.conf", "w") as file:
             file.write(
                 textwrap.dedent(
-                    f"""
+                    f"""\
                     http_proxy={os.getenv("JUJU_CHARM_HTTP_PROXY", "")}
                     https_proxy={os.getenv("JUJU_CHARM_HTTPS_PROXY", "")}
                     no_proxy={os.getenv("JUJU_CHARM_NO_PROXY", "")}
