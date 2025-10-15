@@ -240,8 +240,6 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
                     releases = {self.typed_config.releases}
                     setup_command =
                     setup_command2 =
-                    worker_upstream_percentage = {self.typed_config.worker_upstream_percentage}
-                    stable_release_percentage = {self.typed_config.stable_release_percentage}
                     retry_delay = 300
                     debug = 0
                     architectures =

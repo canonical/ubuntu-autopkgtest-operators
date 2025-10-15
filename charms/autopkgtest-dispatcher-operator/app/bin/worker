@@ -480,66 +480,6 @@ def request(channel, method, properties, body):
     systemd_logging_handler._extra["ADT_RELEASE"] = release
     systemd_logging_handler._extra["ADT_ARCH"] = architecture
 
-    try:
-        worker_upstream_percentage = int(
-            cfg["autopkgtest"]["worker_upstream_percentage"]
-        )
-    except Exception as _:
-        worker_upstream_percentage = 33
-
-    try:
-        stable_release_percentage = int(cfg["autopkgtest"]["stable_release_percentage"])
-    except Exception as _:
-        stable_release_percentage = 100
-
-    try:
-        devel = distro_info.UbuntuDistroInfo().devel()
-    except distro_info.DistroDataOutdated as _:
-        logging.warning(
-            (
-                "distro_info detected as outdated, "
-                "ignoring stable vs devel die roll mechanism"
-            )
-        )
-        devel = None
-
-    if devel and release != devel:
-        if random.randint(1, 100) > stable_release_percentage:
-            logging.info(
-                "Stable release test request and 1d100 rolled above %i, skipping for now",
-                stable_release_percentage,
-            )
-            channel.basic_reject(
-                delivery_tag=method.delivery_tag,
-                requeue=True,
-            )
-            return
-        else:
-            logging.info(
-                "Stable release test request and 1d100 rolled below %i, running it now",
-                stable_release_percentage,
-            )
-
-    if method.routing_key.startswith("debci-upstream-"):
-        # crude way to not allow upstream tests to monopolise resources - only X%
-        # of chances to really run them
-        # This percentage is a juju config option.
-        if random.randint(1, 100) > worker_upstream_percentage:
-            logging.info(
-                "Upstream job detected and 1d100 rolled above %i, skipping for now",
-                worker_upstream_percentage,
-            )
-            channel.basic_reject(
-                delivery_tag=method.delivery_tag,
-                requeue=True,
-            )
-            return
-        else:
-            logging.info(
-                "Upstream job detected and 1d100 rolled below %i, running it now",
-                worker_upstream_percentage,
-            )
-
     if isinstance(body, bytes):
         try:
             body = body.decode("UTF-8")

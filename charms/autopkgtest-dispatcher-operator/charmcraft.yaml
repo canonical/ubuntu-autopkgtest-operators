@@ -74,18 +74,6 @@ config:
       type: string
       description: Space-separated list of releases to test.
       default: trusty xenial bionic focal jammy noble plucky questing
-    worker-upstream-percentage:
-      type: int
-      description: Percent chance that a test will be run from the upstream queue when its turn comes up.
-      min: 0
-      max: 100
-      default: 33
-    stable-release-percentage:
-      type: int
-      description: Percent chance that a test will be run from stable releases.
-      min: 0
-      max: 100
-      default: 100
 
     # swift
     swift-auth-url:

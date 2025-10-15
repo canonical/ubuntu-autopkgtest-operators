@@ -11,8 +11,6 @@ class DispatcherConfig(pydantic.BaseModel):
     autopkgtest_git_branch: str
     default_worker_count: int
     releases: str
-    worker_upstream_percentage: int
-    stable_release_percentage: int
     swift_auth_url: str
     swift_project_domain_name: str
     swift_project_name: str
