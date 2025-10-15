@@ -63,7 +63,7 @@ config:
   options:
     # charm options
     autopkgtest-git-branch:
-      type: str
+      type: string
       description: salsa.debian.org/ubuntu-ci-team/autopkgtest branch to clone
       default: ubuntu/production-tip
     default-worker-count:
