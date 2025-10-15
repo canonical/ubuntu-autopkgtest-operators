@@ -1,0 +1,125 @@
+#!/usr/bin/python3
+# Filter out all but the latest request for a given upstream PR
+
+import argparse
+import configparser
+import json
+import logging
+import os
+from collections import defaultdict
+
+import amqp
+import dateutil.parser
+import distro_info
+
+UDI = distro_info.UbuntuDistroInfo()
+ALL_UBUNTU_RELEASES = UDI.all
+SUPPORTED_UBUNTU_RELEASES = sorted(
+    set(UDI.supported() + UDI.supported_esm()), key=ALL_UBUNTU_RELEASES.index
+)
+
+
+def filter_amqp(options):
+    try:
+        cp = configparser.ConfigParser()
+        with open("/home/ubuntu/rabbitmq.cred", "r") as f:
+            cp.read_string("[rabbit]\n" + f.read().replace('"', ""))
+        amqp_con = amqp.Connection(
+            cp["rabbit"]["RABBIT_HOST"],
+            cp["rabbit"]["RABBIT_USER"],
+            cp["rabbit"]["RABBIT_PASSWORD"],
+        )
+    except FileNotFoundError:
+        amqp_con = amqp.Connection(
+            os.environ["RABBIT_HOST"],
+            userid=os.environ["RABBIT_USER"],
+            password=os.environ["RABBIT_PASSWORD"],
+        )
+    amqp_con.connect()
+    dry_run = "[dry-run] " if options.dry_run else ""
+
+    queues = (
+        f"debci-upstream-{release}-{arch}"
+        for release in SUPPORTED_UBUNTU_RELEASES
+        for arch in ("amd64", "arm64", "armhf", "i386", "ppc64el", "s390x")
+    )
+    for queue_name in queues:
+        ch = amqp_con.channel()
+        logging.debug("Looking at %s", queue_name)
+        seen = defaultdict(dict)
+        while True:
+            try:
+                r = ch.basic_get(queue_name)
+            except amqp.NotFound:
+                logging.debug(f"No such queue {queue_name}")
+                break
+            if r is None:
+                break
+            if not isinstance(r.body, str):
+                body = r.body.decode("UTF-8")
+            else:
+                body = r.body
+            (pkg, params) = body.split("\n", 1)
+            params_j = json.loads(params)
+            submit_time = dateutil.parser.parse(params_j["submit-time"])
+            pr = [
+                val.split("=", 1)[1]
+                for val in params_j["env"]
+                if val.startswith("UPSTREAM_PULL_REQUEST")
+            ][0]
+            try:
+                (delivery_tag, old_submit_time) = seen[pkg][pr]
+                if old_submit_time <= submit_time:
+                    # pylint: disable=line-too-long
+                    logging.info(
+                        f"{dry_run}We have seen PR {pr} in {queue_name} before: acking the previous request"
+                    )
+                    if not options.dry_run:
+                        ch.basic_ack(
+                            delivery_tag
+                        )  # delivery tag, the old one NOT r.delivery_tag!
+                del seen[pkg][pr]
+            except KeyError:
+                pass
+            finally:
+                logging.debug(f"Recording {pkg}/{pr} for {queue_name}")
+                seen[pkg][pr] = (r.delivery_tag, submit_time)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="""Deduplicates jobs in the upstream queue.
+
+The upstream integration is different than regular jobs pushed by Britney.
+If a developer pushes two times in a row on a pull request, then two test
+requests get queued. This script is here to remove any duplicate requests.
+
+If ~/rabbitmq.cred is not present, this script will load credentials from
+$RABBIT_HOST, $RABBIT_USER, and $RABBIT_PASSWORD environment variables.
+""",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="only show the operations that would be performed",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="additionally show queue items that are not removed",
+    )
+
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(asctime)s - %(message)s",
+    )
+
+    filter_amqp(args)
+
+
+if __name__ == "__main__":
+    main()

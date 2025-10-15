@@ -1,0 +1,1166 @@
+#!/usr/bin/python3
+# autopkgtest cloud worker
+# Author: Martin Pitt <martin.pitt@ubuntu.com>
+#
+# Requirements: python3-pika python3-swiftclient
+# Requirements for running autopkgtest from git: python3-debian libdpkg-perl
+
+import argparse
+import configparser
+import fnmatch
+import hashlib
+import json
+import logging
+import os
+import random
+import re
+import shutil
+import signal
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import uuid
+
+import distro_info
+import pika
+import swiftclient
+import systemd.journal
+
+my_path = os.path.dirname(__file__)
+root_path = os.path.dirname(os.path.abspath(my_path))
+debug = False
+args = None
+cfg = None
+swift_creds = {}
+swift_upload = True
+exit_requested = None
+running_test = False
+status_exchange_name = "teststatus.fanout"
+complete_exchange_name = "testcomplete.fanout"
+amqp_con = None
+systemd_logging_handler = systemd.journal.JournalHandler()
+hostname = socket.gethostname()
+
+# Read in from config files
+big_packages = set()
+long_tests = set()
+never_run = set()
+esm_specials = set()
+
+ARCH_RELEASE_RESTRICTION_MAPPING = {
+    "trusty": ["amd64", "i386"],
+    "xenial": ["amd64", "i386", "s390x"],
+}
+
+SUCCESS_CODES = (0, 2, 8)
+
+KEYS_FOR_ADDITIONAL_PARAMS = ["all-proposed", "testname"]
+
+
+def term_handler(signum, frame):
+    """SIGTERM handler, for clean exit after current test"""
+
+    logging.info("Caught SIGTERM, requesting exit")
+    global exit_requested
+    exit_requested = 0
+    if not running_test:
+        amqp_con.close()
+
+
+def hup_handler(signum, frame):
+    """SIGHUP handler, for restarting after current test"""
+
+    logging.info("Caught SIGHUP, requesting restart")
+    global exit_requested
+    exit_requested = 10
+    if not running_test:
+        amqp_con.close()
+
+
+def parse_args():
+    """Parse command line and return argparse.args object"""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-a",
+        "--architecture",
+        default=subprocess.check_output(
+            ["dpkg", "--print-architecture"], universal_newlines=True
+        ).strip(),
+        help="architecture to watch queues for (default: machine arch)",
+    )
+    parser.add_argument(
+        "-c",
+        "--config",
+        default=os.path.join(my_path, "worker.conf"),
+        help="configuration file (default: %(default)s)",
+    )
+    parser.add_argument(
+        "-d",
+        "--debug",
+        action="store_true",
+        default=False,
+        help="enable debug logging",
+    )
+    parser.add_argument(
+        "-v",
+        "--variable",
+        metavar="KEY=VALUE",
+        action="append",
+        default=[],
+        help="define additional variable for given config file",
+    )
+    return parser.parse_args()
+
+
+def read_per_package_configs(cfg):
+    def read_per_package_file(filename):
+        out = set()
+        with open(filename, "r") as f:
+            entries = {
+                line.strip() for line in f.readlines() if not line.startswith("#")
+            }
+
+            for entry in entries:
+                package = None
+                arch = None
+                release = None
+                try:
+                    (package, arch, release) = entry.split("/", 3)
+                except ValueError:
+                    release = "all"
+                    try:
+                        (package, arch) = entry.split("/", 2)
+                    except ValueError:
+                        arch = "all"
+                        package = entry
+                finally:
+                    out.add(f"{package}/{arch}/{release}")
+            return out
+
+    global big_packages, long_tests, never_run, esm_specials
+
+    dir = cfg.get("autopkgtest", "per_package_config_dir").strip()
+
+    big_packages = read_per_package_file(os.path.join(dir, "big_packages"))
+    long_tests = read_per_package_file(os.path.join(dir, "long_tests"))
+    never_run = read_per_package_file(os.path.join(dir, "never_run"))
+    esm_specials = read_per_package_file(os.path.join(dir, "esm_specials"))
+
+
+def request_matches_per_package(package, arch, release, s):
+    return (
+        any(fnmatch.fnmatchcase(f"{package}/{arch}/{release}", entry) for entry in s)
+        or any(fnmatch.fnmatchcase(f"{package}/all/{release}", entry) for entry in s)
+        or any(fnmatch.fnmatchcase(f"{package}/{arch}/all", entry) for entry in s)
+        or any(fnmatch.fnmatchcase(f"{package}/all/all", entry) for entry in s)
+    )
+
+
+def process_output_dir(
+    dir,
+    pkgname,
+    code,
+    triggers,
+    test_uuid,
+    additional_params: dict,
+):
+    """Post-process output directory"""
+
+    files = set(os.listdir(dir))
+
+    # LP: #1641888
+    # In failure cases where we don't know the version, write 'unknown' out as
+    # the version, so that frontends (e.g. autopkgtest-web, or britney) can
+    # display the result.
+    if (code not in SUCCESS_CODES) and "testpkg-version" not in files:
+        logging.warning(
+            'Code %d returned and no testpkg-version - returning "unknown" for %s'
+            % (code, pkgname)
+        )
+        with open(os.path.join(dir, "testpkg-version"), "w") as testpkg_version:
+            testpkg_version.write("%s unknown" % pkgname)
+        files.add("testpkg-version")
+        # we might need to fake testinfo.json up too, depending on how
+        # autopkgtest failed. britney uses this to associate results with
+        # requests
+        if "testinfo.json" not in files and triggers:
+            logging.warning("...testinfo.json is missing too, faking one up")
+            triggers = " ".join(triggers)
+            with open(os.path.join(dir, "testinfo.json"), "w") as testinfo:
+                d = {"custom_environment": ["ADT_TEST_TRIGGERS=%s" % triggers]}
+                json.dump(d, testinfo, indent=True)
+            files.add("testinfo.json")
+
+    d = {}
+    # we have to first check this file exists - when a package is marked with
+    # dont_run for whatever reason, the file doesn't exist
+    if os.path.isfile(os.path.join(dir, "testinfo.json")):
+        with open(os.path.join(dir, "testinfo.json"), "r") as testinfo:
+            try:
+                d = json.load(testinfo)
+            except json.decoder.JSONDecodeError as json_err:
+                logging.warning(
+                    "Loading testinfo failed with: %s\nCreating empty testinfo",
+                    json_err,
+                )
+                d = {}
+    with open(os.path.join(dir, "testinfo.json"), "w") as testinfo:
+        json.dump(d, testinfo, indent=True)
+
+    with open(os.path.join(dir, "testpkg-version"), "r") as tpv:
+        testpkg_version = tpv.read().split()[1]
+
+    try:
+        with open(os.path.join(dir, "duration"), "r") as dur:
+            duration = dur.read()
+    except FileNotFoundError:
+        duration = None
+
+    try:
+        with open(os.path.join(dir, "requester"), "r") as req:
+            requester = req.read()
+    except FileNotFoundError:
+        requester = None
+
+    # these are small and we need only these for gating and indexing
+    resultfiles = ["exitcode"]
+    # these might not be present in infrastructure failure cases
+    for f in [
+        "testbed-packages",
+        "testpkg-version",
+        "duration",
+        "testinfo.json",
+        "requester",
+        "summary",
+    ]:
+        if f in files:
+            resultfiles.append(f)
+    subprocess.check_call(["tar", "cf", "result.tar"] + resultfiles, cwd=dir)
+
+    # compress main log file, for direct access
+    subprocess.check_call(["gzip", "-9", os.path.join(dir, "log")])
+    files.discard("log")
+
+    # the readable-by file, if present, needs to stay intact and be uploaded
+    # to the container as is, as it's used for ACL
+    files.discard("readable-by")
+
+    if files:
+        # tar up all other artifacts
+        subprocess.check_call(
+            ["tar", "-czf", "artifacts.tar.gz"] + list(files), cwd=dir
+        )
+        for f in files:
+            path = os.path.join(dir, f)
+            if os.path.isdir(path):
+                shutil.rmtree(path, ignore_errors=True)
+            else:
+                os.unlink(path)
+
+    return (testpkg_version, duration, requester)
+
+
+def i386_cross_series(series):
+    # the first version where i386 is a partiel architecture and only cross
+    # testing is done is 20.04
+    version = distro_info.UbuntuDistroInfo().version(series)
+    if not version:
+        return True
+    return version > "19.10"
+
+
+def host_arch(release, architecture):
+    if architecture != "i386":
+        return architecture
+
+    if not i386_cross_series(release):
+        return architecture
+
+    return "amd64"
+
+
+def subst(s, big_package, release, architecture, hostarch, pkgname, test_uuid):
+    subst = {
+        "RELEASE": release,
+        "ARCHITECTURE": architecture,
+        "HOSTARCH": hostarch,
+        "PACKAGENAME": pkgname,
+        "PACKAGESIZE": cfg.get(
+            "virt",
+            big_package and "package_size_big" or "package_size_default",
+        ),
+        "TIMESTAMP": time.strftime("%Y%m%d-%H%M%S"),
+        "HOSTNAME": hostname,
+        "UUID": test_uuid,
+    }
+    for i in args.variable:
+        k, v = i.split("=", 1)
+        subst[k] = v
+
+    for k, v in subst.items():
+        s = s.replace("$" + k, v)
+    return s
+
+
+def send_status_info(
+    *,
+    queue,
+    release,
+    architecture,
+    pkgname,
+    params,
+    out_dir,
+    running,
+    duration,
+    test_uuid,
+    private=False,
+):
+    """Send status and logtail to status queue"""
+
+    if not queue:
+        return
+
+    if private:
+        pkgname = "private-test"
+        params = {}
+        logtail = "Running private test"
+    else:
+        logtail = ""
+        # print('status_info:', release, architecture, pkgname, out_dir, running)
+        try:
+            with open(os.path.join(out_dir, "log"), "rb") as f:
+                # Always get the first 5 lines, as they are very valuable when
+                # debugging problematic jobs
+                logtail += f.readline().decode("UTF-8", errors="replace")
+                logtail += f.readline().decode("UTF-8", errors="replace")
+                logtail += f.readline().decode("UTF-8", errors="replace")
+                logtail += f.readline().decode("UTF-8", errors="replace")
+                logtail += f.readline().decode("UTF-8", errors="replace")
+                logtail += "[... 🠉 HEAD 🠉 ... 🠋 TAIL 🠋 ...]\n"
+
+                # Now get the tail of the log
+                try:
+                    f.seek(-2000, os.SEEK_END)
+                    # throw away the first line as we almost surely cut that out in
+                    # the middle
+                    f.readline()
+                except IOError:
+                    # file is smaller than 2000 bytes? okay
+                    pass
+                logtail += f.read().decode("UTF-8", errors="replace")
+        except (IOError, OSError) as e:
+            logtail += "\nError reading log file: %s" % e
+
+    msg = json.dumps(
+        {
+            "release": release,
+            "architecture": architecture,
+            "package": pkgname,
+            "running": running,
+            "params": params,
+            "duration": duration,
+            "logtail": logtail,
+            "uuid": test_uuid,
+        }
+    )
+
+    logging.debug(f"Sending status update for {test_uuid}")
+    queue.basic_publish(
+        exchange=status_exchange_name,
+        routing_key="",
+        body=msg,
+        properties=pika.BasicProperties(
+            delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
+        ),
+    )
+
+
+def call_autopkgtest(
+    argv,
+    release,
+    architecture,
+    pkgname,
+    params,
+    out_dir,
+    start_time,
+    test_uuid,
+    private=False,
+):
+    """Call autopkgtest and regularly send status/logtail to status_exchange_name
+
+    Return exit code.
+    """
+    # set up status AMQP exchange
+    status_amqp = amqp_con.channel()
+    status_amqp.exchange_declare(
+        exchange=status_exchange_name,
+        exchange_type="fanout",
+    )
+
+    autopkgtest = subprocess.Popen(
+        argv, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
+    )
+    while True:
+        try:
+            autopkgtest.wait(timeout=10)
+            break
+        except subprocess.TimeoutExpired:
+            send_status_info(
+                queue=status_amqp,
+                release=release,
+                architecture=architecture,
+                pkgname=pkgname,
+                params=params,
+                out_dir=out_dir,
+                running=True,
+                duration=int(time.time() - start_time),
+                test_uuid=test_uuid,
+                private=private,
+            )
+
+    ret = autopkgtest.wait()
+    send_status_info(
+        queue=status_amqp,
+        release=release,
+        architecture=architecture,
+        pkgname=pkgname,
+        params=params,
+        out_dir=out_dir,
+        running=False,
+        duration=int(time.time() - start_time),
+        test_uuid=test_uuid,
+        private=private,
+    )
+
+    status_amqp.close()
+
+    return ret
+
+
+def log_contents(out_dir):
+    try:
+        with open(
+            os.path.join(out_dir, "log"),
+            encoding="utf-8",
+            errors="surrogateescape",
+        ) as f:
+            return f.read()
+    except IOError as e:
+        logging.error("Could not read log file: %s" % str(e))
+        return ""
+
+
+def request(channel, method, properties, body):
+    """Callback for AMQP queue request"""
+
+    # Cleanup extras
+    for extra in list(systemd_logging_handler._extra.keys()):
+        if extra.startswith("ADT_"):
+            del systemd_logging_handler._extra[extra]
+
+    # Re-read in case the big/long/no run lists changed, would be better to
+    # this only when needed via inotify.
+    read_per_package_configs(cfg)
+
+    dont_run = False
+    private = False
+
+    # FIXME: make this more elegant
+    fields = method.routing_key.split("-")
+    if len(fields) == 4:
+        release, architecture = fields[2:4]
+    elif len(fields) == 3:
+        release, architecture = fields[1:3]
+    else:
+        raise NotImplementedError("cannot parse queue name %s" % method.routing_key)
+
+    systemd_logging_handler._extra["ADT_RELEASE"] = release
+    systemd_logging_handler._extra["ADT_ARCH"] = architecture
+
+    try:
+        worker_upstream_percentage = int(
+            cfg["autopkgtest"]["worker_upstream_percentage"]
+        )
+    except Exception as _:
+        worker_upstream_percentage = 33
+
+    try:
+        stable_release_percentage = int(cfg["autopkgtest"]["stable_release_percentage"])
+    except Exception as _:
+        stable_release_percentage = 100
+
+    try:
+        devel = distro_info.UbuntuDistroInfo().devel()
+    except distro_info.DistroDataOutdated as _:
+        logging.warning(
+            (
+                "distro_info detected as outdated, "
+                "ignoring stable vs devel die roll mechanism"
+            )
+        )
+        devel = None
+
+    if devel and release != devel:
+        if random.randint(1, 100) > stable_release_percentage:
+            logging.info(
+                "Stable release test request and 1d100 rolled above %i, skipping for now",
+                stable_release_percentage,
+            )
+            channel.basic_reject(
+                delivery_tag=method.delivery_tag,
+                requeue=True,
+            )
+            return
+        else:
+            logging.info(
+                "Stable release test request and 1d100 rolled below %i, running it now",
+                stable_release_percentage,
+            )
+
+    if method.routing_key.startswith("debci-upstream-"):
+        # crude way to not allow upstream tests to monopolise resources - only X%
+        # of chances to really run them
+        # This percentage is a juju config option.
+        if random.randint(1, 100) > worker_upstream_percentage:
+            logging.info(
+                "Upstream job detected and 1d100 rolled above %i, skipping for now",
+                worker_upstream_percentage,
+            )
+            channel.basic_reject(
+                delivery_tag=method.delivery_tag,
+                requeue=True,
+            )
+            return
+        else:
+            logging.info(
+                "Upstream job detected and 1d100 rolled below %i, running it now",
+                worker_upstream_percentage,
+            )
+
+    if isinstance(body, bytes):
+        try:
+            body = body.decode("UTF-8")
+        except UnicodeDecodeError as e:
+            logging.error('Bad encoding in request "%s": %s', body, e)
+            channel.basic_reject(
+                delivery_tag=method.delivery_tag,
+                requeue=False,
+            )
+            return
+
+    # request is either a single string pkgname or "pkg_name json_params"
+    try:
+        req = body.split("\n", 1)
+        pkgname = req[0]
+        if len(req) > 1:
+            params = json.loads(req[1])
+        else:
+            params = {}
+    except (ValueError, IndexError) as e:
+        logging.error('Received invalid request format "%s" (%s)', body, repr(e))
+        channel.basic_reject(
+            delivery_tag=method.delivery_tag,
+            requeue=False,
+        )
+        return
+    test_uuid = params.get("uuid", str(uuid.uuid4()))
+    if not re.match("[a-zA-Z0-9.+-]+$", pkgname):
+        logging.error('Request contains invalid package name, dropping: "%s"', body)
+        channel.basic_reject(
+            delivery_tag=method.delivery_tag,
+            requeue=False,
+        )
+        return
+
+    systemd_logging_handler._extra["ADT_PACKAGE"] = pkgname
+    systemd_logging_handler._extra["ADT_PARAMS"] = str(params)
+
+    logging.info(
+        "Received request for package %s on %s/%s; params: %s",
+        pkgname,
+        release,
+        architecture,
+        params,
+    )
+
+    current_region = os.environ.get("REGION")
+    systemd_logging_handler._extra["ADT_REGION"] = current_region
+
+    # build autopkgtest command line
+    work_dir = tempfile.mkdtemp(prefix="autopkgtest-work.")
+
+    try:
+        out_dir = os.path.join(work_dir, "out")
+        if (
+            release.lower() in ARCH_RELEASE_RESTRICTION_MAPPING
+            and architecture not in ARCH_RELEASE_RESTRICTION_MAPPING[release.lower()]
+            and not request_matches_per_package(
+                pkgname, architecture, release, esm_specials
+            )
+        ):
+            os.makedirs(out_dir)
+            # these will be written later on
+            code = 99
+            duration = 0
+            errormessage = f"Only running {','.join(ARCH_RELEASE_RESTRICTION_MAPPING[release.lower()])} tests for release: {release.lower()}, test requests {architecture}"
+            logging.info(errormessage)
+            # fake a log file
+            with open(os.path.join(out_dir, "log"), "w") as log:
+                log.write(errormessage)
+            with open(os.path.join(out_dir, "testpkg-version"), "w") as testpkg_version:
+                testpkg_version.write(errormessage)
+            dont_run = True
+        elif request_matches_per_package(pkgname, architecture, release, never_run):
+            logging.warning("Marked to never run, ignoring")
+            dont_run = True
+
+            # these will be written later on
+            code = 99
+            duration = 0
+
+            os.makedirs(out_dir)
+
+            # now let's fake up a log file
+            with open(os.path.join(out_dir, "log"), "w") as log:
+                log.write(
+                    "This package is marked to never run. To get the entry removed, contact a member of the Ubuntu Release or Canonical Ubuntu QA team."
+                )
+
+            triggers = None
+            # a json file containing the env
+            if "triggers" in params:
+                triggers = " ".join(params["triggers"])
+                with open(os.path.join(out_dir, "testinfo.json"), "w") as testinfo:
+                    d = {"custom_environment": ["ADT_TEST_TRIGGERS=%s" % triggers]}
+                    json.dump(d, testinfo, indent=True)
+
+            # and the testpackage version (pkgname blacklisted)
+            # XXX: replace "blacklisted" here, but needs changes in
+            # proposed-migration and hints
+            with open(os.path.join(out_dir, "testpkg-version"), "w") as testpkg_version:
+                testpkg_version.write("%s blacklisted" % pkgname)
+
+        container = "autopkgtest-" + release
+        big_pkg = request_matches_per_package(
+            pkgname, architecture, release, big_packages
+        )
+
+        autopkgtest_checkout = cfg.get("autopkgtest", "checkout_dir").strip()
+        if autopkgtest_checkout:
+            argv = [os.path.join(autopkgtest_checkout, "runner", "autopkgtest")]
+        else:
+            argv = ["autopkgtest"]
+        argv += ["--output-dir", out_dir, "--timeout-copy=6000"]
+
+        if i386_cross_series(release) and architecture == "i386":
+            argv += ["-a", "i386"]
+
+        c = cfg.get("autopkgtest", "extra_args")
+        if c:
+            argv += c.strip().split()
+
+        c = cfg.get("autopkgtest", "setup_command").strip()
+        if c:
+            c = subst(
+                c,
+                big_pkg,
+                release,
+                architecture,
+                host_arch(release, architecture),
+                pkgname,
+                test_uuid,
+            )
+            argv += ["--setup-commands", c]
+        c = cfg.get("autopkgtest", "setup_command2").strip()
+        if c:
+            c = subst(
+                c,
+                big_pkg,
+                release,
+                architecture,
+                host_arch(release, architecture),
+                pkgname,
+                test_uuid,
+            )
+            argv += ["--setup-commands", c]
+
+        if "ppas" in params and params["ppas"]:
+            for ppa in params["ppas"]:
+                try:
+                    (ppacreds, _, ppaurl) = ppa.rpartition("@")
+                    (ppaurl, _, fingerprint) = ppaurl.partition(":")
+                    (ppacreds_user, ppacreds_pass) = (
+                        ppacreds.split(":") if ppacreds else (None, None)
+                    )
+                    (ppauser, ppaname) = ppaurl.split("/")
+                except ValueError:
+                    logging.error(
+                        "Invalid PPA specification, must be [user:token@]lpuser/ppa_name[:fingerprint]"
+                    )
+                    channel.basic_reject(
+                        delivery_tag=method.delivery_tag,
+                        requeue=False,
+                    )
+                    return
+                logging.debug(
+                    "Request states that PPA user '%s', name '%s' has GPG fingerprint '%s'"
+                    % (ppauser, ppaname, fingerprint)
+                )
+                if ppacreds_user:
+                    # Any run with at least one private PPA needs to be private.
+                    private = True
+                    ppaprefix = "%s:%s@" % (
+                        ppacreds_user,
+                        ppacreds_pass,
+                    )
+                else:
+                    ppaprefix = ""
+                if fingerprint:
+                    fingerprint = f":{fingerprint}"
+                else:  # Make sure fingerprint is an empty string, and not some other False-ish value
+                    fingerprint = ""
+                argv += [
+                    f"--add-apt-source=ppa:{ppaprefix}{ppauser}/{ppaname}{fingerprint}"
+                ]
+
+            # put results into separate container, named by the last PPA
+            container += "-%s-%s" % (ppauser, ppaname)
+
+        # only install the triggering package from -proposed, rest from -release
+        # this provides better isolation between -proposed packages; but only do
+        # that for Ubuntu itself, not for things from git, PPAs, etc.
+        if cfg.get("virt", "args") != "null":
+            if "test-git" not in params and (
+                "ppas" not in params or "all-proposed" in params
+            ):
+                pocket_arg = "--apt-pocket=proposed"
+                if "all-proposed" not in params:
+                    trigs = [
+                        "src:" + t.split("/", 1)[0]
+                        for t in params.get("triggers", [])
+                        if t not in ("migration-reference/0", "qemu-efi-noacpi/0")
+                    ]
+                    if trigs:
+                        pocket_arg += "=" + ",".join(trigs)
+                    else:
+                        pocket_arg = ""
+                if pocket_arg:
+                    argv.append(pocket_arg)
+            argv.append("--apt-upgrade")
+
+        # determine which test to run
+        if "test-git" in params:
+            testargs = ["--no-built-binaries", params["test-git"]]
+        elif "build-git" in params:
+            testargs = [params["build-git"]]
+        else:
+            testargs = [pkgname]
+
+        argv += testargs
+        global debug
+        if debug:
+            argv.append("--debug")
+
+        timeout_short = 300
+        timeout_long = 20000
+
+        if architecture == "riscv64":
+            # xypron suggested a factor 4 for riscv64 when emulated
+            timeout_short = timeout_short * 4
+            timeout_long = timeout_long * 4
+
+        argv.append(f"--timeout-short={timeout_short}")
+        if request_matches_per_package(pkgname, architecture, release, long_tests):
+            argv.append(f"--timeout-copy={timeout_long * 2}")
+            argv.append(f"--timeout-test={timeout_long * 2}")
+            argv.append(f"--timeout-build={timeout_long * 2}")
+        elif big_pkg:
+            argv.append(f"--timeout-copy={timeout_long}")
+            argv.append(f"--timeout-test={timeout_long}")
+            argv.append(f"--timeout-build={timeout_long}")
+        else:
+            argv.append(f"--timeout-copy={timeout_long}")
+            argv.append(f"--timeout-build={timeout_long}")
+
+        for e in params.get("env", []):
+            argv.append("--env=%s" % e)
+
+        triggers = None
+        if "triggers" in params:
+            triggers = " ".join(params["triggers"])
+            argv.append("--env=ADT_TEST_TRIGGERS=%s" % triggers)
+
+        if "testname" in params:
+            argv.append("--testname=%s" % params["testname"])
+
+        argv.append("--")
+        argv += subst(
+            cfg.get("virt", "args"),
+            big_pkg,
+            release,
+            architecture,
+            host_arch(release, architecture),
+            pkgname,
+            test_uuid,
+        ).split()
+
+        if "swiftuser" in params:
+            private = True
+        elif private:
+            # Some combination already marked the run as private, but no
+            # swiftuser user has been specified. This is not valid, as otherwise
+            # no one would be realistically able to read back the results.
+            logging.error(
+                "Private autopkgtest run detected but no swiftuser identity provided."
+            )
+            channel.basic_reject(
+                delivery_tag=method.delivery_tag,
+                requeue=False,
+            )
+            return
+
+        if private:
+            container = "private-{}".format(container)
+
+        logging.info("Acknowledging request %s" % body)
+        channel.basic_ack(delivery_tag=method.delivery_tag)
+
+        # run autopkgtest
+        if not dont_run:
+            global running_test
+            running_test = True
+            start_time = time.time()
+            logging.info("Running %s", " ".join(argv))
+            code = call_autopkgtest(
+                argv,
+                release,
+                architecture,
+                pkgname,
+                params,
+                out_dir,
+                start_time,
+                test_uuid,
+                private,
+            )
+            duration = int(time.time() - start_time)
+
+        logging.info("autopkgtest exited with code %i", code)
+        if code == 1:
+            logging.error("autopkgtest exited with unexpected error code 1")
+            sys.exit(1)
+        with open(os.path.join(out_dir, "exitcode"), "w") as f:
+            f.write("%i\n" % code)
+        with open(os.path.join(out_dir, "duration"), "w") as f:
+            f.write("%u\n" % duration)
+
+        if "requester" in params:
+            with open(os.path.join(out_dir, "requester"), "w") as f:
+                f.write("%s\n" % params["requester"])
+
+        if "readable-by" in params:
+            with open(os.path.join(out_dir, "readable-by"), "w") as f:
+                if isinstance(params["readable-by"], list):
+                    f.write("\n".join(params["readable-by"]))
+                else:
+                    f.write("%s\n" % params["readable-by"])
+
+        # List of key=value strings to be sent as a rabbitmq msg
+        # These variables are optional additional parameters users
+        # can employ when requesting a test which alters the behaviour
+        additional_parameters = {}
+        for key in KEYS_FOR_ADDITIONAL_PARAMS:
+            if params.get(key, None) is not None:
+                additional_parameters[key] = params[key]
+
+        (testpkg_version, duration, requester) = process_output_dir(
+            out_dir,
+            pkgname,
+            code,
+            params.get("triggers", []),
+            test_uuid,
+            additional_parameters,  # embed additional parameters in testinfo.json
+        )
+
+        # If two tests for the same package with different triggers finish at the
+        # same second, we get collisions with just the timestamp; disambiguate with
+        # the hashed params. We append a '@' which is a nice delimiter for querying
+        # runs in swift.
+        run_id = "%s_%s@" % (
+            time.strftime("%Y%m%d_%H%M%S", time.gmtime()),
+            hashlib.sha1(body.encode("UTF-8")).hexdigest()[:5],
+        )
+        if pkgname.startswith("lib"):
+            prefix = pkgname[:4]
+        else:
+            prefix = pkgname[0]
+        swift_dir = os.path.join(release, architecture, prefix, pkgname, run_id)
+
+        global swift_upload
+        if swift_upload:
+            # publish results into swift
+            logging.info("Putting results into swift %s %s", container, swift_dir)
+
+            # create it if it does not exist yet
+            swift_con = swiftclient.Connection(**swift_creds)
+            try:
+                swift_con.get_container(container, limit=1)
+            except swiftclient.exceptions.ClientException:
+                logging.info("container %s does not exist, creating it", container)
+                if private:
+                    # private result, share only with swiftuser
+                    swift_con.put_container(
+                        container,
+                        headers={"X-Container-Read": "*:%s" % params["swiftuser"]},
+                    )
+                else:
+                    # make it publicly readable
+                    swift_con.put_container(
+                        container,
+                        headers={"X-Container-Read": ".rlistings,.r:*"},
+                    )
+                # wait until it exists
+                timeout = 50
+                while timeout > 0:
+                    try:
+                        swift_con.get_container(container, limit=1)
+                        logging.debug(
+                            "newly created container %s exists now", container
+                        )
+                        break
+                    except swiftclient.exceptions.ClientException:
+                        logging.debug(
+                            "newly created container %s does not exist yet, continuing poll",
+                            container,
+                        )
+                        time.sleep(1)
+                        timeout -= 1
+                else:
+                    logging.error(
+                        "timed out waiting for newly created container %s",
+                        container,
+                    )
+                    sys.exit(1)
+
+            for f in os.listdir(out_dir):
+                path = os.path.join(out_dir, f)
+                with open(path, "rb") as fd:
+                    if path.endswith("log.gz"):
+                        content_type = "text/plain; charset=UTF-8"
+                        headers = {"Content-Encoding": "gzip"}
+                    else:
+                        content_type = None
+                        headers = None
+
+                    sleep_time = 10
+                    for retry in reversed(range(5)):
+                        try:
+                            # swift_con.put_object() is missing the name kwarg
+                            swiftclient.put_object(
+                                swift_con.url,
+                                token=swift_con.token,
+                                container=container,
+                                name=os.path.join(swift_dir, f),
+                                contents=fd,
+                                content_type=content_type,
+                                headers=headers,
+                                content_length=os.path.getsize(path),
+                            )
+                            break
+                        except Exception as e:
+                            if retry > 0:
+                                logging.info(
+                                    "Failed to upload %s to swift (%s), retrying in %s seconds..."
+                                    % (path, str(e), sleep_time)
+                                )
+                                time.sleep(sleep_time)
+                                sleep_time *= 2
+                                continue
+
+                            raise
+
+            swift_con.close()
+    finally:
+        if swift_upload:
+            shutil.rmtree(work_dir, ignore_errors=True)
+        else:
+            logging.info("Keeping results in %s", work_dir)
+
+    complete_amqp = amqp_con.channel()
+    complete_amqp.exchange_declare(
+        exchange=complete_exchange_name,
+        exchange_type="fanout",
+        durable=True,
+    )
+    complete_msg = json.dumps(
+        {
+            "architecture": architecture,
+            "container": container,
+            "duration": duration,
+            "exitcode": code,
+            "package": pkgname,
+            "testpkg_version": testpkg_version,
+            "release": release,
+            "requester": requester,
+            "swift_dir": swift_dir,
+            "triggers": triggers,
+            "env": ",".join(
+                [f"{key}={value}" for key, value in additional_parameters.items()]
+            ),
+            "uuid": test_uuid,
+        }
+    )
+    complete_amqp.basic_publish(
+        exchange=complete_exchange_name,
+        routing_key="",
+        body=complete_msg,
+        properties=pika.BasicProperties(
+            delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
+        ),
+    )
+    complete_amqp.close()
+
+    running_test = False
+
+
+def amqp_connect(cfg):
+    """Connect to AMQP host using given configuration
+
+    Connect `request` to queues for all configured releases and
+    architectures.
+    """
+    global amqp_con
+    logging.info("Connecting to AMQP server %s", os.environ["RABBIT_HOST"])
+    amqp_con = pika.BlockingConnection(
+        parameters=pika.ConnectionParameters(
+            host=os.environ["RABBIT_HOST"],
+            credentials=pika.PlainCredentials(
+                username=os.environ["RABBIT_USER"],
+                password=os.environ["RABBIT_PASSWORD"],
+            ),
+            heartbeat=0,
+        ),
+    )
+    return amqp_con
+
+
+def amqp_queues_channel():
+    """Create channel for consuming the queues"""
+    channel = amqp_con.channel()
+    channel.confirm_delivery()
+    # avoids greedy grabbing of the entire queue while being too busy
+    channel.basic_qos(0, 1, True)
+
+    arch = args.architecture
+
+    # avoid preferring the same architecture on all workers
+    queues = []
+
+    contexts = ["", "huge-", "ppa-", "upstream-"]
+
+    for release in cfg.get("autopkgtest", "releases").split():
+        for context in contexts:
+            queue_name = "debci-%s%s-%s" % (context, release, arch)
+            queues.append(queue_name)
+
+    random.shuffle(queues)
+
+    for queue_name in queues:
+        logging.info("Setting up and listening to AMQP queue %s", queue_name)
+        channel.queue_declare(queue=queue_name, durable=True, auto_delete=False)
+        channel.basic_consume(queue=queue_name, on_message_callback=request)
+
+    return channel
+
+
+def main():
+    """Main program"""
+
+    global cfg, args, swift_creds, swift_upload, debug
+
+    args = parse_args()
+
+    signal.signal(signal.SIGTERM, term_handler)
+    signal.signal(signal.SIGHUP, hup_handler)
+
+    # load configuration
+    cfg = configparser.ConfigParser(
+        {
+            "setup_command": "",
+            "setup_command2": "",
+            "checkout_dir": "",
+            "package_size_default": "",
+            "package_size_big": "",
+            "extra_args": "",
+            "debug": "",
+        },
+        allow_no_value=True,
+    )
+    with open(args.config, "r") as f:
+        cfg.read_file(f)
+
+    if args.debug or cfg.get("autopkgtest", "debug").lower() in [
+        "1",
+        "true",
+        "yes",
+    ]:
+        debug = True
+
+    handlers = None
+    if "INVOCATION_ID" in os.environ:
+        handlers = [systemd_logging_handler]
+    logging.basicConfig(
+        level=(debug and logging.DEBUG or logging.INFO),
+        format="%(levelname)s: %(message)s",
+        handlers=handlers,
+    )
+    if debug:
+        logging.info("Debug enabled")
+    else:
+        logging.info("Debug disabled")
+
+    try:
+        os.environ["SWIFT_AUTH_URL"]
+    except KeyError:
+        logging.warning(
+            "No SWIFT_AUTH_URL detected, disabling swift upload and keeping results locally instead"
+        )
+        swift_upload = False
+
+    if swift_upload:
+        swift_creds = {
+            "authurl": os.environ["SWIFT_AUTH_URL"],
+            "user": os.environ["SWIFT_USERNAME"],
+            "key": os.environ["SWIFT_PASSWORD"],
+            "os_options": {
+                "project_domain_name": os.environ["SWIFT_PROJECT_DOMAIN_NAME"],
+                "project_name": os.environ["SWIFT_PROJECT_NAME"],
+                "user_domain_name": os.environ["SWIFT_USER_DOMAIN_NAME"],
+            },
+            "auth_version": "3",
+        }
+
+        # ensure that we can connect to swift
+        swiftclient.Connection(**swift_creds).close()
+
+    # connect to AMQP queues
+    amqp_connect(cfg)
+    channel = amqp_queues_channel()
+
+    # process queues forever
+    try:
+        while exit_requested is None:
+            logging.info("Waiting for and processing AMQP requests")
+            channel.start_consuming()
+    except IOError:
+        if exit_requested is None:
+            raise
+
+
+if __name__ == "__main__":
+    main()
+    if exit_requested:
+        logging.info("Exiting with %i due to queued exit request" % exit_requested)
+        sys.exit(exit_requested)

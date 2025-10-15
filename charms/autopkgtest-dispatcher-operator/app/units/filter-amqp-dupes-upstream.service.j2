@@ -1,0 +1,10 @@
+[Unit]
+Description=Cancel duplicate upstream test requests
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=~
+TimeoutStartSec=5min
+EnvironmentFile={{ rabbitmq_creds_path }}
+ExecStart=/usr/local/bin/filter-amqp-dupes-upstream
