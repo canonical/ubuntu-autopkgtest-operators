@@ -362,6 +362,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             [
                 "systemctl",
                 "list-units",
+                "--plain",
                 "--no-legend",
                 "--no-pager",
                 "--type=timer",
