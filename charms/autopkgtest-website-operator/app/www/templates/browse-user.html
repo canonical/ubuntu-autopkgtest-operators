@@ -1,0 +1,76 @@
+{% extends "browse-layout.html" %}
+{% import "macros.html" as macros %}
+
+{% macro display_user_test_info(user_results) -%}
+  <table class="table">
+    <tr>
+      <td>
+        <b>Package</b>
+      </td>
+      <td>
+        <b>Release</b>
+      </td>
+      <td>
+        <b>Arch</b>
+      </td>
+      {{ macros.set_up_results_table() }}
+    </tr>
+    {% for row in user_results %}
+      <tr {% if row["code"] in ["running", "queued"] %}class="unfinished"{% endif %}>
+        {% set package = row["package"] %}
+        {% set release = row["release"] %}
+        {% set arch = row["arch"] %}
+        <td>{{ package }}</td>
+        <td>{{ release }}</td>
+        <td>{{ arch }}</td>
+        {{ macros.results_table_core(row["version"], row["triggers"], row["additional_params"], row["human_date"], row["human_sec"], row["requester"], row["code"], row["url"], row["show_retry"], row["all_proposed"], row["uuid"], package, release, arch) }}
+      </tr>
+    {% endfor %}
+  </table>
+{%- endmacro %}
+
+{% block content %}
+  <h1 class="page-header" id="user-home">
+    Running, queued and test results by <a href="https://launchpad.net/~{{ user }}">{{ user }}
+    <img src="{{ url_for('static', filename='launchpad.ico') }}" class="icon">
+  </a>
+</h1>
+<nav class="navigation-links links">
+  <a href="{{ base_url }}user/{{ user }}">Summary</a>
+  <a href="{{ base_url }}user/{{ user }}?show-running=false&show-queued=true&show-results=false">Queued</a>
+  <a href="{{ base_url }}user/{{ user }}?show-running=true&show-queued=false&show-results=false">Running</a>
+  <a href="{{ base_url }}user/{{ user }}?only-results=true">Results</a>
+  <a href="{{ base_url }}user/{{ user }}/ppa">PPA results</a>
+</nav>
+{% if not (running_tests or queued_tests or previous_test_results) %}
+  <p>
+    Looks like there's no results, running tests, or queued tests for {{ user }}. You may have reached the end of your results, or maybe there's a typo in the url - you can click the Launchpad icon to double check this user exists, or go back to the summary.
+  </p>
+{% endif %}
+
+{% if queued_tests %}
+  <h2 id="results-queued">Queued</h2>
+  {{ display_user_test_info(queued_tests) }}
+{% endif %}
+
+{% if running_tests %}
+  <h2 id="results-running">Running</h2>
+  {{ display_user_test_info(running_tests) }}
+{% endif %}
+
+{% if previous_test_results %}
+  <h2 id="results-complete">Test Results</h2>
+  <p>Results {{ offset }} to {{ offset + limit }}</p>
+  {{ display_user_test_info(previous_test_results) }}
+
+  <nav class="page-links links">
+    {% if offset != 0 %}
+      <a href="{{ base_url }}user/{{ user }}?offset={{ offset - limit }}&limit={{ limit }}&only-results=true">Previous page</a>
+    {% endif %}
+    <a href="{{ base_url }}user/{{ user }}?offset={{ offset + limit }}&limit={{ limit }}&only-results=true">Next page</a>
+    <br>
+    <a href="{{ base_url }}user/{{ user }}?only-results=true&limit=10000">Show more results</a>
+  </nav>
+{% endif %}
+
+{% endblock content %}

@@ -1,0 +1,217 @@
+#!/usr/bin/python3
+"""
+download/read Sources.gz for all known releases and write them into
+a copy of autopkgtest.db, which is then published to the public location.
+This is being used for statistics, and is used by britney and other
+external monitoring tools.
+"""
+
+import gzip
+import hashlib
+import logging
+import os
+import sqlite3
+import tempfile
+import urllib.request
+from pathlib import Path
+
+import apt_pkg
+from helpers.utils import get_autopkgtest_cloud_conf
+
+sqlite3.paramstyle = "named"
+
+COMPONENTS = ["main", "restricted", "universe", "multiverse"]
+
+
+def init_db(path, path_current, path_rw):
+    """Create DB if it does not exist, and connect to it"""
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    db = sqlite3.connect(path)
+    db_rw = sqlite3.connect("file:%s?mode=ro" % path_rw, uri=True)
+
+    # if no db, we need to copy /home/ubuntu/autopkgtest.db to /home/ubuntu/public/autopkgtest.db
+    if not os.path.exists(path_current):
+        logging.warning(
+            f"Looks like there's no pre-existing db at {path_current}, copying..."
+        )
+        public_db_con = sqlite3.connect(path_current)
+        db_rw.backup(public_db_con)
+        public_db_con.close()
+
+    logging.info(f"backing up {path_rw} to {path}")
+    with db:
+        db_rw.backup(db)
+    db_rw.close()
+
+    db.execute("PRAGMA journal_mode = MEMORY")
+    db.execute("ATTACH DATABASE ? AS current", (path_current,))
+
+    try:
+        db.execute(
+            "CREATE TABLE current_version("
+            "  release CHAR[20], "
+            "  pocket CHAR[40], "
+            "  component CHAR[10],"
+            "  package CHAR[50], "
+            "  version CHAR[120], "
+            "  PRIMARY KEY(release, package))"
+        )
+        logging.debug("database table current_version created")
+    except sqlite3.OperationalError as e:
+        if "already exists" not in str(e):
+            raise
+        try:  # schema upgrade
+            db.execute("ALTER TABLE current_version ADD COLUMN pocket CHAR[40]")
+            db.execute("ALTER TABLE current_version ADD COLUMN component CHAR[10]")
+        except sqlite3.OperationalError as e2:
+            if "duplicate column name" not in str(e2):
+                raise
+        logging.debug("table 'current_version' already exists")
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS current_version_pocket_ix "
+        "ON current_version(pocket, component)"
+    )
+
+    try:
+        db.execute(
+            "INSERT OR REPLACE INTO current_version "
+            "(release, pocket, component, package, version) "
+            "SELECT release, pocket, component, package, version "
+            "FROM current.current_version"
+        )
+        logging.debug("Old current_versions copied over")
+        current_version_copied = True
+    except sqlite3.OperationalError as e:
+        logging.debug("failed to copy current_version: %s", str(e))
+        current_version_copied = False
+
+    try:
+        db.execute(
+            "CREATE TABLE url_last_checked("
+            "  url CHAR[100], "
+            "  timestamp CHAR[50], "
+            "  PRIMARY KEY(url))"
+        )
+        logging.debug("database table url_last_checked created")
+    except sqlite3.OperationalError as e:
+        if "already exists" not in str(e):
+            raise
+        logging.debug("table 'url_last_checked' already exists")
+
+    try:
+        if current_version_copied:
+            db.execute(
+                "INSERT OR REPLACE INTO url_last_checked (url, timestamp) "
+                "SELECT url, timestamp FROM current.url_last_checked"
+            )
+            logging.debug("Old url_last_checked copied over")
+    except sqlite3.OperationalError as e:
+        if "no such table" not in str(e):
+            raise
+        logging.debug("no url_last_checked yet, first run probably")
+
+    db.commit()
+    db.execute("DETACH DATABASE current")
+    return db
+
+
+def get_last_checked(db_con, url):
+    c = db_con.cursor()
+    c.execute("SELECT timestamp FROM url_last_checked WHERE url=?", (url,))
+
+    try:
+        (ts,) = c.fetchone()
+        return ts
+    except TypeError:  # not found
+        return None
+
+
+def get_sources(db_con, release, archive_url):
+    for component in COMPONENTS:
+        for pocket in (release, release + "-updates"):
+            logging.debug("Processing %s/%s", pocket, component)
+            try:
+                url = f"{archive_url}/dists/{pocket}/{component}/source/Sources.gz"
+                request = urllib.request.Request(url)
+                last_checked = get_last_checked(db_con, url)
+                if last_checked:
+                    request.add_header("If-Modified-Since", last_checked)
+
+                # meh, apt_pkg.TagFile() apparently cannot directly read  from an urllib stream
+                with tempfile.TemporaryFile() as temp_file:
+                    with urllib.request.urlopen(request) as response:
+                        temp_file.write(response.read())
+                        last_modified = response.getheader("Last-Modified")
+                        if last_modified:
+                            db_con.execute(
+                                "INSERT INTO url_last_checked (url, timestamp) "
+                                "VALUES (:url, :timestamp) "
+                                "ON CONFLICT (url) DO "
+                                "UPDATE SET timestamp = :timestamp",
+                                {"url": url, "timestamp": last_modified},
+                            )
+
+                    db_con.execute(
+                        "DELETE FROM current_version "
+                        "WHERE pocket = ? AND component = ?",
+                        (pocket, component),
+                    )
+                    temp_file.seek(0)
+                    with gzip.open(temp_file) as fd:
+                        for section in apt_pkg.TagFile(fd):
+                            db_con.execute(
+                                "INSERT INTO current_version "
+                                "(release, pocket, component, package, version) "
+                                "VALUES "
+                                "(:release, :pocket, :component, :package, :version) "
+                                "ON CONFLICT (release, package) DO "
+                                "UPDATE SET pocket = :pocket, "
+                                "component = :component, version = :version",
+                                {
+                                    "release": release,
+                                    "pocket": pocket,
+                                    "component": component,
+                                    "package": section["Package"],
+                                    "version": section["Version"],
+                                },
+                            )
+                db_con.commit()
+            except (urllib.error.HTTPError, ConnectionResetError) as e:
+                if e.code == 304:
+                    logging.debug("url {} not modified".format(url))
+
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=(logging.DEBUG if "DEBUG" in os.environ else logging.INFO)
+    )
+
+    config = get_autopkgtest_cloud_conf()
+
+    target = config["web"]["database_ro"]
+    target_new = "{}.new".format(target)
+    target_checksum = "{}.sha256".format(target)
+    target_checksum_new = "{}.new".format(target_checksum)
+
+    archive_url = config["web"]["archive_url"]
+
+    try:
+        # systemd makes sure to not run us in parallel, so we can safely
+        # delete any leftover file.
+        os.unlink(target_new)
+    except FileNotFoundError:
+        pass
+    db_con = init_db(target_new, target, config["web"]["database"])
+
+    for row in db_con.execute("SELECT DISTINCT release FROM test"):
+        get_sources(db_con, row[0], archive_url)
+    db_con.commit()
+    db_con.close()
+
+    with open(target_new, "rb") as f:
+        checksum = hashlib.sha256(f.read()).hexdigest()
+    with open(target_checksum_new, "w") as f:
+        f.write(checksum)
+
+    os.rename(target_checksum_new, target_checksum)
+    os.rename(target_new, target)

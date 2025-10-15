@@ -1,0 +1,70 @@
+type: charm
+name: ubuntu-autopkgtest-website
+title: Charm Template
+summary: Website for the autopkgtest service
+description: Website for the autopkgtest service
+links:
+  issues:
+    - https://github.com/canonical/ubuntu-autopkgtest-operators/issues
+  source:
+    - https://github.com/canonical/ubuntu-autopkgtest-operators
+
+base: ubuntu@24.04
+platforms:
+  amd64:
+
+parts:
+  charm:
+    plugin: charm
+    source: .
+  website:
+    plugin: dump
+    source: app
+    organize:
+      www: app/www
+
+charm-libs:
+  - lib: operator_libs_linux.apt
+    version: "0"
+  - lib: operator_libs_linux.systemd
+    version: "1"
+  - lib: traefik_k8s.ingress
+    version: "2"
+
+config:
+  options:
+    hostname:
+      type: string
+      description: Website hostname, e.g. autopkgtest.ubuntu.com
+      default: localhost
+
+    # swift options
+    swift-auth-url:
+      type: string
+      description: swift auth URL
+    swift-project-domain-name:
+      type: string
+      description: swift project domain name
+    swift-project-name:
+      type: string
+      description: swift project name
+    swift-storage-url:
+      type: string
+      description: swift storage url
+    swift-user-domain-name:
+      type: string
+      description: swift user domain name
+    swift-username:
+      type: string
+      description: swift username
+    swift-juju-secret:
+      type: secret
+      description: juju secret id holding the swift password
+
+requires:
+  amqp:
+    interface: rabbitmq
+    limit: 1
+  ingress:
+    interface: ingress
+    limit: 1

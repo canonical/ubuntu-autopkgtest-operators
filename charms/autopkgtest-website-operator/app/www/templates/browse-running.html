@@ -1,0 +1,72 @@
+{% extends "browse-layout.html" %}
+{% import "macros.html" as macros %}
+
+{% block content %}
+  <h1 class="page-header">Running and queued tests</h1>
+  <p>The data displayed on this page is refreshed approximately every 30 seconds.</p>
+
+  <h2>Queue lengths</h2>
+  <p>
+    Click on the number in a cell to jump to the list of test requests for
+    that release and architecture which are waiting to be run.
+  </p>
+
+  {% for context in queues_info.keys() %}
+    <table class="table-condensed table-striped"
+           style="display: inline-block;
+                  padding-right: 30px">
+      <tr>
+        <th>{{ context }}</th>
+        {% for a in arches %}<th>{{ a }}</th>{% endfor %}
+      </tr>
+
+      {% for r in releases %}
+        <tr>
+          <td>{{ r }}</td>
+          {% for a in arches %}
+            <td>
+              {% if queues_lengths[context][r][a] %}
+                <a href="#queue-{{ context }}-{{ r }}-{{ a }}">{{ queues_lengths[context][r][a] }}</a>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </table>
+  {% endfor %}
+
+  <!-- Running tests -->
+  <h2>Running tests</h2>
+  {% if running_count != 1 %}
+    <p>There are currently {{running_count}} running tests.</p>
+  {% else %}
+    <p>There is currently {{running_count}} running test.</p>
+  {% endif %}
+  <p>Click on the package name to jump to the currently running tests of that package.</p>
+  <table class="table-condensed table-striped">
+    {% for column in running|sort|batch(3) %}
+      <tr>
+        {% for p in column %}
+          <td>
+            <a href="#pkg-{{ p }}">{{ p }}</a>
+          </td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+  </table>
+
+  <hr>
+
+  {% for p, info in running.items()|sort %}
+    <h3 id="pkg-{{ p }}">
+      <a href="/packages/{{ p }}">{{ p }}</a>
+    </h3>
+    {{ macros.display_running_job(p, info) }}
+  {% endfor %}
+
+  <!-- queue contents -->
+  {{ macros.display_queues_info(queues_info) }}
+
+{% endblock content %}

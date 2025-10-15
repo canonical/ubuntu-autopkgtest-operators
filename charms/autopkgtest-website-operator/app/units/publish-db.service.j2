@@ -1,0 +1,9 @@
+[Unit]
+Description=publish autopkgtest.db
+
+[Service]
+User={{ user }}
+EnvironmentFile=-/etc/environment.d/proxy.conf
+Type=oneshot
+ExecStart={{ webcontrol }}/publish-db
+TimeoutSec=300

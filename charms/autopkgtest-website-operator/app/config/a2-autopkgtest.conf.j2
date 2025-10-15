@@ -1,0 +1,54 @@
+<Directory {{ documentroot }}>
+  Require all granted
+</Directory>
+
+<VirtualHost *:{{ http_port }}>
+  DocumentRoot {{ documentroot }}
+
+  RewriteEngine On
+  # Return 204 for favicon.ico
+  RewriteRule ^/favicon\.ico$ - [R=204,L]
+
+  RemoteIPHeader X-Forwarded-For
+  ErrorLog ${APACHE_LOG_DIR}/error.log
+  CustomLog ${APACHE_LOG_DIR}/access.log combined
+  AddType 'text/plain' .log
+  AddCharset UTF-8 .log
+  DirectoryIndex browse.cgi
+  RedirectMatch permanent "^/packages(.*)/$" "/packages$1"
+  Redirect permanent /running.shtml /running
+
+  # robots.txt for disallowing bots
+  Alias /robots.txt {{ documentroot }}/static/robots.txt
+
+  # egress forward proxy settings
+  {%- if https_proxy %}
+  SetEnv HTTPS_PROXY "{{ https_proxy }}"
+  {%- if swift_storage_url.startswith('https://') %}
+  ProxyRemote "{{ swift_storage_url }}" "{{ https_proxy }}"
+  {%- endif %}
+  {%- endif %}
+  {%- if http_proxy %}
+  SetEnv HTTP_PROXY "{{ http_proxy }}"
+  {%- if swift_storage_url.startswith('http://') %}
+  ProxyRemote "{{ swift_storage_url }}" "{{ http_proxy }}"
+  {%- endif %}
+  {%- endif %}
+  {%- if no_proxy %}
+  SetEnv NO_PROXY "{{ no_proxy }}"
+  {%- endif %}
+
+  # webcontrol CGI scripts
+  ScriptAlias /request.cgi {{ documentroot }}/request.cgi/
+  ScriptAlias /login {{ documentroot }}/request.cgi/login
+  ScriptAlias /logout {{ documentroot }}/request.cgi/logout
+  ScriptAlias /private-results {{ documentroot }}/private-results.cgi/
+  ScriptAlias / {{ documentroot }}/browse.cgi/
+
+  # reverse proxy rules
+  SSLProxyEngine on
+  ProxyPass "/results/" "{{ swift_storage_url }}"
+  ProxyPass "/rabbitmq-management/" "http://{{ rabbithost }}:15672/"
+
+  ServerName {{ servername }}
+</VirtualHost>

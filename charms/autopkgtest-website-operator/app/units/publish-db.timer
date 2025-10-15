@@ -1,0 +1,8 @@
+[Unit]
+Description=publish autopkgtest.db (timer)
+
+[Timer]
+OnCalendar=minutely
+
+[Install]
+WantedBy=autopkgtest-web.target

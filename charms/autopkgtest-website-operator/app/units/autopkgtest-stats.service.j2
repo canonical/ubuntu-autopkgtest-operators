@@ -1,0 +1,8 @@
+[Unit]
+Description=Collect & submit package stats
+
+[Service]
+Type=oneshot
+User={{ user }}
+ExecStart={{ webcontrol }}/autopkgtest-stats
+TimeoutStartSec=10m

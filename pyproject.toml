@@ -1,0 +1,13 @@
+[project]
+requires-python = ">= 3.10"
+
+[tool.ruff]
+lint.extend-select = ["W", "I"]
+lint.extend-ignore = [
+    "E741",
+    "E722",
+]
+extend-exclude = ["__pycache__", "*.egg_info", "**/lib/charms/"]
+
+[tool.codespell]
+skip = "build,lib,venv,icon.svg,.tox,.git,.mypy_cache,.ruff_cache,.coverage"

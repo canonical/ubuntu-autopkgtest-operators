@@ -1,0 +1,41 @@
+{% extends "browse-layout.html" %}
+{% import "macros.html" as macros %}
+
+{% block content %}
+  <h2>{{package}}</h2>
+  <ul class="external-links links">
+    <li>{{ macros.launchpad_link(package) }}</li>
+    <li>{{ macros.excuses_link(package) }}</li>
+  </ul>
+
+  {% if results %}
+    <table class="table" style="width: auto">
+      <tr>
+        <th></th>
+        {% for r in releases %}<th>{{r}}</th>{% endfor %}
+      </tr>
+
+      {% for a in arches %}
+        <tr>
+          <th>{{a}}</th>
+          {% for r in releases %}
+            <td class="{{ results[r][a] }}">
+              <a href="{{package}}/{{r}}/{{a}}">{{ results[r][a] }}</a>
+            </td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </table>
+
+    <hr>
+    <h3>Running tests</h3>
+
+    {% for p, info in running.items()|sort %}{{ macros.display_running_job(p, info) }}{% endfor %}
+
+    <h3>Queued tests</h3>
+    {{ macros.display_queues_info(queues_info) }}
+
+  {% else %}
+    {{ macros.nonexistent_package() }}
+  {% endif %}
+{% endblock content %}

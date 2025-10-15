@@ -1,0 +1,24 @@
+#!/usr/bin/python3
+
+import json
+
+from helpers.utils import get_ppa_containers_cache, swift_connect
+
+
+def main():
+    swift_con = swift_connect()
+    _, containers = swift_con.get_account()
+    ppa_containers = []
+    for container in containers:
+        name = container["name"]
+        if not name.startswith("autopkgtest-") or len(name.split("-")) < 3:
+            continue
+        ppa_containers.append(name)
+    cache_directory = get_ppa_containers_cache()
+    cache_directory.mkdir(parents=True, exist_ok=True)
+
+    (cache_directory / "ppa_containers.json").write_text(json.dumps(ppa_containers))
+
+
+if __name__ == "__main__":
+    main()

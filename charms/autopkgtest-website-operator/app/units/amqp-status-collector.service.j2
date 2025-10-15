@@ -1,0 +1,9 @@
+[Unit]
+Description=Read running test status from RabbitMQ (running.json)
+
+[Service]
+User={{ user }}
+Type=oneshot
+RuntimeDirectory=amqp-status-collector
+RuntimeDirectoryPreserve=yes
+ExecStart={{ webcontrol }}/amqp-status-collector

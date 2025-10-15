@@ -1,0 +1,12 @@
+extends: default
+
+rules:
+  document-start: disable
+  indentation:
+    spaces: 2
+  line-length:
+    max: 180
+  truthy:
+    ignore:
+      # "on:" syntax causes false positives
+      - ".github/workflows/*.yaml"

@@ -1,0 +1,15 @@
+{% extends "browse-layout.html" %}
+{% block content %}
+  <div style="background: #f33; padding: 0.5em 1.5em;">
+    <h1>Error {{ exit_code }}:</h1>
+    <p>{{ error }}</p>
+  </div>
+  <p>
+    A server error has occurred, please contact the service
+    maintainers on Matrix, in the #devel:ubuntu.com room
+  </p>
+  <p>Please include the details below:</p>
+  <pre class="code">
+  {% for line in tb -%}{{ line }}{%- endfor -%}
+  </pre>
+{% endblock content %}

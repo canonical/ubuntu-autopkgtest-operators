@@ -1,0 +1,174 @@
+{% macro display_running_job(package, info) -%}
+  {% for runhash, relinfo in info.items() %}
+    {% for release, archinfo in relinfo.items() %}
+      {% for arch, (params, duration, logtail) in archinfo.items() %}
+        <table class="table-condensed">
+          <tr>
+            <th>Package:</th>
+            <td>{{ package }}</td>
+          </tr>
+          <tr>
+            <th>Release:</th>
+            <td>{{ release }}</td>
+          </tr>
+          <tr>
+            <th>Architecture:</th>
+            <td>{{ arch }}</td>
+          </tr>
+          {% for param, v in params.items() %}
+            {% if param == "requester" %}
+              <tr>
+                <th>{{ param|capitalize }}:</th>
+                <td>
+                  <a href="https://launchpad.net/~{{ v }}">{{ v }}</a>
+                </td>
+              </tr>
+            {% elif param == "uuid" %}
+              <tr>
+                <th>{{ param|upper }}:</th>
+                <td>{{ v }}</td>
+              </tr>
+            {% else %}
+              <tr>
+                <th>{{ param|capitalize }}:</th>
+                <td>{{ v }}</td>
+              </tr>
+            {% endif %}
+          {% endfor %}
+          <tr>
+            <th>Running for:</th>
+            <td>{{ duration//3600 }}h {{ duration % 3600//60 }}m {{ duration % 60 }}s ({{ duration }}s)</td>
+          </tr>
+        </table>
+        <pre>
+{{ logtail }}
+      </pre>
+      {% endfor %}
+    {% endfor %}
+    <hr>
+  {% endfor %}
+{%- endmacro %}
+
+{% macro display_queues_info(queues_info) -%}
+  {% for queue_name in queues_info.keys() -%}
+    {% for r in queues_info[queue_name] -%}
+      {% for a in queues_info[queue_name][r] -%}
+        {% if queues_info[queue_name][r][a] -%}
+          {% set (nreqs, reqs) = queues_info[queue_name][r][a] %}
+          {%- if nreqs > 0 %}
+            <table class="table-condensed table-striped"
+                   id="queue-{{ queue_name }}-{{ r }}-{{ a }}">
+              <thead>
+                <tr>
+                  <th class="sticky-table-headers">
+                    <h3>Queued tests for {{ queue_name }} {{ r }} {{ a }}</h3>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for req in reqs %}
+                  <tr>
+                    <td>{{ req }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endif %}
+        {% endif %}
+      {%- endfor %}
+    {%- endfor %}
+  {%- endfor %}
+{%- endmacro %}
+
+{% macro set_up_results_table() -%}
+  <td>
+    <b>Version</b>
+  </td>
+  <td>
+    <b>Triggers</b>
+  </td>
+  <td>
+    <b>Env</b>
+  </td>
+  <td>
+    <b>Date</b>
+  </td>
+  <td>
+    <b>Duration</b>
+  </td>
+  <td>
+    <b>Requester</b>
+  </td>
+  <td>
+    <b>Result</b>
+  </td>
+  <td>
+    <b>UUID</b>
+  </td>
+  <td></td>
+{%- endmacro %}
+
+{% macro results_table_core(version, triggers, env, date, duration, requester, code, url, show_retry, all_proposed, uuid, package, release, arch) -%}
+  <td>{{ version }}</td>
+  <td>{{ triggers }}</td>
+  <td>{{ env }}</td>
+  <td>{{ date }}</td>
+  <td>{{ duration }}</td>
+  <td>
+    {% if requester != None and requester != "-" and requester != "" %}
+      <a href="https://launchpad.net/~{{ requester }}">{{ requester }}</a>
+    {% else %}
+      -
+    {% endif %}
+  </td>
+  <td class="nowrap {{ code }}" title={{ code }}>{{ code }}
+  </td>
+  <td>
+    {% if code not in ["running", "queued"] %}
+      <a href="{{ url_for('get_by_uuid', uuid=uuid) }}">{{uuid}}</a>
+    {% else %}
+      {{uuid}}
+    {% endif %}
+  </td>
+  <td class="nowrap">
+    {% if code not in ["running", "queued"] %}
+      <a href="{{ url_for('get_by_uuid', uuid=uuid) }}/log">log</a>
+      (<a href="{{  url }}/log.gz">raw</a>)&emsp;
+      <a href="{{ url }}/artifacts.tar.gz">artifacts</a> &emsp;
+    {% endif %}
+  </td>
+  <td class="nowrap">
+    {% if show_retry %}{{ retry_button(release, arch, package, triggers, all_proposed) }}{% endif %}
+  </td>
+{%- endmacro %}
+
+{% macro excuses_link(package_name, release="") -%}
+  {% if release != "" %}
+    {% set release = release + "/" %}
+  {% endif %}
+  <a href="https://ubuntu-archive-team.ubuntu.com/proposed-migration/{{ release }}update_excuses.html#{{ package_name }}">excuses</a>
+{%- endmacro %}
+
+{% macro launchpad_link(package_name, release="") -%}
+  {% if release != "" %}
+    {% set release = release + "/" %}
+  {% endif %}
+  <a href="https://launchpad.net/ubuntu/{{ release }}+source/{{ package_name }}">
+    <img src="{{ url_for('static', filename='launchpad.ico') }}" class="icon">
+  Launchpad</a>
+{%- endmacro %}
+
+{% macro retry_button(release, arch, package, triggers, all_proposed) -%}
+  {% set ts = triggers.split()|map('urlencode')|join("&trigger=")|safe %}
+  {% if all_proposed %}
+    <a href="{{ url_for("index_root") }}request.cgi?release={{ release }}&arch={{ arch }}&package={{ package|urlencode }}&trigger={{ ts }}&all-proposed=1">&#9851;</a>
+  {% else %}
+    <a href="{{ url_for("index_root") }}request.cgi?release={{ release }}&arch={{ arch }}&package={{ package|urlencode }}&trigger={{ ts }}">&#9851;</a>
+  {% endif %}
+{%- endmacro %}
+
+{% macro nonexistent_package() -%}
+  <p>
+    Oops! Looks like this package has no previous results. The package itself may not exist - you can check by clicking the Launchpad icon.
+  </p>
+{%- endmacro %}

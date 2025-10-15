@@ -1,0 +1,9 @@
+[Unit]
+Description=Cache PPA container names
+
+[Service]
+Type=oneshot
+User={{ user }}
+EnvironmentFile=-/etc/environment.d/proxy.conf
+ExecStart={{ webcontrol }}/cache-ppa-containers
+TimeoutStartSec=10m

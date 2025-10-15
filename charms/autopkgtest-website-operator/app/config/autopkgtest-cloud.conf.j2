@@ -1,0 +1,23 @@
+[web]
+database={{ database }}
+database_ro={{ database_ro }}
+external_swift_url=https://{{ hostname }}/results
+stats_cache_dir={{ data }}
+ppa_containers_cache_dir={{ data }}
+archive_url=http://archive.ubuntu.com/ubuntu
+indexed_packages={{ data }}/indexed_packages.json
+amqp_queue_cache={{ data }}/queued.json
+running_cache={{ data }}/running.json
+allowed_requestors=autopkgtest-requestors
+
+[amqp]
+uri=amqp://{{ rabbituser }}:{{ rabbitpassword }}@{{ rabbithost }}
+
+[swift]
+os_auth_url = {{ swift_auth_url }}
+os_project_domain_name = {{ swift_project_domain_name }}
+os_username = {{ swift_username }}
+os_user_domain_name = {{ swift_user_domain_name }}
+os_project_name = {{ swift_project_name }}
+os_password = {{ swift_password }}
+os_identity_api_version = 3

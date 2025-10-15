@@ -1,0 +1,8 @@
+[Unit]
+Description=collect ppa containers (timer)
+
+[Timer]
+OnCalendar=minutely
+
+[Install]
+WantedBy=autopkgtest-web.target

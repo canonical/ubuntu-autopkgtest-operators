@@ -1,0 +1,162 @@
+#!/usr/bin/python3
+"""
+This script periodically backs up the sqlite3 db to swift storage
+and clears up old backups
+"""
+
+import atexit
+import datetime
+import hashlib
+import logging
+import sqlite3
+from pathlib import Path
+
+import swiftclient
+from helpers.utils import (
+    get_autopkgtest_cloud_conf,
+    init_db,
+    swift_connect,
+    zstd_compress,
+)
+
+DB_PATH = ""
+DB_NAME = ""
+CONTAINER_NAME = "db-backups"
+MAX_DAYS = 7
+SWIFT_RETRIES = 5
+DB_BACKUP_NAME = ""
+DB_BACKUP_PATH = ""
+
+
+def db_connect() -> sqlite3.Connection:
+    """
+    Establish connection to sqlite3 db
+    """
+    global DB_PATH
+    global DB_NAME
+    global DB_BACKUP_NAME
+    global DB_BACKUP_PATH
+    cp = get_autopkgtest_cloud_conf()
+    DB_PATH = Path(cp["web"]["database"])
+    DB_NAME = DB_PATH.name
+    DB_BACKUP_NAME = "%s.bak" % DB_NAME
+    DB_BACKUP_PATH = Path("/tmp") / (
+        DB_PATH.name + ".zst"
+    )  # using zst extension as we will compress with zstd
+
+    db_con = init_db(cp["web"]["database"])
+
+    return db_con
+
+
+def backup_db(db_con: sqlite3.Connection):
+    with open(DB_BACKUP_PATH, "wb") as bkp_file:
+        bkp_file.write(zstd_compress(data="\n".join(db_con.iterdump()).encode()))
+
+
+def create_container_if_it_doesnt_exist(swift_conn: swiftclient.Connection):
+    """
+    create db-backups container if it doesn't already exist
+    """
+    try:
+        swift_conn.get_container(CONTAINER_NAME)
+    except swiftclient.exceptions.ClientException:
+        swift_conn.put_container(
+            CONTAINER_NAME,
+        )
+
+
+def get_db_backup_checksum():
+    with open(DB_BACKUP_PATH, "rb") as bkp_f:
+        md5 = hashlib.md5(bkp_f.read()).hexdigest()
+    return md5
+
+
+def upload_backup_to_swift(
+    swift_conn: swiftclient.Connection,
+) -> swiftclient.Connection:
+    """
+    Upload compressed database to swift storage under container db-backups
+    """
+    now = datetime.datetime.now(datetime.UTC).strftime("%Y/%m/%d/%H_%M_%S")
+    checksum = get_db_backup_checksum()
+    object_path = "%s/%s-%s.%s" % (
+        now,
+        DB_BACKUP_NAME.split(".")[0],
+        checksum,
+        "db.zst",
+    )
+    db_backup_contents = Path(DB_BACKUP_PATH).read_bytes()
+    for retry in range(SWIFT_RETRIES):
+        try:
+            swift_conn.put_object(
+                container=CONTAINER_NAME,
+                obj=object_path,
+                contents=db_backup_contents,
+            )
+            break
+        except swiftclient.exceptions.ClientException as e:
+            logging.info(
+                "Retry %i out of %i failed, exception: %s"
+                % (retry, SWIFT_RETRIES, str(e))
+            )
+            swift_conn = swift_connect()
+    return swift_conn
+
+
+def delete_old_backups(
+    swift_conn: swiftclient.Connection,
+) -> swiftclient.Connection:
+    """
+    Delete objects in db-backups container that are older than 7 days
+    """
+    logging.info("Removing old db backups...")
+    _, objects = swift_conn.get_container(CONTAINER_NAME)
+    now = datetime.datetime.now(datetime.UTC)
+
+    for obj in objects:
+        last_modified = obj["last_modified"]
+        timestamp = datetime.datetime.strptime(
+            last_modified, "%Y-%m-%dT%H:%M:%S.%fZ"
+        ).replace(tzinfo=datetime.UTC)
+        diff = now - timestamp
+        if diff > datetime.timedelta(days=MAX_DAYS):
+            logging.info("Deleting %s" % obj["name"])
+            for retry in range(SWIFT_RETRIES):
+                try:
+                    swift_conn.delete_object(CONTAINER_NAME, obj["name"])
+                    break
+                except swiftclient.exceptions.ClientException as e:
+                    logging.info(
+                        "Retry %i out of %i failed, exception: %s"
+                        % (retry, SWIFT_RETRIES, str(e))
+                    )
+                    swift_conn = swift_connect()
+    return swift_conn
+
+
+def cleanup():
+    """
+    Delete db and compressed db under /tmp
+    """
+    Path(DB_BACKUP_PATH).unlink(missing_ok=True)
+    Path("%s.gz" % DB_BACKUP_PATH).unlink(missing_ok=True)
+
+
+if __name__ == "__main__":
+    # Only bother running script if this unit is the leader.
+    logging.basicConfig(level="INFO")
+    logging.info("Connecting to db")
+    db_con = db_connect()
+    logging.info("Creating a backup of the db...")
+    backup_db(db_con)
+    logging.info("Registering cleanup function")
+    atexit.register(cleanup)
+    logging.info("Setting up swift connection")
+    swift_conn = swift_connect()
+    create_container_if_it_doesnt_exist(swift_conn)
+    logging.info("Uploading db to swift!")
+    swift_conn = upload_backup_to_swift(swift_conn)
+    logging.info("Pruning old database backups")
+    swift_conn = delete_old_backups(swift_conn)
+    cleanup()
