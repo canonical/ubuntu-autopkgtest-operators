@@ -1,0 +1,75 @@
+name: ubuntu-autopkgtest-janitor
+type: charm
+summary: A charm for performing maintenance for autopkgtest workers.
+description: A charm for performing maintenance for autopkgtest workers.
+links:
+  issues:
+    - https://github.com/canonical/ubuntu-autopkgtest-operators/issues
+  source:
+    - https://github.com/canonical/ubuntu-autopkgtest-operators
+
+base: ubuntu@24.04
+platforms:
+  amd64:
+    build-on: [amd64]
+    build-for: [amd64]
+
+charm-libs:
+  - lib: operator_libs_linux.apt
+    version: "0"
+  - lib: operator_libs_linux.systemd
+    version: "1"
+  - lib: operator_libs_linux.snap
+    version: "2"
+
+parts:
+  charm:
+    plugin: charm
+    source: .
+  systemd-units:
+    plugin: dump
+    source: .
+    stage:
+      - units/*
+
+actions:
+  add-worker:
+    description: Add worker to run maintenance tasks on.
+    params:
+      arch:
+        type: string
+        description: Architecture of the worker.
+        enum: [amd64, amd64v3, i386, arm64, armhf, s390x, ppc64el, riscv64]
+      token:
+        type: string
+        description: LXD client token to connect to a remote.
+  remove-worker:
+    description: Remove a worker from the janitor.
+    params:
+      arch:
+        type: string
+        description: Architecture of the worker.
+        enum: [amd64, amd64v3, i386, arm64, armhf, s390x, ppc64el, riscv64]
+  rebuild-all-images:
+    description: Trigger rebuild of all the images
+  reconfigure:
+    description: Reconfigure image builders with current distro-info-data
+
+config:
+  options:
+    extra-releases:
+      type: string
+      description: Space-separated of unsupported release to build images from
+      default: trusty
+    mirror:
+      type: string
+      description: Ubuntu mirror to use
+      default: https://archive.ubuntu.com/ubuntu/
+    max-containers:
+      type: int
+      description: Max number of containers per remote
+      default: 50
+    max-virtual-machines:
+      type: int
+      description: Max number of virtual machines per remote
+      default: 20

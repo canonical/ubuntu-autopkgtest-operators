@@ -1,0 +1,13 @@
+[Unit]
+Description=Build autopkgtest testbed VM (%i)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+User={{ user }}
+WorkingDirectory=~
+TimeoutStartSec=18h
+ExecStart=sh -ec '\
+    PARAMS="%i"; REMOTE="$${PARAMS%-*}"; ARCH="$${REMOTE##*-}"; RELEASE="$${PARAMS##*-}"; \
+    MIRROR="{{ mirror }}" /usr/bin/flock "/run/lock/%p-$$ARCH" "{{ autopkgtest_location }}/tools/autopkgtest-build-lxd" --vm -r "$$REMOTE" "ubuntu-daily:$$RELEASE/$$ARCH"'

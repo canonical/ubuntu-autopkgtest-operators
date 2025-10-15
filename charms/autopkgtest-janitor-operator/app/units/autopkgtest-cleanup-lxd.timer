@@ -1,0 +1,9 @@
+[Unit]
+Description=Timer to cleanup stale LXD instances
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

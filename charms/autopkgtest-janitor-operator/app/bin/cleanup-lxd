@@ -1,0 +1,77 @@
+#!/usr/bin/python3
+
+import datetime
+import json
+import subprocess
+import sys
+
+MAX_AGE_HOURS = 12
+
+
+def parse_lxd_time(s):
+    return datetime.datetime.fromisoformat(s.split(".")[0] + "+00:00")
+
+
+def main():
+    """Clean stale LXD instances"""
+
+    print(f"Deleting instances older than {MAX_AGE_HOURS} hours")
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    remotes = json.loads(subprocess.check_output(["lxc", "remote", "list", "-fjson"]))
+    remotes = [r for r in remotes if r.startswith("worker-")]
+
+    errors = False
+    for remote in remotes:
+        try:
+            instances = json.loads(
+                subprocess.check_output(["lxc", "list", "-fjson", remote + ":"])
+            )
+        except Exception as e:
+            print(
+                f"Error getting list of instances from remote {remote}: {e}",
+                file=sys.stderr,
+            )
+            errors = True
+            continue
+
+        for instance in instances:
+            if now - parse_lxd_time(instance["created_at"]) >= datetime.timedelta(
+                hours=MAX_AGE_HOURS
+            ):
+                print(f"Instance {remote}:{instance['name']} is old - deleting")
+                try:
+                    subprocess.check_call(
+                        [
+                            "lxc",
+                            "delete",
+                            "--force",
+                            f"{remote}:{instance['name']}",
+                        ],
+                        timeout=60,
+                    )
+                except subprocess.CalledProcessError as e:
+                    print(
+                        f"Error deleting {remote}:{instance['name']}: {e}",
+                        file=sys.stderr,
+                    )
+                    errors = True
+                    continue
+                except subprocess.TimeoutExpired as e:
+                    print(
+                        f"Timeout deleting {remote}:{instance['name']}: {e}",
+                        file=sys.stderr,
+                    )
+                    errors = True
+                    continue
+
+    if errors:
+        print(
+            "Errors encountered during cleanup, see messagesa above",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

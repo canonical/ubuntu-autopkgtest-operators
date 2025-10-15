@@ -1,0 +1,6 @@
+[Unit]
+Description=Timer to build autopkgtest testbed container (%i)
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=24h

@@ -1,0 +1,9 @@
+[Unit]
+Description=Clean stale LXD instalces
+
+[Service]
+Type=exec
+User={{ user }}
+WorkingDirectory=~
+TimeoutStartSec=20m
+ExecStart=/usr/local/bin/cleanup-lxd
