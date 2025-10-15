@@ -9,5 +9,7 @@ User={{ user }}
 WorkingDirectory=~
 TimeoutStartSec=18h
 ExecStart=sh -ec '\
-    PARAMS="%i"; REMOTE="$${PARAMS%-*}"; ARCH="$${REMOTE##*-}"; RELEASE="$${PARAMS##*-}"; \
-    MIRROR="{{ mirror }}" /usr/bin/flock "/run/lock/%p-$$ARCH" "{{ autopkgtest_location }}/tools/autopkgtest-build-lxd" -r "$$REMOTE" "ubuntu-daily:$$RELEASE/$$ARCH"'
+    PARAMS="%i"; REMOTE="$${PARAMS%-*}"; ARCH="$${REMOTE##*-}"; RELEASE="$${PARAMS##*-}"; BASE="$$RELEASE"; \
+    if ! lxc image info "ubuntu-daily:$$BASE/$$ARCH" >/dev/null 2>&1 && [ "$$RELEASE" = "$$(ubuntu-distro-info --devel)" ]; then BASE=$$(ubuntu-distro-info --stable); fi; \
+    RELEASE="$$RELEASE" MIRROR="{{ mirror }}" /usr/bin/flock "/run/lock/%p-$$ARCH" \
+    "{{ autopkgtest_location }}/tools/autopkgtest-build-lxd" -r "$$REMOTE" "ubuntu-daily:$$BASE/$$ARCH"'
