@@ -8,6 +8,7 @@ class DispatcherConfig(pydantic.BaseModel):
         extra="forbid",
     )
 
+    autopkgtest_git_branch: str
     default_worker_count: int
     releases: str
     worker_upstream_percentage: int

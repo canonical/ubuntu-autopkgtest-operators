@@ -25,7 +25,6 @@ logger = logging.getLogger(__name__)
 USER = "ubuntu"
 
 AUTOPKGTEST_REPO = "https://salsa.debian.org/ubuntu-ci-team/autopkgtest.git"
-AUTOPKGTEST_BRANCH = "ubuntu/production-tip"
 AUTOPKGTEST_LOCATION = Path(f"~{USER}/autopkgtest").expanduser()
 
 AUTOPKGTEST_PACKAGE_CONFIG_REPO = "https://git.launchpad.net/~ubuntu-release/autopkgtest-cloud/+git/autopkgtest-package-configs"
@@ -183,7 +182,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         for repo, branch, location in [
             (
                 AUTOPKGTEST_REPO,
-                AUTOPKGTEST_BRANCH,
+                self.typed_config.autopkgtest_git_branch,
                 AUTOPKGTEST_LOCATION,
             ),
             (
