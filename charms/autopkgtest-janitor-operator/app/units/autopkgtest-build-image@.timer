@@ -1,0 +1,9 @@
+[Unit]
+Description=Timer to build autopkgtest testbed image (%i)
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=24h
+
+[Install]
+WantedBy=timers.target

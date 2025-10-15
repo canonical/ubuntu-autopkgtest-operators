@@ -107,6 +107,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         self.unit.status = ops.MaintenanceStatus("installing charm tools")
         src_dir = CHARM_APP_DATA / "bin"
         shutil.copy(src_dir / "cleanup-lxd", "/usr/local/bin/")
+        shutil.copy(src_dir / "build-image-on-worker", "/usr/local/bin/")
 
         self.unit.status = ops.MaintenanceStatus("cloning autopkgtest repository")
         shutil.rmtree(AUTOPKGTEST_LOCATION, ignore_errors=True)
@@ -244,7 +245,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
 
         for release in releases:
             # stop all matching units
-            systemd.service_stop(f"autopkgtest-build-*@worker-{arch}-{release}.*")
+            systemd.service_stop(f"autopkgtest-build-image@{arch}-{release}-*.*")
 
             # disable all enabled matching units
 
@@ -257,7 +258,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
                     "--no-legend",
                     "--no-pager",
                     "--state=enabled",
-                    f"autopkgtest-build-*@worker-{arch}-{release}.*",
+                    f"autopkgtest-build-image@{arch}-{release}-*.*",
                 ],
                 text=True,
                 capture_output=True,
@@ -269,7 +270,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
 
             # reset failed state
             systemd._systemctl(
-                "reset-failed", f"autopkgtest-build-*@worker-{arch}-{release}.*"
+                "reset-failed", f"autopkgtest-build-image@{arch}-{release}-*.*"
             )
 
     def enable_image_builders(self, arch, releases):
@@ -281,11 +282,11 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
                 logger.info(f"Not creating image for {release}/{arch}")
                 continue
 
-            timers = [f"autopkgtest-build-container@worker-{arch}-{release}.timer"]
-            services = [f"autopkgtest-build-container@worker-{arch}-{release}.service"]
+            timers = [f"autopkgtest-build-image@{arch}-{release}-container.timer"]
+            services = [f"autopkgtest-build-image@{arch}-{release}-container.service"]
             if arch in VM_ARCHITECTURES:
-                timers.append(f"autopkgtest-build-vm@worker-{arch}-{release}.timer")
-                services.append(f"autopkgtest-build-vm@worker-{arch}-{release}.service")
+                timers.append(f"autopkgtest-build-image@{arch}-{release}-vm.timer")
+                services.append(f"autopkgtest-build-image@{arch}-{release}-vm.service")
 
             logger.info(f"Enabling worker units for {arch}/{release}")
             systemd.service_enable("--now", *timers)
@@ -366,7 +367,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
                 "--no-legend",
                 "--no-pager",
                 "--type=timer",
-                "autopkgtest-build-*.timer",
+                "autopkgtest-build-image@*.timer",
             ],
             capture_output=True,
             text=True,

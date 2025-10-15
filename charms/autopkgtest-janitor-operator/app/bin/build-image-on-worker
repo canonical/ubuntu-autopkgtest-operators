@@ -2,26 +2,53 @@
 
 set -eu
 
-# $1 expected in form: arch-release-type
+# $1 expected in form: arch-release-type, with type either "container" or "vm".
+IFS=- read -r arch RELEASE type <<EOF
+$1
+EOF
 
-IFS=- set -- "$1"
-arch=$1
-release=$2
-type=$3
+export RELEASE
 
 remote="worker-$arch"
-base=$release
+imgremote="ubuntu-daily"
+base=$RELEASE
+
+if [ -z "${MIRROR-}" ]; then
+    echo 'MIRROR environment variable is not set, the image default will be used'
+fi
+
+# Fallback to stable when opening a new release. We use --latest
+# instead of --devel as that works with outdated distro-info-data.
 latest=$(ubuntu-distro-info --latest)
-
-# Put extra autopkgtest-build-lxd parameters in $@
-set --
+stable=$(ubuntu-distro-info --stable)
+name="autopkgtest/ubuntu/$RELEASE/$arch"
+set -- lxc image info
 if [ "$type" = "vm" ]; then
-    set -- --vm
+    set -- "$@" --vm
+    name="$name/vm"
+fi
+if
+    [ "$RELEASE" = "$latest" ] &&
+    ! "$@" "$remote:$name" >/dev/null 2>&1 &&
+    ! "$@" "$imgremote:$base/$arch" >/dev/null 2>&1 &&
+    "$@" "$imgremote:$stable/$arch" >/dev/null 2>&1
+then
+    echo "No $base image appears to be available, falling back to $stable"
+    base=$stable
 fi
 
-if ! lxc image info "ubuntu-daily:$base/$arch" >/dev/null 2>&1 && [ "$release" = "$latest" ]; then
-    base=$(ubuntu-distro-info --stable)
+# Construct the autopkgtest-build-lxd command line in $@.
+set -- autopkgtest-build-lxd
+if [ "$type" = "vm" ]; then
+    set -- "$@" --vm
+fi
+set -- "$@" --remote "$remote" "ubuntu-daily:$base/$arch"
+
+# If RUNTIME_DIRECTORY is set, which normally happens when this script
+# is started from the systemd service, then limit to one image build
+# per architecture (remote).
+if [ -n "${RUNTIME_DIRECTORY-}" ]; then
+    set -- flock --verbose "$RUNTIME_DIRECTORY/$arch.lock" "$@"
 fi
 
-RELEASE=$release MIRROR="{{ mirror }}" flock --verbose "/run/lock/%p-$arch" \
-    "{{ autopkgtest_location }}/tools/autopkgtest-build-lxd" "$@" -r "$remote" "ubuntu-daily:$base/$arch"
+exec "$@"

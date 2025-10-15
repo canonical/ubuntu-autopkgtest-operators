@@ -1,0 +1,15 @@
+[Unit]
+Description=Build autopkgtest testbed image (%i)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+User={{ user }}
+TimeoutStartSec=18h
+EnvironmentFile=-/etc/environment.d/proxy.conf
+Environment="PATH={{ autopkgtest_location }}/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/snap/bin"
+Environment="MIRROR={{ mirror }}"
+RuntimeDirectory=%p
+RuntimeDirectoryPreserve=yes
+ExecStart=build-image-on-worker %i
