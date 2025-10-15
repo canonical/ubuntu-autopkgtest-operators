@@ -155,13 +155,12 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         # installs python3-distro-info.
         import distro_info
 
+        # get all supported releases + extra in reverse order, without duplicates
         udi = distro_info.UbuntuDistroInfo()
         all_releases = (
-            self.typed_config.extra_releases + udi.supported_esm() + udi.supported()
+            udi.supported_esm() + udi.supported() + self.typed_config.extra_releases
         )
-
-        # let the latest release be first
-        all_releases.reverse()
+        all_releases = [r for r in reversed(udi.all) if r in all_releases]
 
         return all_releases
 
