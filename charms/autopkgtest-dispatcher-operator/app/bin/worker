@@ -264,7 +264,7 @@ def process_output_dir(
 
 
 def i386_cross_series(series):
-    # the first version where i386 is a partiel architecture and only cross
+    # the first version where i386 is a partial architecture and only cross
     # testing is done is 20.04
     version = distro_info.UbuntuDistroInfo().version(series)
     if not version:
