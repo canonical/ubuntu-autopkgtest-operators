@@ -1,0 +1,27 @@
+#!/bin/sh
+
+set -eu
+
+# $1 expected in form: arch-release-type
+
+IFS=- set -- "$1"
+arch=$1
+release=$2
+type=$3
+
+remote="worker-$arch"
+base=$release
+latest=$(ubuntu-distro-info --latest)
+
+# Put extra autopkgtest-build-lxd parameters in $@
+set --
+if [ "$type" = "vm" ]; then
+    set -- --vm
+fi
+
+if ! lxc image info "ubuntu-daily:$base/$arch" >/dev/null 2>&1 && [ "$release" = "$latest" ]; then
+    base=$(ubuntu-distro-info --stable)
+fi
+
+RELEASE=$release MIRROR="{{ mirror }}" flock --verbose "/run/lock/%p-$arch" \
+    "{{ autopkgtest_location }}/tools/autopkgtest-build-lxd" "$@" -r "$remote" "ubuntu-daily:$base/$arch"
