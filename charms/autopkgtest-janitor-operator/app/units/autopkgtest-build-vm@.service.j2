@@ -6,7 +6,6 @@ After=network-online.target
 [Service]
 Type=exec
 User={{ user }}
-WorkingDirectory=~
 TimeoutStartSec=18h
 ExecStart=sh -ec '\
     PARAMS="%i"; REMOTE="$${PARAMS%-*}"; ARCH="$${REMOTE##*-}"; RELEASE="$${PARAMS##*-}"; BASE="$$RELEASE"; \
