@@ -20,23 +20,12 @@
 
       <div class="col-md-4">
         <div class="panel panel-default">
-          <div class="panel-heading">Package Index</div>
+          <div class="panel-heading">Test Results</div>
           <div class="panel-body">
             <p>
               You can navigate to {{base_url}}packages/<i>packagename</i> to get
               results for a particular package.
             </p>
-
-            <ul class="list-inline">
-
-              {% for i in indexes %}
-                <li>
-                  <h5>
-                    <a href="{{base_url}}testlist#index-{{i}}">{{i}}</a>
-                  </h5>
-                </li>
-              {% endfor %}
-            </ul>
           </div>
         </div>
 

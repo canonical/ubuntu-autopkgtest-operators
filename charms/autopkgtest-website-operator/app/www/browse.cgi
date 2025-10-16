@@ -18,7 +18,6 @@ from helpers.exceptions import NotFound, RunningJSONNotFound
 from helpers.utils import (
     get_all_releases,
     get_autopkgtest_cloud_conf,
-    get_indexed_packages,
     get_ppa_containers_cache,
     get_release_arches,
     get_repo_head_commit_hash,
@@ -58,7 +57,6 @@ def init_config():
 
     CONFIG["swift_container_url"] = cp["web"]["external_swift_url"] + "/autopkgtest-%s"
     CONFIG["amqp_queue_cache"] = Path(cp["web"]["amqp_queue_cache"])
-    CONFIG["indexed_packages"] = Path(cp["web"]["indexed_packages"])
     CONFIG["running_cache"] = Path(cp["web"]["running_cache"])
     CONFIG["database"] = Path(cp["web"]["database_ro"])
 
@@ -350,9 +348,6 @@ def get_running_for_user(user: str):
 @app.route("/")
 def index_root():
     flask.session.permanent = True
-    letters = list("abcdefghijklmnopqrstuvwxyz")
-    indexes = letters + ["lib" + l for l in letters]
-    indexes.sort()
 
     recent = []
     for row in db_con.execute(
@@ -368,7 +363,6 @@ def index_root():
 
     return render(
         "browse-home.html",
-        indexes=indexes,
         recent_runs=recent,
         commit_hash=get_repo_head_commit_hash(__file__),
     )
@@ -1044,17 +1038,6 @@ def queues_json():
 @app.route("/queued.json")
 def return_queued_exactly():
     return flask.send_file(CONFIG["amqp_queue_cache"], mimetype="application/json")
-
-
-@app.route("/testlist")
-def testlist():
-    indexed_pkgs = {}
-    try:
-        with open(CONFIG["indexed_packages"], "r") as f:
-            indexed_pkgs = json.load(f)
-    except FileNotFoundError:
-        indexed_pkgs = get_indexed_packages()
-    return render("browse-testlist.html", indexed_pkgs=indexed_pkgs)
 
 
 @app.route("/statistics")
