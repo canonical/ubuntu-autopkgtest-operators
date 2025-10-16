@@ -197,7 +197,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             # a proxy. the next release should hopefully include this feature.
             # pygit2.clone_repository(repo, location, checkout_branch=branch)
             self.run_as_user(
-                f"git clone --depth 1 -branch '{branch}' '{repo}' '{location}'"
+                f"git clone --depth 1 --branch '{branch}' '{repo}' '{location}'"
             )
 
     def install_worker_and_tools(self):
