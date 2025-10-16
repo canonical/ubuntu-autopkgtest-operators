@@ -119,13 +119,9 @@ class AutopkgtestQueueContents:
                         )
                     try:
                         requests = self.get_queue_requests(queue_name)
-                    except AMQPError as e:
-                        code = e.code
-                        if code != 404:
-                            raise
-                        requests = []
-                        # 404s invalidate the channel for some reason
-                        self.amqp_channel = self.amqp_con.channel()
+                    except AMQPError:
+                        logging.warning("Failed reading data from queue %s", queue_name)
+                        continue
                     queue_size = 0
                     if requests:
                         queue_size = len(requests)
