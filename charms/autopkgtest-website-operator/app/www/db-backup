@@ -144,7 +144,6 @@ def cleanup():
 
 
 if __name__ == "__main__":
-    # Only bother running script if this unit is the leader.
     logging.basicConfig(level="INFO")
     logging.info("Connecting to db")
     db_con = db_connect()
