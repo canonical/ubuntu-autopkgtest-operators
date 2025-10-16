@@ -273,13 +273,17 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             )
 
     def enable_image_builders(self, arch, releases):
-        for release in releases:
+        for i, release in enumerate(releases):
             if (
                 release in RELEASE_ARCH_RESTRICTIONS
                 and arch not in RELEASE_ARCH_RESTRICTIONS[release]
             ):
                 logger.info(f"Not creating image for {release}/{arch}")
                 continue
+
+            # don't drown systemd
+            if i > 0:
+                time.sleep(3)
 
             timers = [f"autopkgtest-build-image@{arch}-{release}-container.timer"]
             services = [f"autopkgtest-build-image@{arch}-{release}-container.service"]
@@ -292,9 +296,6 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
 
             logger.info(f"Starting worker units for {arch}/{release}")
             systemd.service_start(*services)
-
-            # don't drown systemd
-            time.sleep(3)
 
     def _on_add_worker(self, event: ops.ActionEvent):
         """Handle adding a new worker"""
