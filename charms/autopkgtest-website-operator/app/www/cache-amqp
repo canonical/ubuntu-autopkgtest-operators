@@ -259,16 +259,13 @@ if __name__ == "__main__":
     queue_contents = aq.get_queue_contents()
 
     with tempfile.NamedTemporaryFile(
-        mode="w", dir=os.path.dirname(args.output), delete=False
+        mode="w",
+        dir=os.path.dirname(args.output),
+        delete=False,
+        delete_on_close=False,
     ) as tf:
-        try:
-            json.dump(queue_contents, tf, indent=2)
-            umask = os.umask(0)
-            os.umask(umask)
-            os.chmod(tf.name, 0o644 & ~umask)
-            os.rename(tf.name, args.output)
-        finally:
-            try:
-                os.unlink(tf.name)
-            except FileNotFoundError:
-                pass
+        json.dump(queue_contents, tf, indent=2)
+        umask = os.umask(0)
+        os.umask(umask)
+        os.chmod(tf.name, 0o644 & ~umask)
+        os.rename(tf.name, args.output)
