@@ -5,7 +5,6 @@
 """Charm the application."""
 
 import logging
-import time
 
 import autopkgtest_website
 import config_types
@@ -78,15 +77,13 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             return
 
         # https://github.com/juju/terraform-provider-juju/issues/770#issuecomment-3051899587
-        while True:
-            try:
-                swift_password = self.typed_config.swift_juju_secret.get_content().get(
-                    "password"
-                )
-                break
-            except ops.ModelError:
-                self.unit.status = ops.BlockedStatus("swift secret not yet available")
-                time.sleep(10)
+        try:
+            swift_password = self.typed_config.swift_juju_secret.get_content().get(
+                "password"
+            )
+        except ops.ModelError:
+            self.unit.status = ops.BlockedStatus("swift secret not available")
+            return
 
         self.unit.status = ops.MaintenanceStatus("configuring service")
 
