@@ -7,10 +7,8 @@ import os
 import sqlite3
 import sys
 import tempfile
-import time
 import urllib.parse
 
-import pika
 from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf
 from pika.exceptions import AMQPError
 
@@ -20,7 +18,7 @@ logger = logging.getLogger()
 
 
 class AutopkgtestQueueContents:
-    def __init__(self, amqp_uri, database, refresh_semaphores=False):
+    def __init__(self, amqp_uri, database):
         assert amqp_uri is not None
         assert database is not None
 
@@ -32,43 +30,6 @@ class AutopkgtestQueueContents:
         self.amqp_con = amqp_connect()
         self.amqp_channel = self.amqp_con.channel()
         logger.info("Connected to AMQP host %s", parts.hostname)
-
-        # we are the leader, init the semaphores if necessary
-        for context in AMQP_CONTEXTS:
-            for release, arches in self.release_arches.items():
-                for arch in arches:
-                    queue_name = f"semaphore-{context}-{release}-{arch}"
-                    if refresh_semaphores:
-                        self.amqp_channel.queue_delete(queue_name)
-                        logger.info(
-                            f"Semaphore queue '{queue_name}' deleted for recreation"
-                        )
-                    try:
-                        self.amqp_channel.queue_declare(
-                            queue_name, durable=True, passive=True
-                        )
-                        logger.info(f"Semaphore queue '{queue_name}' exists")
-                    except AMQPError as e:
-                        code = e.code
-                        if code != 404:
-                            raise
-                        # 404s invalidate the channel for some reason
-                        self.amqp_channel = self.amqp_con.channel()
-                        # queue does not exist, create it
-                        logger.info(
-                            f"Semaphore queue {queue_name} does not exist, initialising..."
-                        )
-                        self.amqp_channel.queue_declare(queue_name, durable=True)
-                        # add a single message to the queue so only one run
-                        # of cache-amqp can read the actual queue contents
-                        self.amqp_channel.basic_publish(
-                            exchange="",
-                            routing_key=queue_name,
-                            body=f"{queue_name}",
-                            properties=pika.BasicProperties(
-                                delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
-                            ),
-                        )
 
     @property
     def release_arches(self):
@@ -147,19 +108,6 @@ class AutopkgtestQueueContents:
         for context in AMQP_CONTEXTS:
             for release, arches in release_arches.items():
                 for arch in arches:
-                    semaphore_queue_name = f"semaphore-{context}-{release}-{arch}"
-                    logging.info(
-                        f"Trying to lock semaphore queue {semaphore_queue_name}..."
-                    )
-                    body = None
-                    while body is None:
-                        method, properties, body = channel.basic_get(
-                            semaphore_queue_name
-                        )
-                        if body is None:
-                            logging.debug("...can't lock, sleeping...")
-                            time.sleep(1)
-                    logging.info("...locked.")
                     if context == "ubuntu":
                         # ubuntu test requests use context-less name (backwards compatibility)
                         queue_name = "debci-%s-%s" % (release, arch)
@@ -187,11 +135,6 @@ class AutopkgtestQueueContents:
                         "requests": requests,
                     }
                     all_arches.add(arch)
-                    logging.debug(f"Releasing semaphore lock {semaphore_queue_name}")
-                    channel.basic_reject(
-                        delivery_tag=method.delivery_tag,
-                        requeue=True,
-                    )
 
         queued = {
             "releases": list(release_arches.keys()),
@@ -214,13 +157,6 @@ if __name__ == "__main__":
         action="count",
         default=0,
         help="Print debugging (give twice for super verbose output)",
-    )
-    parser.add_argument(
-        "--refresh-semaphores",
-        dest="refresh_semaphores",
-        action="store_true",
-        help="Force the recreation of the semaphore queues if something broke them "
-        "(make sure to stop every running cache-amqp script before use)",
     )
     parser.add_argument(
         "-o",
@@ -255,7 +191,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Get queue details from rabbitmq directly
-    aq = AutopkgtestQueueContents(amqp_uri, database, args.refresh_semaphores)
+    aq = AutopkgtestQueueContents(amqp_uri, database)
     queue_contents = aq.get_queue_contents()
 
     with tempfile.NamedTemporaryFile(
