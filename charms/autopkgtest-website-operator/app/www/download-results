@@ -105,4 +105,4 @@ if __name__ == "__main__":
         queue="",
         on_message_callback=process_message,
     )
-    amqp_con.start_consuming()
+    amqp_con.process_data_events()
