@@ -1,12 +1,9 @@
 #!/usr/bin/python3
 
-import datetime
 import json
 import logging
 import os
 import socket
-import sys
-import time
 
 import pika
 from helpers.utils import SqliteWriterConfig, amqp_connect
@@ -54,49 +51,37 @@ def process_message(channel, method, properties, body):
         channel.basic_ack(delivery_tag=method.delivery_tag)
         return
 
-    start = datetime.datetime.now()
-    while True:
-        try:
-            # add to queue instead of writing to db
-            with amqp_con.channel() as complete_amqp:
-                complete_amqp.exchange_declare(
-                    exchange=SqliteWriterConfig.writer_exchange_name,
-                    exchange_type="fanout",
-                    durable=True,
-                )
-                write_me_msg = {
-                    "run_id": run_id,
-                    "version": version,
-                    "triggers": triggers,
-                    "duration": duration,
-                    "exitcode": exitcode,
-                    "requester": requester,
-                    "env": info.get("env", ""),
-                    "uuid": test_uuid,
-                    "release": release,
-                    "arch": arch,
-                    "package": package,
-                }
-                complete_amqp.basic_publish(
-                    exchange=SqliteWriterConfig.writer_exchange_name,
-                    routing_key="",
-                    body=json.dumps(write_me_msg),
-                    properties=pika.BasicProperties(
-                        delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
-                    ),
-                )
+    write_me_msg = {
+        "run_id": run_id,
+        "version": version,
+        "triggers": triggers,
+        "duration": duration,
+        "exitcode": exitcode,
+        "requester": requester,
+        "env": info.get("env", ""),
+        "uuid": test_uuid,
+        "release": release,
+        "arch": arch,
+        "package": package,
+    }
 
-                channel.basic_ack(delivery_tag=method.delivery_tag)
-                return
-        except Exception:
-            time.sleep(3)
-            now = datetime.datetime.now()
-            if (
-                now.timestamp() - start.timestamp()
-            ) > SqliteWriterConfig.retry_time_limit:
-                logging.error("amqp connection seems unstable, exiting...")
-                sys.exit(1)
-            amqp_con = amqp_connect()
+    # add to queue instead of writing to db
+    with amqp_con.channel() as complete_amqp:
+        complete_amqp.exchange_declare(
+            exchange=SqliteWriterConfig.writer_exchange_name,
+            exchange_type="fanout",
+            durable=True,
+        )
+        complete_amqp.basic_publish(
+            exchange=SqliteWriterConfig.writer_exchange_name,
+            routing_key="",
+            body=json.dumps(write_me_msg),
+            properties=pika.BasicProperties(
+                delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
+            ),
+        )
+
+    channel.basic_ack(delivery_tag=method.delivery_tag)
 
 
 if __name__ == "__main__":
