@@ -65,7 +65,7 @@ config:
     autopkgtest-git-branch:
       type: string
       description: salsa.debian.org/ubuntu-ci-team/autopkgtest branch to clone
-      default: ubuntu/production-tip
+      default: ubuntu/staging
     default-worker-count:
       type: int
       description: Default number of workers to create for a cluster.
