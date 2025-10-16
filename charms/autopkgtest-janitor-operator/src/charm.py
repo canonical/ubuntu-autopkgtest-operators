@@ -111,7 +111,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         self.unit.status = ops.MaintenanceStatus("cloning autopkgtest repository")
         shutil.rmtree(AUTOPKGTEST_LOCATION, ignore_errors=True)
         self.run_as_user(
-            f"git clone -b '{AUTOPKGTEST_BRANCH}' '{AUTOPKGTEST_REPO}' '{AUTOPKGTEST_LOCATION}'"
+            f"git clone --depth 1 --branch '{AUTOPKGTEST_BRANCH}' '{AUTOPKGTEST_REPO}' '{AUTOPKGTEST_LOCATION}'"
         )
 
     def _on_start(self, event: ops.StartEvent):

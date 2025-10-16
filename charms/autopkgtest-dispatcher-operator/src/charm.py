@@ -195,7 +195,9 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             # TODO: the currently packaged version of pygit2 does not support cloning through
             # a proxy. the next release should hopefully include this feature.
             # pygit2.clone_repository(repo, location, checkout_branch=branch)
-            self.run_as_user(f"git clone -b '{branch}' '{repo}' '{location}'")
+            self.run_as_user(
+                f"git clone --depth 1 -branch '{branch}' '{repo}' '{location}'"
+            )
 
     def install_worker_and_tools(self):
         src_path = CHARM_APP_DATA / "bin"
