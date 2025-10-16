@@ -5,4 +5,4 @@ Description=Backup sql database
 OnCalendar=*-*-* 00:05:00
 
 [Install]
-WantedBy=autopkgtest-web.target
+WantedBy=timers.target

@@ -5,4 +5,4 @@ Description=publish autopkgtest.db (timer)
 OnCalendar=minutely
 
 [Install]
-WantedBy=autopkgtest-web.target
+WantedBy=timers.target

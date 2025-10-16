@@ -5,4 +5,4 @@ Description=Read running test status from RabbitMQ (running.json)
 OnCalendar=minutely
 
 [Install]
-WantedBy=autopkgtest-web.target
+WantedBy=timers.target

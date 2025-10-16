@@ -5,4 +5,4 @@ Description=Collect & submit package stats
 OnCalendar=hourly
 
 [Install]
-WantedBy=autopkgtest-web.target
+WantedBy=timers.target

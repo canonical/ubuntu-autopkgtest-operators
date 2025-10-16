@@ -5,4 +5,4 @@ Description=Cache queue entries from AMQP (timer)
 OnCalendar=minutely
 
 [Install]
-WantedBy=autopkgtest-web.target
+WantedBy=timers.target

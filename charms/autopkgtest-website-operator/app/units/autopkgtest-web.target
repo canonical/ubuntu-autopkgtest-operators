@@ -1,5 +1,0 @@
-[Unit]
-Description=autopkgtest web
-
-[Install]
-WantedBy=multi-user.target
