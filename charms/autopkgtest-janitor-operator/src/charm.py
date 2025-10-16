@@ -358,7 +358,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
     def _on_rebuild_all_images(self, event: ops.ActionEvent):
         """Rebuild all images"""
 
-        out = subprocess.check_output(
+        out = subprocess.run(
             [
                 "systemctl",
                 "list-units",
@@ -368,8 +368,10 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
                 "--type=timer",
                 "autopkgtest-build-*.timer",
             ],
+            capture_output=True,
             text=True,
-        )
+            check=True,
+        ).stdout
         all_timers = [line.split()[0] for line in out.splitlines()]
         all_services = [t.removesuffix(".timer") + ".service" for t in all_timers]
         for service in all_services:

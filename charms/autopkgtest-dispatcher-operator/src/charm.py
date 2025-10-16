@@ -127,7 +127,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
     # utils
     def run_as_user(self, command: str):
-        subprocess.check_call(
+        subprocess.run(
             [
                 "su",
                 "--login",
@@ -136,6 +136,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
                 "--command",
                 command,
             ],
+            check=True,
         )
 
     def write_rabbitmq_creds(self):

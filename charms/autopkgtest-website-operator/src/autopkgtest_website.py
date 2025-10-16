@@ -114,12 +114,12 @@ def configure(
     logger.info("Making runtime tmpfiles")
     with open("/etc/tmpfiles.d/autopkgtest-web-runtime.conf", "w") as f:
         f.write("D %t/autopkgtest_webcontrol 0755 www-data www-data\n")
-    subprocess.check_call(["systemd-tmpfiles", "--create"])
+    subprocess.run(["systemd-tmpfiles", "--create"], check=True)
 
     logger.info("Configuring apache2")
-    subprocess.check_call(["a2dissite", "000-default"])
-    subprocess.check_call(["a2dismod", "mpm_event", "mpm_worker"])
-    subprocess.check_call(
+    subprocess.run(["a2dissite", "000-default"], check=True)
+    subprocess.run(["a2dismod", "mpm_event", "mpm_worker"], check=True)
+    subprocess.run(
         [
             "a2enmod",
             "mpm_prefork",
@@ -130,7 +130,8 @@ def configure(
             "remoteip",
             "rewrite",
             "ssl",
-        ]
+        ],
+        check=True,
     )
 
     j2env = jinja2.Environment(

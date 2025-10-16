@@ -12,10 +12,12 @@ class SystemdHelper:
         return [f"autopkgtest@worker-{arch}-{n}.service" for n in ns]
 
     def list_units_by_pattern(self, pattern):
-        proc = subprocess.check_output(
+        proc = subprocess.run(
             ["systemctl", "list-units", f"{pattern}"],
+            capture_output=True,
             text=True,
-        )
+            check=True,
+        ).stdout
 
         # have to mangle the systemctl output manually here
         units = []
