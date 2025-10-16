@@ -12,6 +12,7 @@ class JanitorConfig(pydantic.BaseModel):
     def split_space_separated(cls, v):
         return v.split()
 
+    autopkgtest_git_branch: str
     extra_releases: List[str]
     mirror: str
     max_containers: int

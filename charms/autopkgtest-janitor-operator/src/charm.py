@@ -28,7 +28,6 @@ CHARM_APP_DATA = CHARM_SOURCE_PATH / "app"
 USER = "ubuntu"
 
 AUTOPKGTEST_REPO = "https://salsa.debian.org/ubuntu-ci-team/autopkgtest.git"
-AUTOPKGTEST_BRANCH = "ubuntu/production-tip"
 AUTOPKGTEST_LOCATION = Path(f"~{USER}/autopkgtest").expanduser()
 
 # Releases not listed here are assumed to support any architecture.
@@ -112,7 +111,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         self.unit.status = ops.MaintenanceStatus("cloning autopkgtest repository")
         shutil.rmtree(AUTOPKGTEST_LOCATION, ignore_errors=True)
         self.run_as_user(
-            f"git clone --depth 1 --branch '{AUTOPKGTEST_BRANCH}' '{AUTOPKGTEST_REPO}' '{AUTOPKGTEST_LOCATION}'"
+            f"git clone --depth 1 --branch '{self.typed_config.autopkgtest_git_branch}' '{AUTOPKGTEST_REPO}' '{AUTOPKGTEST_LOCATION}'"
         )
 
     def _on_start(self, event: ops.StartEvent):

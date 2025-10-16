@@ -57,6 +57,10 @@ actions:
 
 config:
   options:
+    autopkgtest-git-branch:
+      type: string
+      description: salsa.debian.org/ubuntu-ci-team/autopkgtest branch to clone
+      default: ubuntu/staging
     extra-releases:
       type: string
       description: Space-separated of unsupported release to build images from
