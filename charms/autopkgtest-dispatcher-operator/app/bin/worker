@@ -199,14 +199,7 @@ def process_output_dir(
     # dont_run for whatever reason, the file doesn't exist
     if os.path.isfile(os.path.join(dir, "testinfo.json")):
         with open(os.path.join(dir, "testinfo.json"), "r") as testinfo:
-            try:
-                d = json.load(testinfo)
-            except json.decoder.JSONDecodeError as json_err:
-                logging.warning(
-                    "Loading testinfo failed with: %s\nCreating empty testinfo",
-                    json_err,
-                )
-                d = {}
+            d = json.load(testinfo)
     with open(os.path.join(dir, "testinfo.json"), "w") as testinfo:
         json.dump(d, testinfo, indent=True)
 
