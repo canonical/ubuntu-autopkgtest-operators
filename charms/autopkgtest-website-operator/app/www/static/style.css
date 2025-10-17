@@ -49,7 +49,7 @@
 
 .fail:before,
 .denylisted:before,
-.unknown-failure:before {
+.otherfail:before {
   content: "✖ ";
   color: #ef2929;
   font-size: 18px;

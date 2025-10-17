@@ -137,7 +137,7 @@ def human_exitcode(code):
     elif code == 20:
         return "error"
     else:
-        return "unknown-failure"
+        return "otherfail"
 
 
 def get_queues_info():
