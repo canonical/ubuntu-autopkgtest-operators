@@ -23,7 +23,6 @@ DB_PATH = ""
 DB_NAME = ""
 CONTAINER_NAME = "db-backups"
 MAX_DAYS = 7
-SWIFT_RETRIES = 5
 DB_BACKUP_NAME = ""
 DB_BACKUP_PATH = ""
 
@@ -87,20 +86,11 @@ def upload_backup_to_swift(
         "db.zst",
     )
     db_backup_contents = Path(DB_BACKUP_PATH).read_bytes()
-    for retry in range(SWIFT_RETRIES):
-        try:
-            swift_conn.put_object(
-                container=CONTAINER_NAME,
-                obj=object_path,
-                contents=db_backup_contents,
-            )
-            break
-        except swiftclient.exceptions.ClientException as e:
-            logging.info(
-                "Retry %i out of %i failed, exception: %s"
-                % (retry, SWIFT_RETRIES, str(e))
-            )
-            swift_conn = swift_connect()
+    swift_conn.put_object(
+        container=CONTAINER_NAME,
+        obj=object_path,
+        contents=db_backup_contents,
+    )
     return swift_conn
 
 
@@ -122,16 +112,7 @@ def delete_old_backups(
         diff = now - timestamp
         if diff > datetime.timedelta(days=MAX_DAYS):
             logging.info("Deleting %s" % obj["name"])
-            for retry in range(SWIFT_RETRIES):
-                try:
-                    swift_conn.delete_object(CONTAINER_NAME, obj["name"])
-                    break
-                except swiftclient.exceptions.ClientException as e:
-                    logging.info(
-                        "Retry %i out of %i failed, exception: %s"
-                        % (retry, SWIFT_RETRIES, str(e))
-                    )
-                    swift_conn = swift_connect()
+            swift_conn.delete_object(CONTAINER_NAME, obj["name"])
     return swift_conn
 
 
