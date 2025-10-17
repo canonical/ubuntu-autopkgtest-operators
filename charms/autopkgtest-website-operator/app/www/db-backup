@@ -19,33 +19,8 @@ from helpers.utils import (
     zstd_compress,
 )
 
-DB_PATH = ""
-DB_NAME = ""
 CONTAINER_NAME = "db-backups"
 MAX_DAYS = 7
-DB_BACKUP_NAME = ""
-DB_BACKUP_PATH = ""
-
-
-def db_connect() -> sqlite3.Connection:
-    """
-    Establish connection to sqlite3 db
-    """
-    global DB_PATH
-    global DB_NAME
-    global DB_BACKUP_NAME
-    global DB_BACKUP_PATH
-    cp = get_autopkgtest_cloud_conf()
-    DB_PATH = Path(cp["web"]["database"])
-    DB_NAME = DB_PATH.name
-    DB_BACKUP_NAME = "%s.bak" % DB_NAME
-    DB_BACKUP_PATH = Path("/tmp") / (
-        DB_PATH.name + ".zst"
-    )  # using zst extension as we will compress with zstd
-
-    db_con = init_db(cp["web"]["database"])
-
-    return db_con
 
 
 def backup_db(db_con: sqlite3.Connection):
@@ -125,9 +100,21 @@ def cleanup():
 
 
 if __name__ == "__main__":
+    global DB_BACKUP_NAME
+    global DB_BACKUP_PATH
+
     logging.basicConfig(level="INFO")
+
+    cp = get_autopkgtest_cloud_conf()
+    db_path = Path(cp["web"]["database"])
+    db_filename = db_path.name
+    DB_BACKUP_NAME = "%s.bak" % db_filename
+    DB_BACKUP_PATH = Path("/tmp") / (
+        db_path.name + ".zst"
+    )  # using zst extension as we will compress with zstd
+
     logging.info("Connecting to db")
-    db_con = db_connect()
+    db_con = init_db(cp["web"]["database"])
     logging.info("Creating a backup of the db...")
     backup_db(db_con)
     logging.info("Registering cleanup function")
