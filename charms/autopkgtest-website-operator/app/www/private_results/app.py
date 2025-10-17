@@ -41,13 +41,6 @@ LOGIN = """
 </form>
 """
 
-DENIED_ACC = "Unprivileged! You can't access these logs."
-
-DENIED_OBJ = (
-    "Denied! The result couldn't be acquired. Please speak "
-    + "to a member of the Canonical Ubuntu QA team."
-)
-
 
 def swift_get_object(connection, container, path):
     """Fetch an object from swift."""
@@ -125,11 +118,13 @@ def index_result(container, series, arch, group, src, runid, file):
         object_path = os.path.join(parent_path, file)
         acl_path = os.path.join(parent_path, "readable-by")
         if not validate_user_path(connection, container, nick, acl_path):
-            return render_template_string(HTML, content=DENIED_ACC), 403
+            return render_template_string(
+                HTML, content="You can't access these logs."
+            ), 403
         # We can pull the result now
         result = swift_get_object(connection, container, object_path)
         if result is None:
-            return render_template_string(HTML, content=DENIED_OBJ), 404
+            return render_template_string(HTML, content="Log not found."), 404
         if file.endswith(".gz"):
             content_type = "text/plain; charset=UTF-8"
             headers = {"Content-Encoding": "gzip"}
