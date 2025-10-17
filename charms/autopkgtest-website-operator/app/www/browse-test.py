@@ -85,11 +85,6 @@ if __name__ == "__main__":
 
     utils.init_db(browse.CONFIG["database"])
     browse.connect_db("file:%s?mode=ro" % browse.CONFIG["database"])
-    if utils.is_db_empty(browse.db_con):
-        browse.connect_db("file:%s?mode=rw" % browse.CONFIG["database"])
-        with browse.db_con:
-            tests.populate_dummy_db(browse.db_con)
-        browse.connect_db("file:%s?mode=ro" % browse.CONFIG["database"])
 
     if activate_debugtoolbar:
         browse.app.debug = True

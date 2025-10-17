@@ -428,20 +428,6 @@ def swift_connect() -> swiftclient.Connection:
         raise swiftclient.ClientException(repr(e))
 
 
-def is_db_empty(db_con):
-    cursor = db_con.cursor()
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-    tables = cursor.fetchall()
-    if len(tables) == 0:
-        return True
-    for table in tables:
-        cursor.execute(f"SELECT * FROM {table[0]};")
-        entries = cursor.fetchall()
-        if len(entries) > 0:
-            return False
-    return True
-
-
 def get_db_path():
     return get_autopkgtest_cloud_conf()["web"]["database"]
 
