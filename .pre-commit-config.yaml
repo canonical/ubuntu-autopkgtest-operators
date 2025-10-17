@@ -23,10 +23,17 @@ repos:
     hooks:
       - id: shellcheck
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.0
+    rev: v0.14.1
     hooks:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
+  - repo: https://github.com/djlint/djLint
+    rev: v1.36.4
+    hooks:
+      - id: djlint-reformat-handlebars
+        types_or: ['html']
+      - id: djlint-handlebars
+        types_or: ['html']
 
 exclude: ^(charms/[^/]+/lib/)

@@ -1,0 +1,7 @@
+{
+    "ignore": "H021,H030,H031,H023,H006,H013",
+    "max_line_length": "120",
+    "max_blank_lines": 1,
+    "profile": "jinja",
+    "indent": "2"
+}
