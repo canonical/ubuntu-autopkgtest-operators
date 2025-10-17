@@ -126,7 +126,7 @@ def human_sec(secs):
 def human_exitcode(code):
     if code in (0, 2):
         return "pass"
-    elif code in (4, 6, 12):
+    elif code in (4, 6, 12, 14):
         return "fail"
     elif code == 8:
         return "neutral"
@@ -136,8 +136,6 @@ def human_exitcode(code):
         return "tmpfail"
     elif code == 20:
         return "error"
-    elif code == 14:
-        return "fail-with-skipped-tests"
     else:
         return "unknown-failure"
 

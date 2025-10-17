@@ -48,7 +48,6 @@
 }
 
 .fail:before,
-.fail-with-skipped-tests:before,
 .denylisted:before,
 .unknown-failure:before {
   content: "✖ ";
