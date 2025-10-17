@@ -1,8 +1,0 @@
-[Unit]
-Description=Index test results (timer)
-
-[Timer]
-OnCalendar=minutely
-
-[Install]
-WantedBy=timers.target
