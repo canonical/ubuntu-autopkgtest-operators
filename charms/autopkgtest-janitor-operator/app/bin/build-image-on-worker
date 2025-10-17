@@ -29,8 +29,7 @@ if [ "$type" = "vm" ]; then
 fi
 if
     [ "$RELEASE" = "$latest" ] &&
-    ! "$@" "$remote:$name" >/dev/null 2>&1 &&
-    ! "$@" "$imgremote:$base/$arch" >/dev/null 2>&1 &&
+    "$@" "$imgremote:$base/$arch" 2>&1 | grep -q "couldn't be found" &&
     "$@" "$imgremote:$stable/$arch" >/dev/null 2>&1
 then
     echo "No $base image appears to be available, falling back to $stable"
