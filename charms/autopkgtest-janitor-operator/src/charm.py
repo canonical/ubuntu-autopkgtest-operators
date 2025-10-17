@@ -36,7 +36,7 @@ RELEASE_ARCH_RESTRICTIONS = {
     "trusty": ["amd64"],
     "xenial": ["amd64", "s390x"],
     "bionic": ["amd64", "arm64", "ppc64el", "s390x"],
-    "focal": ["amd64", "arm64", "ppc64el", "riscv64", "s390x"],
+    "focal": ["amd64", "arm64", "ppc64el", "s390x"],
     "jammy": ["amd64", "arm64", "armhf", "i386", "ppc64el", "riscv64", "s390x"],
     "noble": ["amd64", "arm64", "armhf", "i386", "ppc64el", "riscv64", "s390x"],
     "plucky": ["amd64", "arm64", "armhf", "i386", "ppc64el", "riscv64", "s390x"],
