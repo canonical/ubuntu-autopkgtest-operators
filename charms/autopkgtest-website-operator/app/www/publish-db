@@ -23,7 +23,7 @@ sqlite3.paramstyle = "named"
 COMPONENTS = ["main", "restricted", "universe", "multiverse"]
 
 
-def init_db(path, path_current, path_rw):
+def publish_db(path, path_current, path_rw):
     """Create DB if it does not exist, and connect to it"""
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path)
@@ -201,7 +201,7 @@ if __name__ == "__main__":
         os.unlink(target_new)
     except FileNotFoundError:
         pass
-    db_con = init_db(target_new, target, config["web"]["database"])
+    db_con = publish_db(target_new, target, config["web"]["database"])
 
     for row in db_con.execute("SELECT DISTINCT release FROM test"):
         get_sources(db_con, row[0], archive_url)
