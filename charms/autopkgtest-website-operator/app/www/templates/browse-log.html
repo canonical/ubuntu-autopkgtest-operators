@@ -2,57 +2,62 @@
 {% import "macros.html" as macros %}
 
 {% block content %}
-<h2><a href="{{ url_for('package_overview', package=package) }}">{{ package }}</a>
-	<small>[ <a href="{{ url_for('package_release_arch', package=package, release=release, arch=arch)}}">{{ release }}/{{ arch }}</a> ]
-		- run <a href="{{ url_for('get_by_uuid', uuid=uuid) }}">{{ uuid }}</a></small>
-</h2>
-{% set ns = namespace(lines=0, headers=0, sections=0) %}
-<div class="col-md-2 list-group" id="logview-index">
+  <h2>
+    <a href="{{ url_for('package_overview', package=package) }}">{{ package }}</a>
+    <small>[ <a href="{{ url_for('package_release_arch', package=package, release=release, arch=arch) }}">{{ release }}/{{ arch }}</a> ]
+    - run <a href="{{ url_for('get_by_uuid', uuid=uuid) }}">{{ uuid }}</a></small>
+  </h2>
+  {% set ns = namespace(lines=0, headers=0, sections=0) %}
+  <div class="col-md-2 list-group" id="logview-index">
     {% for section in sections %}
-    <div class="list-group">
+      <div class="list-group">
         {% if 'result' in section and section['result'] == "pass" %}
-        {% set klass = "list-group-item-success" %}
+          {% set klass = "list-group-item-success" %}
         {% elif 'result' in section and section['result'] == "fail" %}
-        {% set klass = "list-group-item-danger" %}
+          {% set klass = "list-group-item-danger" %}
         {% elif 'result' in section and section['result'] == "skip" %}
-        {% set klass = "list-group-item-warning" %}
+          {% set klass = "list-group-item-warning" %}
         {% else %}
-        {% set klass = "list-group-item-info" %}
+          {% set klass = "list-group-item-info" %}
         {% endif %}
         <div class="list-group-item {{ klass }}">
-            <strong>{{ section["name"] }}</strong>
+          <strong>{{ section["name"] }}</strong>
         </div>
         {% for subsection in section["subsections"] %}
-            {% set ns.headers = ns.headers + 1 %}
-            <a class="list-group-item" href="#S{{ ns.headers }}">{{ subsection["name"] }}</a>
+          {% set ns.headers = ns.headers + 1 %}
+          <a class="list-group-item" href="#S{{ ns.headers }}">{{ subsection["name"] }}</a>
         {% endfor %}
-    </div>
+      </div>
     {% endfor %}
-</div>
-<div class="col-md-10">
+  </div>
+  <div class="col-md-10">
     <div class="log-view">
-    {% for section in sections %}
+      {% for section in sections %}
         {% for subsection in section["subsections"] %}
-            {% set ns.sections = ns.sections + 1 %}
-            <div id="S{{ ns.sections  }}" class="log-divider {% if 'result' in section %} log-divider-{{ section['result'] }} {% endif %}" data-siblings="{{ section['subsections']|length - 1 }}">
-                <a href="#S{{ ns.sections  }}" onclick="javascript: return toggleLogSection('#S{{ ns.sections  }}')">
-                    <span class="log-toggle log-open">▸</span>
-                    <span class="log-toggle">▾</span>
-                    {% if 'result' in section %}{{ section["name"] }}: {% endif %}<span class="log-section-name">{{ subsection["name"] }}</span>
-                </a>
-            </div>
-            <div class="log-section">
-                {% for line in subsection["lines"] %}
-                    {% set ns.lines = ns.lines + 1 %}
-                    <span id="L{{ ns.lines }}" class="line-number"><a href="#L{{ ns.lines }}">{{ ns.lines }}</a></span>
-                    <div class="log-line">{{ line }}</div>
-                {% endfor %}
-            </div>
+          {% set ns.sections = ns.sections + 1 %}
+          <div id="S{{ ns.sections }}"
+               class="log-divider {% if 'result' in section %}log-divider-{{ section['result'] }}{% endif %}"
+               data-siblings="{{ section['subsections']|length - 1 }}">
+            <a href="#S{{ ns.sections }}"
+               onclick="javascript: return toggleLogSection('#S{{ ns.sections }}')">
+              <span class="log-toggle log-open">▸</span>
+              <span class="log-toggle">▾</span>
+              {% if 'result' in section %}{{ section["name"] }}:{% endif %}
+              <span class="log-section-name">{{ subsection["name"] }}</span>
+            </a>
+          </div>
+          <div class="log-section">
+            {% for line in subsection["lines"] %}
+              {% set ns.lines = ns.lines + 1 %}
+              <span id="L{{ ns.lines }}" class="line-number"><a href="#L{{ ns.lines }}">{{ ns.lines }}</a></span>
+              <div class="log-line">{{ line }}</div>
+            {% endfor %}
+          </div>
         {% endfor %}
-    {% endfor %}
+      {% endfor %}
     </div>
-</div>
-<script type="text/javascript">
+  </div>
+  <script type="text/javascript">
 function toggleLogSection(section) {
     $(section).next(".log-section").toggle()
     $(section).find(".log-toggle").toggle()
@@ -73,6 +78,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 })
-</script>
+  </script>
 
 {% endblock content %}

@@ -133,7 +133,7 @@
   <td class="nowrap">
     {% if code not in ["running", "queued"] %}
       <a href="{{ url_for('get_by_uuid', uuid=uuid) }}/log">log</a>
-      (<a href="{{  url }}/log.gz">raw</a>)&emsp;
+      (<a href="{{ url }}/log.gz">raw</a>)&emsp;
       <a href="{{ url }}/artifacts.tar.gz">artifacts</a> &emsp;
     {% endif %}
   </td>
