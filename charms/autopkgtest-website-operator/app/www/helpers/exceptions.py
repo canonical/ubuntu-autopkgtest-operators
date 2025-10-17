@@ -98,13 +98,3 @@ class InvalidArgs(WebControlException):
             ),
             400,
         )
-
-
-class QueueDead(Exception):
-    def __init__(self):
-        super().__init__(
-            (
-                "Rabbitmq unresponsive. Perhaps it is currently restarting,"
-                " or it is processing a large amount of requests."
-            )
-        )

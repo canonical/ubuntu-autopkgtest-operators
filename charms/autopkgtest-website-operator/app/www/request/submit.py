@@ -24,11 +24,10 @@ from helpers.exceptions import (
     ForbiddenRequest,
     InvalidArgs,
     NotFound,
-    QueueDead,
     RequestInQueue,
     RequestRunning,
 )
-from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf, timeout
+from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf
 
 # Launchpad REST API base
 LP = "https://api.launchpad.net/1.0/"
@@ -310,21 +309,17 @@ class Submit:
         )
         params["uuid"] = str(uuid.uuid4())
         body = "%s\n%s" % (package, json.dumps(params, sort_keys=True))
-        try:
-            with timeout(seconds=60):
-                with amqp_connect() as amqp_con:
-                    with amqp_con.channel() as ch:
-                        ch.basic_publish(
-                            exchange="",
-                            routing_key=queue,
-                            body=body,
-                            properties=pika.BasicProperties(
-                                delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
-                            ),
-                        )
-                return params["uuid"]
-        except (TimeoutError, UnboundLocalError, OSError) as e:
-            raise QueueDead from e
+        with amqp_connect() as amqp_con:
+            with amqp_con.channel() as ch:
+                ch.basic_publish(
+                    exchange="",
+                    routing_key=queue,
+                    body=body,
+                    properties=pika.BasicProperties(
+                        delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
+                    ),
+                )
+        return params["uuid"]
 
     @classmethod
     def post_json(cls, url, data, auth_file, project):
