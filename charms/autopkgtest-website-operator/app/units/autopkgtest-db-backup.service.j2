@@ -1,8 +1,0 @@
-[Unit]
-Description=Backup sql database
-
-[Service]
-Type=oneshot
-User={{ user }}
-EnvironmentFile=-/etc/environment.d/proxy.conf
-ExecStart={{ webcontrol }}/autopkgtest-db-backup
