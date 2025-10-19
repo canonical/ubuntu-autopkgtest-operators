@@ -12,7 +12,7 @@ import sqlite3
 import urllib.parse
 import urllib.request
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from time import time
 from urllib.error import HTTPError
 
@@ -303,7 +303,7 @@ class Submit:
             queue = "debci-%s-%s" % (release, arch)
 
         params["submit-time"] = datetime.strftime(
-            datetime.now().astimezone(timezone.utc), "%Y-%m-%d %H:%M:%S%z"
+            datetime.now().astimezone(UTC), "%Y-%m-%d %H:%M:%S%z"
         )
         params["uuid"] = str(uuid.uuid4())
         body = "%s\n%s" % (package, json.dumps(params, sort_keys=True))
@@ -544,7 +544,7 @@ class Submit:
         if not os.path.isfile(self.config["web"]["running_cache"]):
             return False
         data = {}
-        with open(self.config["web"]["running_cache"], "r") as f:
+        with open(self.config["web"]["running_cache"]) as f:
             data = json.load(f)
         if data == {}:
             return False
@@ -600,7 +600,7 @@ class Submit:
         if not os.path.isfile(self.config["web"]["amqp_queue_cache"]):
             return False
         data = {}
-        with open(self.config["web"]["amqp_queue_cache"], "r") as f:
+        with open(self.config["web"]["amqp_queue_cache"]) as f:
             data = json.load(f)
         data = data["queues"]
         this_test = {

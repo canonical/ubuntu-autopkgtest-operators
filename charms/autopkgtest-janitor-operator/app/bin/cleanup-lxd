@@ -16,7 +16,7 @@ def main():
     """Clean stale LXD instances."""
     print(f"Deleting instances older than {MAX_AGE_HOURS} hours")
 
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     remotes = json.loads(subprocess.check_output(["lxc", "remote", "list", "-fjson"]))
     remotes = [r for r in remotes if r.startswith("worker-")]
 

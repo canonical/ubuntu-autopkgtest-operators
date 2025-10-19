@@ -170,7 +170,7 @@ def get_sources(db_con, release, archive_url):
                 db_con.commit()
             except (urllib.error.HTTPError, ConnectionResetError) as e:
                 if e.code == 304:
-                    logging.debug("url {} not modified".format(url))
+                    logging.debug(f"url {url} not modified")
 
 
 if __name__ == "__main__":
@@ -181,9 +181,9 @@ if __name__ == "__main__":
     config = get_autopkgtest_cloud_conf()
 
     target = config["web"]["database_ro"]
-    target_new = "{}.new".format(target)
-    target_checksum = "{}.sha256".format(target)
-    target_checksum_new = "{}.new".format(target_checksum)
+    target_new = f"{target}.new"
+    target_checksum = f"{target}.sha256"
+    target_checksum_new = f"{target_checksum}.new"
 
     archive_url = config["web"]["archive_url"]
 

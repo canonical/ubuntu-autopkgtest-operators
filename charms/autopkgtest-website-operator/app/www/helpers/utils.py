@@ -5,7 +5,6 @@ import logging
 import os
 import pathlib
 import sqlite3
-import typing
 import urllib.parse
 from pathlib import Path
 
@@ -16,7 +15,7 @@ import swiftclient
 sqlite3.paramstyle = "named"
 
 
-def read_config_file(filepath: typing.Union[str, pathlib.Path], cfg_key: str = None):
+def read_config_file(filepath: str | pathlib.Path, cfg_key: str = None):
     """Read a given config file.
 
     Reads a given config file, whether it be a key=value env file or
@@ -34,11 +33,11 @@ def read_config_file(filepath: typing.Union[str, pathlib.Path], cfg_key: str = N
     """
     config = configparser.ConfigParser()
     if cfg_key is None:
-        with open(filepath, "r") as f:
+        with open(filepath) as f:
             config.read_file(f)
         return config
     else:
-        with open(filepath, "r") as fp:
+        with open(filepath) as fp:
             config.read_string(
                 ("[%s]\n" % cfg_key) + fp.read().replace('"', "")
             )  # read_string preserves "" quotes
@@ -132,7 +131,7 @@ def get_source_versions(db_con, release):
     return srcs
 
 
-def get_github_context(params: typing.Dict[str, str]) -> str:
+def get_github_context(params: dict[str, str]) -> str:
     if "testname" in params:
         return "%s/%s %s" % (
             params["release"],

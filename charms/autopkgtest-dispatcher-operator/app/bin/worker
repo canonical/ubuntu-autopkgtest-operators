@@ -115,7 +115,7 @@ def parse_args():
 def read_per_package_configs(cfg):
     def read_per_package_file(filename):
         out = set()
-        with open(filename, "r") as f:
+        with open(filename) as f:
             entries = {
                 line.strip() for line in f.readlines() if not line.startswith("#")
             }
@@ -194,22 +194,22 @@ def process_output_dir(
     # we have to first check this file exists - when a package is marked with
     # dont_run for whatever reason, the file doesn't exist
     if os.path.isfile(os.path.join(directory, "testinfo.json")):
-        with open(os.path.join(directory, "testinfo.json"), "r") as testinfo:
+        with open(os.path.join(directory, "testinfo.json")) as testinfo:
             d = json.load(testinfo)
     with open(os.path.join(directory, "testinfo.json"), "w") as testinfo:
         json.dump(d, testinfo, indent=True)
 
-    with open(os.path.join(directory, "testpkg-version"), "r") as tpv:
+    with open(os.path.join(directory, "testpkg-version")) as tpv:
         testpkg_version = tpv.read().split()[1]
 
     try:
-        with open(os.path.join(directory, "duration"), "r") as dur:
+        with open(os.path.join(directory, "duration")) as dur:
             duration = dur.read()
     except FileNotFoundError:
         duration = None
 
     try:
-        with open(os.path.join(directory, "requester"), "r") as req:
+        with open(os.path.join(directory, "requester")) as req:
             requester = req.read()
     except FileNotFoundError:
         requester = None
@@ -335,11 +335,11 @@ def send_status_info(
                     # throw away the first line as we almost surely cut that out in
                     # the middle
                     f.readline()
-                except IOError:
+                except OSError:
                     # file is smaller than 2000 bytes? okay
                     pass
                 logtail += f.read().decode("UTF-8", errors="replace")
-        except (IOError, OSError) as e:
+        except OSError as e:
             logtail += "\nError reading log file: %s" % e
 
     msg = json.dumps(
@@ -436,7 +436,7 @@ def log_contents(out_dir):
             errors="surrogateescape",
         ) as f:
             return f.read()
-    except IOError as e:
+    except OSError as e:
         logging.error("Could not read log file: %s" % str(e))
         return ""
 
@@ -750,7 +750,7 @@ def request(channel, method, properties, body):
             return
 
         if private:
-            container = "private-{}".format(container)
+            container = f"private-{container}"
 
         logging.info("Acknowledging request %s" % body)
         channel.basic_ack(delivery_tag=method.delivery_tag)
@@ -1023,7 +1023,7 @@ def main():
         },
         allow_no_value=True,
     )
-    with open(args.config, "r") as f:
+    with open(args.config) as f:
         cfg.read_file(f)
 
     if args.debug or cfg.get("autopkgtest", "debug").lower() in [
@@ -1079,7 +1079,7 @@ def main():
         while exit_requested is None:
             logging.info("Waiting for and processing AMQP requests")
             channel.start_consuming()
-    except IOError:
+    except OSError:
         if exit_requested is None:
             raise
 

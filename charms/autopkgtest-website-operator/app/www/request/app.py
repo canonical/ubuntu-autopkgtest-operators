@@ -71,7 +71,7 @@ def check_github_sig(request):
         with open(keyfile) as f:
             keymap = json.load(f)
             key = keymap[package].encode("ASCII")
-    except (IOError, ValueError, KeyError, UnicodeEncodeError) as e:
+    except (OSError, ValueError, KeyError, UnicodeEncodeError) as e:
         logging.error("Failed to load GitHub key for package %s: %s", package, e)
         return False
 
@@ -285,9 +285,9 @@ def index_root():
             else:
                 count = s.unsend_amqp_request(**params)
 
-            return HTML.format(
-                LOGOUT + "<p>Deleted {} requests</p>".format(count)
-            ).format(**ChainMap(session, params))
+            return HTML.format(LOGOUT + f"<p>Deleted {count} requests</p>").format(
+                **ChainMap(session, params)
+            )
 
         if params.get("ppas"):
             uuid = s.send_amqp_request(context="ppa", **params)
@@ -302,7 +302,7 @@ def index_root():
                 params["release"],
                 params["arch"],
             )
-            params["Result history"] = '<a href="{}">{}</a>'.format(url, url)
+            params["Result history"] = f'<a href="{url}">{url}</a>'
             params["UUID"] = uuid
             params["Result url"] = os.path.join(
                 request.host_url,

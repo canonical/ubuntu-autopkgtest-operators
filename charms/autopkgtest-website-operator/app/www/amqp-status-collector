@@ -74,7 +74,7 @@ def main():
 
     cp = get_autopkgtest_cloud_conf()
     running_name = cp["web"]["running_cache"]
-    running_name_new = "{}.new".format(running_name)
+    running_name_new = f"{running_name}.new"
 
     with open(running_name_new, "w", encoding="utf-8") as f:
         json.dump(running_tests, f)

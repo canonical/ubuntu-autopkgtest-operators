@@ -22,7 +22,7 @@ SUPPORTED_UBUNTU_RELEASES = sorted(
 def filter_amqp(options):
     try:
         cp = configparser.ConfigParser()
-        with open("/home/ubuntu/rabbitmq.cred", "r") as f:
+        with open("/home/ubuntu/rabbitmq.cred") as f:
             cp.read_string("[rabbit]\n" + f.read().replace('"', ""))
         amqp_con = amqp.Connection(
             cp["rabbit"]["RABBIT_HOST"],

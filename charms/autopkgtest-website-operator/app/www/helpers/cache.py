@@ -25,7 +25,7 @@ class KeyValueCache:
         file.truncate()
 
     def get(self, key):
-        with open(self.path, "r") as f:
+        with open(self.path) as f:
             self._lock(f, "r")
             try:
                 data = json.load(f)

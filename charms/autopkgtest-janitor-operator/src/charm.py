@@ -10,7 +10,6 @@ import subprocess
 import textwrap
 import time
 from pathlib import Path
-from typing import List
 
 import action_types
 import charms.operator_libs_linux.v0.apt as apt
@@ -148,7 +147,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         if new_sources != old_sources:
             sourceslist.write_text("\n".join(new_sources) + "\n")
 
-    def get_releases(self) -> List[str]:
+    def get_releases(self) -> list[str]:
         """Return all releases to build images for."""
         # we can't do a top-level import because it's the charm itself that
         # installs python3-distro-info.

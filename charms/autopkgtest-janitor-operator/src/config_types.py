@@ -1,5 +1,3 @@
-from typing import List
-
 import pydantic
 
 
@@ -13,7 +11,7 @@ class JanitorConfig(pydantic.BaseModel):
         return v.split()
 
     autopkgtest_git_branch: str
-    extra_releases: List[str]
+    extra_releases: list[str]
     mirror: str
     max_containers: int
     max_virtual_machines: int

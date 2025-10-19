@@ -146,7 +146,7 @@ def get_queues_info():
 
     Return (releases, arches, context -> release -> arch -> (queue_size, [requests])).
     """
-    with open(CONFIG["amqp_queue_cache"], "r") as json_file:
+    with open(CONFIG["amqp_queue_cache"]) as json_file:
         queue_info_j = json.load(json_file)
 
         arches = queue_info_j["arches"]

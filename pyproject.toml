@@ -2,7 +2,8 @@
 requires-python = ">= 3.10"
 
 [tool.ruff]
-lint.extend-select = ["W", "I", "S", "A", "I", "PLE", "F", "D"]
+target-version = "py312"
+lint.extend-select = ["W", "I", "S", "A", "I", "PLE", "F", "D", "UP"]
 lint.extend-ignore = [
     "D203",
     "D100",
@@ -14,6 +15,7 @@ lint.extend-ignore = [
     "D213",
     "E722",
     "E741",
+    "UP031",
     "S101",
     "S106",
     "S108",
