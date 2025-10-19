@@ -216,4 +216,4 @@ if __name__ == "__main__":
         queue="",
         on_message_callback=lambda *args: process_message(*args, db_con),
     )
-    amqp_con.process_data_events()
+    status_ch.start_consuming()
