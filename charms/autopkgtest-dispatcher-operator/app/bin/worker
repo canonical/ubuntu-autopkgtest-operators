@@ -142,12 +142,12 @@ def read_per_package_configs(cfg):
 
     global big_packages, long_tests, never_run, esm_specials
 
-    dir = cfg.get("autopkgtest", "per_package_config_dir").strip()
+    d = cfg.get("autopkgtest", "per_package_config_dir").strip()
 
-    big_packages = read_per_package_file(os.path.join(dir, "big_packages"))
-    long_tests = read_per_package_file(os.path.join(dir, "long_tests"))
-    never_run = read_per_package_file(os.path.join(dir, "never_run"))
-    esm_specials = read_per_package_file(os.path.join(dir, "esm_specials"))
+    big_packages = read_per_package_file(os.path.join(d, "big_packages"))
+    long_tests = read_per_package_file(os.path.join(d, "long_tests"))
+    never_run = read_per_package_file(os.path.join(d, "never_run"))
+    esm_specials = read_per_package_file(os.path.join(d, "esm_specials"))
 
 
 def request_matches_per_package(package, arch, release, s):
@@ -160,7 +160,7 @@ def request_matches_per_package(package, arch, release, s):
 
 
 def process_output_dir(
-    dir,
+    directory,
     pkgname,
     code,
     triggers,
@@ -169,7 +169,7 @@ def process_output_dir(
 ):
     """Post-process output directory"""
 
-    files = set(os.listdir(dir))
+    files = set(os.listdir(directory))
 
     # LP: #1641888
     # In failure cases where we don't know the version, write 'unknown' out as
@@ -180,7 +180,7 @@ def process_output_dir(
             'Code %d returned and no testpkg-version - returning "unknown" for %s'
             % (code, pkgname)
         )
-        with open(os.path.join(dir, "testpkg-version"), "w") as testpkg_version:
+        with open(os.path.join(directory, "testpkg-version"), "w") as testpkg_version:
             testpkg_version.write("%s unknown" % pkgname)
         files.add("testpkg-version")
         # we might need to fake testinfo.json up too, depending on how
@@ -189,7 +189,7 @@ def process_output_dir(
         if "testinfo.json" not in files and triggers:
             logging.warning("...testinfo.json is missing too, faking one up")
             triggers = " ".join(triggers)
-            with open(os.path.join(dir, "testinfo.json"), "w") as testinfo:
+            with open(os.path.join(directory, "testinfo.json"), "w") as testinfo:
                 d = {"custom_environment": ["ADT_TEST_TRIGGERS=%s" % triggers]}
                 json.dump(d, testinfo, indent=True)
             files.add("testinfo.json")
@@ -197,23 +197,23 @@ def process_output_dir(
     d = {}
     # we have to first check this file exists - when a package is marked with
     # dont_run for whatever reason, the file doesn't exist
-    if os.path.isfile(os.path.join(dir, "testinfo.json")):
-        with open(os.path.join(dir, "testinfo.json"), "r") as testinfo:
+    if os.path.isfile(os.path.join(directory, "testinfo.json")):
+        with open(os.path.join(directory, "testinfo.json"), "r") as testinfo:
             d = json.load(testinfo)
-    with open(os.path.join(dir, "testinfo.json"), "w") as testinfo:
+    with open(os.path.join(directory, "testinfo.json"), "w") as testinfo:
         json.dump(d, testinfo, indent=True)
 
-    with open(os.path.join(dir, "testpkg-version"), "r") as tpv:
+    with open(os.path.join(directory, "testpkg-version"), "r") as tpv:
         testpkg_version = tpv.read().split()[1]
 
     try:
-        with open(os.path.join(dir, "duration"), "r") as dur:
+        with open(os.path.join(directory, "duration"), "r") as dur:
             duration = dur.read()
     except FileNotFoundError:
         duration = None
 
     try:
-        with open(os.path.join(dir, "requester"), "r") as req:
+        with open(os.path.join(directory, "requester"), "r") as req:
             requester = req.read()
     except FileNotFoundError:
         requester = None
@@ -231,10 +231,10 @@ def process_output_dir(
     ]:
         if f in files:
             resultfiles.append(f)
-    subprocess.check_call(["tar", "cf", "result.tar"] + resultfiles, cwd=dir)
+    subprocess.check_call(["tar", "cf", "result.tar"] + resultfiles, cwd=directory)
 
     # compress main log file, for direct access
-    subprocess.check_call(["gzip", "-9", os.path.join(dir, "log")])
+    subprocess.check_call(["gzip", "-9", os.path.join(directory, "log")])
     files.discard("log")
 
     # the readable-by file, if present, needs to stay intact and be uploaded
@@ -244,10 +244,10 @@ def process_output_dir(
     if files:
         # tar up all other artifacts
         subprocess.check_call(
-            ["tar", "-czf", "artifacts.tar.gz"] + list(files), cwd=dir
+            ["tar", "-czf", "artifacts.tar.gz"] + list(files), cwd=directory
         )
         for f in files:
-            path = os.path.join(dir, f)
+            path = os.path.join(directory, f)
             if os.path.isdir(path):
                 shutil.rmtree(path, ignore_errors=True)
             else:

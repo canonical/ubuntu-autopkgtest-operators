@@ -21,7 +21,7 @@ Configuration file for the Sphinx documentation builder.
 # -- Project information -----------------------------------------------------
 
 project = "autopkgtest-cloud"
-copyright = "2021, Canonical Ltd"
+copyright = "2021, Canonical Ltd"  # noqa: A001
 author = "Iain Lane <iain.lane@canonical.com>"
 
 

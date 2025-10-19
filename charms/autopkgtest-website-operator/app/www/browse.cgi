@@ -560,8 +560,8 @@ def list_ppa_runs(user, ppa):
     test_runs = {}
     for target_container in target_containers:
         (_, container_objs) = swift_con.get_container(target_container)
-        for object in container_objs:
-            name = object["name"]
+        for obj in container_objs:
+            name = obj["name"]
             if not name.endswith("log.gz"):
                 continue
             name_parts = name.split("/")
