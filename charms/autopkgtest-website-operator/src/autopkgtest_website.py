@@ -53,7 +53,6 @@ PACKAGES = [
     "python3-pygit2",
     "python3-swiftclient",
     "python3-werkzeug",
-    "zstd",
 ]
 
 
