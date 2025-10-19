@@ -15,12 +15,8 @@ platforms:
     build-for: [amd64]
 
 charm-libs:
-  - lib: operator_libs_linux.apt
-    version: "0"
   - lib: operator_libs_linux.systemd
     version: "1"
-  - lib: operator_libs_linux.snap
-    version: "2"
 
 parts:
   charm:

@@ -11,12 +11,11 @@ import time
 from pathlib import Path
 
 import action_types
-import charms.operator_libs_linux.v0.apt as apt
 import charms.operator_libs_linux.v1.systemd as systemd
-import charms.operator_libs_linux.v2.snap as snap
 import config_types
 import jinja2
 import ops
+from charmlibs import apt, snap
 from ops.framework import StoredState
 from systemd_helper import SystemdHelper
 
