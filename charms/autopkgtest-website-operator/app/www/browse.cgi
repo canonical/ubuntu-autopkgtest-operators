@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Browse autopkgtest results"""
+"""Browse autopkgtest results."""
 
 import gzip
 import json
@@ -142,11 +142,10 @@ def human_exitcode(code):
 
 
 def get_queues_info():
-    """Return information about queued tests
+    """Return information about queued tests.
 
     Return (releases, arches, context -> release -> arch -> (queue_size, [requests])).
     """
-
     with open(CONFIG["amqp_queue_cache"], "r") as json_file:
         queue_info_j = json.load(json_file)
 
@@ -439,7 +438,9 @@ def load_ppa_cache():
 
 
 def get_container_ppa_name(user: str, container: str) -> str:
-    """Given a username and a swift container name, try to return
+    """Given username and swift container name, get PPA name.
+
+    Given a username and a swift container name, try to return
     the name of the ppa. Swift container names for PPA results follow
     the format autopkgtest-<series>-<username>-<ppa_name>.
 
@@ -457,7 +458,8 @@ def get_container_ppa_name(user: str, container: str) -> str:
 
 @app.route("/user/<user>/")
 def user_overview(user):
-    """
+    """Provide per-user view of autopkgtest results.
+
     This endpoint provides a "per-user" view for autopkgtest-cloud.
     It shows a page, much like the package/release/arch pages,
     except all of the queued, running and historical results are
@@ -592,13 +594,13 @@ def list_ppa_runs(user, ppa):
 @app.route("/recent")
 @app.route("/api/experimental/recent.json")
 def recent():
-    """
+    """Provide recent results.
+
     This endpoint provides recent results where recent means that the test is
     among the last limit results (default = 100 and 0 < limit <= 10000).
     The page includes details such as version, triggers, requester, result,
     log, ...
     """
-
     args = flask.request.args
     try:
         limit = int(args.get("limit", 100))

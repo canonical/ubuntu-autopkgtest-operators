@@ -13,8 +13,7 @@ def parse_lxd_time(s):
 
 
 def main():
-    """Clean stale LXD instances"""
-
+    """Clean stale LXD instances."""
     print(f"Deleting instances older than {MAX_AGE_HOURS} hours")
 
     now = datetime.datetime.now(datetime.timezone.utc)

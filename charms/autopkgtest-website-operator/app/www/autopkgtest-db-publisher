@@ -1,5 +1,6 @@
 #!/usr/bin/python3
-"""
+"""Generate database for publication.
+
 download/read Sources.gz for all known releases and write them into
 a copy of autopkgtest.db, which is then published to the public location.
 This is being used for statistics, and is used by britney and other
@@ -24,7 +25,7 @@ COMPONENTS = ["main", "restricted", "universe", "multiverse"]
 
 
 def publish_db(path, path_current):
-    """Generate database to publish"""
+    """Generate database to publish."""
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path)
     db_live = db_connect_readonly()

@@ -1,6 +1,4 @@
-"""
-utilities for autopkgtest-web webcontrol
-"""
+"""utilities for autopkgtest-web webcontrol."""
 
 import configparser
 import logging
@@ -19,9 +17,10 @@ sqlite3.paramstyle = "named"
 
 
 def read_config_file(filepath: typing.Union[str, pathlib.Path], cfg_key: str = None):
-    """
+    """Read a given config file.
+
     Reads a given config file, whether it be a key=value env file or
-    properly formatted config file
+    properly formatted config file.
 
     :param filepath:
         Path to config file. Can be a string or pathlib.Path
@@ -70,8 +69,7 @@ def get_autopkgtest_cloud_conf():
 
 
 def get_stats_cache():
-    """Return path object representing the location of the autopkgtest
-    stats cache.
+    """Return path of the the autopkgtest stats cache.
 
     :return path: ``pathlib.Path``
     """
@@ -79,8 +77,7 @@ def get_stats_cache():
 
 
 def get_ppa_containers_cache():
-    """Return path object representing the location of the ppa
-    containers cache.
+    """Return path of the of the ppa containers cache.
 
     :return path: ``pathlib.Path``
     """
@@ -90,7 +87,7 @@ def get_ppa_containers_cache():
 
 
 def get_release_arches(db_con):
-    """Determine available releases and architectures
+    """Determine available releases and architectures.
 
     :param db_con:
         sqlite3 connection to autopkgtest db
@@ -116,7 +113,7 @@ def get_release_arches(db_con):
 
 
 def get_source_versions(db_con, release):
-    """Get latest version of packages for given release
+    """Get latest version of packages for given release.
 
     :param db_con:
         sqlite3 connection for autopkgtest db
@@ -126,7 +123,6 @@ def get_source_versions(db_con, release):
     :type release: ``str``
     :return ``dict(package -> version)``:
     """
-
     srcs = {}
     for pkg, ver in db_con.execute(
         "SELECT package, version FROM current_version WHERE release = ?",
@@ -148,7 +144,7 @@ def get_github_context(params: typing.Dict[str, str]) -> str:
 
 
 def srchash(src: str) -> str:
-    """Get srchash of package name
+    """Get srchash of package name.
 
     :param src:
         package name
@@ -178,8 +174,7 @@ def setup_key(app, path):
 
 
 def amqp_connect():
-    """Connect to AMQP server"""
-
+    """Connect to AMQP server."""
     cp = get_autopkgtest_cloud_conf()
     amqp_uri = cp["amqp"]["uri"]
     parts = urllib.parse.urlsplit(amqp_uri, allow_fragments=False)
@@ -198,7 +193,7 @@ def amqp_connect():
 
 
 def db_connect_readonly():
-    """Get connection to autopkgtest db from config
+    """Get connection to autopkgtest db from config.
 
     :return conn: ``sqlite3.Connection``
     """
@@ -210,9 +205,7 @@ def db_connect_readonly():
 
 
 def swift_connect() -> swiftclient.Connection:
-    """
-    Establish connection to swift storage
-    """
+    """Establish connection to swift storage."""
     try:
         config = get_autopkgtest_cloud_conf()
         swift_creds = {

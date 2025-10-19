@@ -149,8 +149,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             sourceslist.write_text("\n".join(new_sources) + "\n")
 
     def get_releases(self) -> List[str]:
-        """Return all releases to build images for"""
-
+        """Return all releases to build images for."""
         # we can't do a top-level import because it's the charm itself that
         # installs python3-distro-info.
         import distro_info
@@ -165,8 +164,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         return all_releases
 
     def set_limits(self, arch: str) -> None:
-        """Set instance limits"""
-
+        """Set instance limits."""
         remote = f"worker-{arch}"
         max_containers = self.typed_config.max_containers
         max_vms = self.typed_config.max_virtual_machines
@@ -239,8 +237,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
     # action helpers
 
     def disable_image_builders(self, arch, releases):
-        """Disable image builders"""
-
+        """Disable image builders."""
         # We don't try to be smart here hoping to have a good representation
         # of the state of the units. We just query for existing matching units
         # and stop/disable all of them.
@@ -301,7 +298,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             systemd.service_start(*services)
 
     def _on_add_worker(self, event: ops.ActionEvent):
-        """Handle adding a new worker"""
+        """Handle adding a new worker."""
         params = event.load_params(action_types.AddWorkerAction, errors="fail")
         arch = params.arch
         token = params.token
@@ -344,7 +341,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         event.set_results({"result": f"Added worker for {arch}"})
 
     def _on_remove_worker(self, event: ops.ActionEvent):
-        """Handle removing a worker"""
+        """Handle removing a worker."""
         params = event.load_params(action_types.RemoveWorkerAction, errors="fail")
         arch = params.arch
 
@@ -354,14 +351,12 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             self._stored.workers.remove(arch)
 
     def _on_reconfigure(self, event: ops.ActionEvent):
-        """Reconfigure"""
-
+        """Reconfigure."""
         self.unit.status = ops.MaintenanceStatus("reconfiguring")
         self.on.config_changed.emit()
 
     def _on_rebuild_all_images(self, event: ops.ActionEvent):
-        """Rebuild all images"""
-
+        """Rebuild all images."""
         out = subprocess.run(
             [
                 "systemctl",

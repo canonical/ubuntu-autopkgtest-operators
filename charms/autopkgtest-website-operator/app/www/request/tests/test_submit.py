@@ -1,4 +1,4 @@
-"""Submit Tests
+"""Submit Tests.
 
 Test all things related verifying input arguments and sending AMQP requests.
 """
@@ -19,7 +19,7 @@ from helpers.exceptions import (
 
 
 class SubmitTestBase(TestCase):
-    """Common setup of tests of Submit class"""
+    """Common setup of tests of Submit class."""
 
     @patch("request.submit.sqlite3")
     @patch(
@@ -59,10 +59,10 @@ class SubmitTestBase(TestCase):
 
 
 class DistroRequestValidationTests(SubmitTestBase):
-    """Test verification of distribution test requests"""
+    """Test verification of distribution test requests."""
 
     def test_init(self):
-        """Read debci configuration"""
+        """Read debci configuration."""
         distro_info = UbuntuDistroInfo()
         releases = set(distro_info.supported() + distro_info.supported_esm())
         releases.add("testy")
@@ -73,22 +73,20 @@ class DistroRequestValidationTests(SubmitTestBase):
         self.assertIn("allowed_requestors", self.submit.config["web"])
 
     def test_bad_release(self):
-        """Unknown release"""
-
+        """Unknown release."""
         with self.assertRaises(WebControlException) as cme:
             self.submit.validate_distro_request("fooly", "C51", "blue", ["ab/1"], "joe")
         self.assertEqual(str(cme.exception), "release fooly not found")
 
     def test_bad_arch(self):
-        """Unknown architecture"""
-
+        """Unknown architecture."""
         with self.assertRaises(WebControlException) as cme:
             self.submit.validate_distro_request("testy", "wut", "blue", ["ab/1"], "joe")
         self.assertEqual(str(cme.exception), "arch wut not found")
 
     @patch("request.submit.urllib.request.urlopen")
     def test_bad_package(self, mock_urlopen):
-        """Unknown package"""
+        """Unknown package."""
         cm = MagicMock()
         cm.__enter__.return_value = cm
         cm.getcode.return_value = 200
@@ -109,8 +107,7 @@ class DistroRequestValidationTests(SubmitTestBase):
         self.assertIn("package badpkg", str(cme.exception))
 
     def test_bad_argument(self):
-        """Unknown argument"""
-
+        """Unknown argument."""
         with self.assertRaises(ValueError) as cme:
             self.submit.validate_distro_request(
                 "testy", "C51", "blue", ["ab/1"], "joe", foo="bar"
@@ -119,7 +116,7 @@ class DistroRequestValidationTests(SubmitTestBase):
 
     @patch("request.submit.urllib.request.urlopen")
     def test_invalid_trigger_syntax(self, mock_urlopen):
-        """Invalid syntax in trigger"""
+        """Invalid syntax in trigger."""
         cm = MagicMock()
         cm.__enter__.return_value = cm
         cm.getcode.return_value = 200
@@ -151,8 +148,7 @@ class DistroRequestValidationTests(SubmitTestBase):
         self.assertIn("Malformed trigger", str(cme.exception))
 
     def test_disallowed_testname(self):
-        """testname not allowed for distro tests"""
-
+        """Testname not allowed for distro tests."""
         # we only allow this for GitHub requests; with distro requests it would
         # be cheating as proposed-migration would consider those
         with self.assertRaises(ValueError) as cme:
@@ -163,8 +159,7 @@ class DistroRequestValidationTests(SubmitTestBase):
 
     @patch("request.submit.urllib.request.urlopen")
     def test_ppa(self, mock_urlopen):
-        """PPA does not exist"""
-
+        """PPA does not exist."""
         # invalid name don't even call lp
         with self.assertRaises(WebControlException) as cme:
             self.submit.validate_distro_request(
@@ -214,8 +209,7 @@ class DistroRequestValidationTests(SubmitTestBase):
 
     @patch("request.submit.urllib.request.urlopen")
     def test_nonexisting_trigger(self, mock_urlopen):
-        """Trigger source package/version does not exist"""
-
+        """Trigger source package/version does not exist."""
         # mock Launchpad response: successful form, but no matching
         # source/version
         cm = MagicMock()
@@ -260,8 +254,7 @@ class DistroRequestValidationTests(SubmitTestBase):
 
     @patch("request.submit.urllib.request.urlopen")
     def test_bad_package_ppa(self, mock_urlopen):
-        """Unknown package with a PPA request, assert no exception"""
-
+        """Unknown package with a PPA request, assert no exception."""
         # mock Launchpad response: successful form, but no matching
         # source/version
         cm = MagicMock()
@@ -293,8 +286,7 @@ class DistroRequestValidationTests(SubmitTestBase):
 
     @patch("request.submit.urllib.request.urlopen")
     def test_nonexisting_trigger_ppa(self, mock_urlopen):
-        """Trigger source package/version does not exist in PPA"""
-
+        """Trigger source package/version does not exist in PPA."""
         # mock Launchpad response: successful form, but no matching
         # source/version
         cm = MagicMock()
@@ -327,8 +319,7 @@ class DistroRequestValidationTests(SubmitTestBase):
 
     @patch("request.submit.urllib.request.urlopen")
     def test_no_upload_perm(self, mock_urlopen):
-        """Requester is not allowed to upload package"""
-
+        """Requester is not allowed to upload package."""
         # mock Launchpad response: successful form, matching
         # source/version, upload not allowed
         cm = MagicMock()
@@ -354,8 +345,7 @@ class DistroRequestValidationTests(SubmitTestBase):
 
     @patch("request.submit.urllib.request.urlopen")
     def test_distro_ok(self, mock_urlopen):
-        """Valid distro request is accepted"""
-
+        """Valid distro request is accepted."""
         # mock Launchpad response: successful form, matching
         # source/version, upload allowed
         cm = MagicMock()
@@ -378,8 +368,7 @@ class DistroRequestValidationTests(SubmitTestBase):
 
     @patch("request.submit.urllib.request.urlopen")
     def test_distro_all_proposed(self, mock_urlopen):
-        """Valid distro request with all-proposed is accepted"""
-
+        """Valid distro request with all-proposed is accepted."""
         # mock Launchpad response: successful form, matching
         # source/version, upload allowed
         cm = MagicMock()
@@ -403,8 +392,7 @@ class DistroRequestValidationTests(SubmitTestBase):
         self.assertEqual(mock_urlopen.call_count, 5)
 
     def test_distro_all_proposed_bad_value(self):
-        """Valid distro request with invalid all-proposed value"""
-
+        """Valid distro request with invalid all-proposed value."""
         with self.assertRaises(ValueError) as cme:
             self.submit.validate_distro_request(
                 "testy", "C51", "blue", ["ab/1.2"], "joe", **{"all-proposed": "bogus"}
@@ -413,8 +401,7 @@ class DistroRequestValidationTests(SubmitTestBase):
 
     @patch("request.submit.urllib.request.urlopen")
     def test_validate_distro_whitelisted_team(self, mock_urlopen):
-        """Valid distro request via whitelisted team is accepted"""
-
+        """Valid distro request via whitelisted team is accepted."""
         # mock Launchpad response: successful form, matching
         # source/version, upload allowed
         cm = MagicMock()
@@ -435,8 +422,7 @@ class DistroRequestValidationTests(SubmitTestBase):
 
     @patch("request.submit.urllib.request.urlopen")
     def test_ppa_ok(self, mock_urlopen):
-        """Valid PPA request is accepted"""
-
+        """Valid PPA request is accepted."""
         # mock Launchpad response: successful form, matching
         # source/version, upload allowed
         cm = MagicMock()
@@ -466,8 +452,7 @@ class DistroRequestValidationTests(SubmitTestBase):
 
     @patch("request.submit.Submit.is_test_in_queue")
     def test_already_queued(self, mock_is_test_in_queue):
-        """Test request is rejected if already queued"""
-
+        """Test request is rejected if already queued."""
         is_test_in_queue_cm = MagicMock()
         is_test_in_queue_cm.__enter__.return_value = is_test_in_queue_cm
         is_test_in_queue_cm.is_test_in_queue.side_effect = RequestInQueue(
@@ -486,8 +471,7 @@ class DistroRequestValidationTests(SubmitTestBase):
 
     @patch("request.submit.Submit.is_test_running")
     def test_already_running(self, mock_is_test_running):
-        """Test request is rejected if already running"""
-
+        """Test request is rejected if already running."""
         is_test_running_cm = MagicMock()
         is_test_running_cm.__enter__.return_value = is_test_running_cm
         is_test_running_cm.is_test_running.side_effect = RequestRunning(
@@ -505,9 +489,7 @@ class DistroRequestValidationTests(SubmitTestBase):
         )
 
     def test_migration_reference_all_proposed_combo(self):
-        """
-        Tests when a test request has migration-reference/0 + all-proposed=1 in the request args.
-        """
+        """Tests when a test request has migration-reference/0 + all-proposed=1 in the request args."""
         with self.assertRaises(BadRequest) as cme:
             self.submit.validate_distro_request(
                 "testy",
@@ -524,7 +506,7 @@ class DistroRequestValidationTests(SubmitTestBase):
 
 
 class GitRequestValidationTests(SubmitTestBase):
-    """Test verification of git branch test requests"""
+    """Test verification of git branch test requests."""
 
     def test_bad_release(self):
         with self.assertRaises(WebControlException) as cme:
@@ -580,8 +562,7 @@ class GitRequestValidationTests(SubmitTestBase):
         self.assertIn("bar=1", str(cme.exception))
 
     def test_no_ppa(self):
-        """No PPA"""
-
+        """No PPA."""
         with self.assertRaises(WebControlException) as cme:
             self.submit.validate_git_request(
                 "testy", "C51", "ab", **{"build-git": "https://x.com/proj"}
@@ -638,7 +619,7 @@ class GitRequestValidationTests(SubmitTestBase):
     @patch("request.submit.Submit.is_valid_ppa")
     @patch("request.submit.Submit.is_test_running")
     def test_git_request_running(self, is_valid_ppa, mock_is_test_running):
-        """Test request is rejected if already running"""
+        """Test request is rejected if already running."""
         is_valid_ppa.return_value = True
 
         is_test_running_cm = MagicMock()
@@ -667,7 +648,7 @@ class GitRequestValidationTests(SubmitTestBase):
     @patch("request.submit.Submit.is_valid_ppa")
     @patch("request.submit.Submit.is_test_in_queue")
     def test_git_already_queued(self, is_valid_ppa, mock_is_test_in_queue):
-        """Test request is rejected if already queued"""
+        """Test request is rejected if already queued."""
         is_valid_ppa.return_value = True
 
         is_test_in_queue_cm = MagicMock()
@@ -738,7 +719,7 @@ class GitRequestValidationTests(SubmitTestBase):
 
 
 class SendAMQPTests(SubmitTestBase):
-    """Test test request sending via AMQP"""
+    """Test test request sending via AMQP."""
 
     @patch("request.submit.amqp.Connection")
     @patch("request.submit.amqp.Message")

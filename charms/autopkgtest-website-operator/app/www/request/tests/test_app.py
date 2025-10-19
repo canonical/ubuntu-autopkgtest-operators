@@ -30,7 +30,6 @@ class DistroRequestTests(AppTestBase):
 
     def test_secret_key_persistence(self):
         """Secret key gets saved and loaded between app restarts."""
-
         orig_key = request.app.app.secret_key
         request.app.setup_key(request.app, request.app.secret_path)
         self.assertEqual(request.app.app.secret_key, orig_key)
@@ -580,7 +579,7 @@ SESSION = {}
 
 
 class LoginTests(AppTestBase):
-    """Test OpenID Logins"""
+    """Test OpenID Logins."""
 
     def test_login(self):
         """Ensure correct redirect when initiating login."""

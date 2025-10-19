@@ -2,8 +2,16 @@
 requires-python = ">= 3.10"
 
 [tool.ruff]
-lint.extend-select = ["W", "I", "S", "A", "I", "PLE", "F"]
+lint.extend-select = ["W", "I", "S", "A", "I", "PLE", "F", "D"]
 lint.extend-ignore = [
+    "D203",
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D107",
+    "D213",
     "E722",
     "E741",
     "S101",

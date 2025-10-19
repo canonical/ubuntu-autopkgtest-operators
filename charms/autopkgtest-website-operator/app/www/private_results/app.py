@@ -1,4 +1,4 @@
-"""Test Result Fetcher Flask App"""
+"""Test Result Fetcher Flask App."""
 
 import logging
 import os

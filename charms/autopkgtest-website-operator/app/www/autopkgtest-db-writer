@@ -13,8 +13,7 @@ amqp_con = None
 
 
 def db_connect():
-    """Create DB if it does not exist, and connect to it"""
-
+    """Create DB if it does not exist, and connect to it."""
     cp = get_autopkgtest_cloud_conf()
     db_path = cp["web"]["database"]
     db = sqlite3.connect(db_path)
@@ -135,9 +134,7 @@ def process_message(channel, method, properties, body):
 
 
 def get_test_id(db_con, release, arch, src):
-    """
-    get id of test
-    """
+    """Get id of test."""
     if not get_test_id._cache:
         # prime the cache with all test IDs; much more efficient than doing
         # thousands of individual queries

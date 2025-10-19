@@ -55,15 +55,13 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
 
     def _on_install(self, event: ops.InstallEvent):
         """Install the workload on the machine."""
-
         self.unit.status = ops.MaintenanceStatus("installing website software")
         autopkgtest_website.install()
 
         self._stored.installed = True
 
     def _on_config_changed(self, event: ops.ConfigChangedEvent):
-        """Configure/Reconfigure service"""
-
+        """Configure/Reconfigure service."""
         # If we blocked during install, it may happen that a config_changed
         # event gets processed before we installed. In this case, emit an
         # install event.
@@ -112,7 +110,6 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
 
     def _on_start(self, event: ops.StartEvent):
         """Handle start event."""
-
         if isinstance(self.unit.status, ops.BlockedStatus):
             return
 

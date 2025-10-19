@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Run results app as CGI script"""
+"""Run results app as CGI script."""
 
 from wsgiref.handlers import CGIHandler
 

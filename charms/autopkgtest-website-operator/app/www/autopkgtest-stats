@@ -18,8 +18,7 @@ STAT_PASSRUNS = "passruns"
 
 
 def success_count_for_release_and_arch(db, release, arch, src_versions):
-    """Return number of packages with tests that pass"""
-
+    """Return number of packages with tests that pass."""
     count = 0
 
     # we consider the latest successful run of a package's current version with

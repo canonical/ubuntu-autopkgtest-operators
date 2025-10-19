@@ -57,8 +57,7 @@ PACKAGES = [
 
 
 def install() -> None:
-    """Install website"""
-
+    """Install website."""
     if "JUJU_CHARM_HTTPS_PROXY" in os.environ or "JUJU_CHARM_HTTP_PROXY" in os.environ:
         logger.info("Installing proxy environment file")
         Path("/etc/environment.d").mkdir(exist_ok=True)
@@ -106,7 +105,7 @@ def configure(
     amqp_creds: dict[str, str],
     swift_creds: dict[str, str],
 ) -> None:
-    """Configuring service"""
+    """Configure service."""
     logger.info("Stopping apache2")
     systemd.service_stop("apache2")
 
@@ -197,6 +196,5 @@ def configure(
 
 
 def start() -> None:
-    """Start the workload"""
-
+    """Start the workload."""
     systemd.service_start("apache2")

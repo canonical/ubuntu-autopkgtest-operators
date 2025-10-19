@@ -13,8 +13,7 @@ logging.basicConfig(level=(logging.DEBUG if "DEBUG" in os.environ else logging.I
 
 
 def process_message(body, running_tests):
-    """Process AMQP status message, update running_tests"""
-
+    """Process AMQP status message, update running_tests."""
     if isinstance(body, bytes):
         body = body.decode("UTF-8", errors="replace")
     info = json.loads(body)

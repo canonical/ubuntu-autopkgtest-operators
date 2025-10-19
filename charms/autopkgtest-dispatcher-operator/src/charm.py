@@ -140,7 +140,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         )
 
     def write_rabbitmq_creds(self):
-        """Set rabbitmq creds"""
+        """Set rabbitmq creds."""
         with open(RABBITMQ_CREDS_PATH, "w") as file:
             file.write(
                 textwrap.dedent(
@@ -264,7 +264,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
     # action hooks
 
     def _on_add_worker(self, event: ops.ActionEvent):
-        """Handle adding a new worker"""
+        """Handle adding a new worker."""
         params = event.load_params(action_types.AddWorkerAction, errors="fail")
         worker_arch = params.arch.value
 

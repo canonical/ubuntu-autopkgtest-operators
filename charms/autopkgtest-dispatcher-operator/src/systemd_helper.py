@@ -6,9 +6,7 @@ import charms.operator_libs_linux.v1.systemd as systemd
 
 class SystemdHelper:
     def get_autopkgtest_unit_names(self, arch, ns):
-        """Return the names of the autopkgtest worker unit files
-        for the given arch and requested unit numbers
-        """
+        """Return autopkgtest worker unit filenames for given arch and numbers."""
         return [f"autopkgtest@worker-{arch}-{n}.service" for n in ns]
 
     def list_units_by_pattern(self, pattern):
@@ -43,6 +41,7 @@ class SystemdHelper:
 
     def set_up_systemd_units(self, target_config):
         """Enable requested units and remove unneeded ones.
+
         target_config is a dict which maps arches to number of workers.
         """
         lxd_worker_names = self.get_autopkgtest_units()

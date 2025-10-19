@@ -1,4 +1,4 @@
-"""Logic for verifying and submitting test requests
+"""Logic for verifying and submitting test requests.
 
 Author: Martin Pitt <martin.pitt@ubuntu.com>
 """
@@ -85,7 +85,7 @@ class Submit:
     def validate_distro_request(
         self, release, arch, package, triggers, requester, ppas=[], **kwargs
     ):
-        """Validate package and triggers for a distro test request
+        """Validate package and triggers for a distro test request.
 
         'package' is a single source package name. 'triggers' has the format
         ['sourcepackage/version', ...].
@@ -214,7 +214,7 @@ class Submit:
             raise ForbiddenRequest(package, ",".join(triggers))
 
     def validate_git_request(self, release, arch, package, ppas=[], env=[], **kwargs):
-        """Validate parameters for an upstream git test request
+        """Validate parameters for an upstream git test request.
 
         Supported kwargs:
         - 'build-git' is the URL of the branch to test
@@ -268,8 +268,7 @@ class Submit:
             raise BadRequest("Unsupported arguments: %s" % " ".join(unsupported_keys))
 
     def unsend_amqp_request(self, release, arch, package, context=None, **params):
-        """Remove an autopkgtest AMQP request"""
-
+        """Remove an autopkgtest AMQP request."""
         if context:
             queue = "debci-%s-%s-%s" % (context, release, arch)
         else:
@@ -297,8 +296,7 @@ class Submit:
         return count
 
     def send_amqp_request(self, release, arch, package, context=None, **params):
-        """Send autopkgtest AMQP request"""
-
+        """Send autopkgtest AMQP request."""
         if context:
             queue = "debci-%s-%s-%s" % (context, release, arch)
         else:
@@ -371,7 +369,7 @@ class Submit:
     #
 
     def is_valid_ppa(self, ppa):
-        """Check if a ppa exists"""
+        """Check if a ppa exists."""
         team, _, name = ppa.partition("/")
         if not NAME.match(team) or not NAME.match(name):
             return None
@@ -393,7 +391,7 @@ class Submit:
             return True
 
     def is_valid_package_with_results(self, release, arch, package):
-        """Check if package exists and has any results on that release+arch
+        """Check if package exists and has any results on that release+arch.
 
         Use this for validating *tested* packages (not triggers, as they don't
         necessarily have tests themselves).
@@ -412,7 +410,7 @@ class Submit:
         return c.fetchone()[0] > 0
 
     def is_valid_package_version(self, release, package, version, ppa=None):
-        """Check if package/version exists in the given release
+        """Check if package/version exists in the given release.
 
         Use this for validating trigger packages. This queries the Launchpad
         REST API. Check given ppa (team/name), or the main Ubuntu archive if
@@ -452,8 +450,7 @@ class Submit:
             return None
 
     def can_upload(self, person, release, component, package):
-        """Check if person can upload package into Ubuntu release"""
-
+        """Check if person can upload package into Ubuntu release."""
         # https://launchpad.net/+apidoc/1.0.html#archive-checkUpload
         (code, response) = self.lp_request(
             "ubuntu/+archive/primary",
@@ -478,7 +475,7 @@ class Submit:
         return code >= 200 and code < 300
 
     def in_allowed_team(self, person):
-        """Check if person is allowed to queue tests"""
+        """Check if person is allowed to queue tests."""
         cached_entry = self.allowed_user_cache.get(person)
         if cached_entry is not None:
             cached_entry = datetime.fromtimestamp(float(cached_entry))
@@ -502,7 +499,7 @@ class Submit:
 
     @classmethod
     def lp_request(cls, obj, query):
-        """Do a Launchpad REST request
+        """Do a Launchpad REST request.
 
         Request https://api.launchpad.net/1.0/<obj>?<query>.
 

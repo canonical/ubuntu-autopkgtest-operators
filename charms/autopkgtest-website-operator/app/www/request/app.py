@@ -1,4 +1,4 @@
-"""Test Request Flask App"""
+"""Test Request Flask App."""
 
 import hmac
 import json
@@ -88,7 +88,7 @@ def check_github_sig(request):
 
 
 def invalid(inv_exception, code=400):
-    """Return message and HTTP error code for an invalid request and log it"""
+    """Return message and HTTP error code for an invalid request and log it."""
     if "nickname" in session:
         html = LOGOUT.format(**session)
     else:
@@ -108,17 +108,18 @@ def invalid(inv_exception, code=400):
 
 
 def maybe_escape(value):
-    """Escape the value if it is True-ish"""
+    """Escape the value if it is True-ish."""
     return _escape(value) if value else value
 
 
 def get_api_keys():
-    """
+    """Get API keys.
+
     API keys is a json file like this:
     {
         "user1": "user1s-apikey",
         "user2": "user2s-apikey",
-    }
+    }.
     """
     try:
         api_keys = json.loads(

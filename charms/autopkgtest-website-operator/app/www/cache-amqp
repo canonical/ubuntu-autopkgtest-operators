@@ -33,11 +33,10 @@ class AutopkgtestQueueContents:
 
     @property
     def release_arches(self):
-        """Determine available releases and architectures
+        """Determine available releases and architectures.
 
         Return release → [arch] dict.
         """
-
         db_con = sqlite3.connect("file:%s?mode=ro" % self.database, uri=True)
 
         release_arches = {}
@@ -52,8 +51,7 @@ class AutopkgtestQueueContents:
         return release_arches
 
     def get_queue_requests(self, queue_name):
-        """Return list of pending requests in AMQP queue"""
-
+        """Return list of pending requests in AMQP queue."""
         delivery_tags = []
         requests = []
 
@@ -96,8 +94,7 @@ class AutopkgtestQueueContents:
         return res
 
     def get_queue_contents(self):
-        """Get queue contents from AMQP and cache them on disk"""
-
+        """Get queue contents from AMQP and cache them on disk."""
         release_arches = self.release_arches
         all_arches = set()
 

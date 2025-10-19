@@ -1,6 +1,4 @@
-"""
-Configuration file for the Sphinx documentation builder.
-"""
+"""Configuration file for the Sphinx documentation builder."""
 # pylint: disable=redefined-builtin
 #
 # This file only contains a selection of the most common options. For a full

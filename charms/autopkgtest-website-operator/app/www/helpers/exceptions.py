@@ -1,6 +1,4 @@
-"""
-Http exceptions for autopkgtest-web
-"""
+"""Http exceptions for autopkgtest-web."""
 
 EXAMPLE_URL = (
     "https://autopkgtest.ubuntu.com/request.cgi/?"
