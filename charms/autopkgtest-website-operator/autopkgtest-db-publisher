@@ -16,23 +16,23 @@ import urllib.request
 from pathlib import Path
 
 import apt_pkg
-from helpers.utils import get_autopkgtest_cloud_conf
+from helpers.utils import db_connect_readonly, get_autopkgtest_cloud_conf
 
 sqlite3.paramstyle = "named"
 
 COMPONENTS = ["main", "restricted", "universe", "multiverse"]
 
 
-def publish_db(path, path_current, path_rw):
+def publish_db(path, path_current):
     """Generate database to publish"""
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path)
-    db_rw = sqlite3.connect("file:%s?mode=ro" % path_rw, uri=True)
+    db_live = db_connect_readonly()
 
-    logging.info(f"backing up {path_rw} to {path}")
+    logging.info(f"backing up database to {path}")
     with db:
-        db_rw.backup(db)
-    db_rw.close()
+        db_live.backup(db)
+    db_live.close()
 
     db.execute("PRAGMA journal_mode = MEMORY")
     db.execute("ATTACH DATABASE ? AS current", (path_current,))
@@ -192,7 +192,7 @@ if __name__ == "__main__":
         os.unlink(target_new)
     except FileNotFoundError:
         pass
-    db_con = publish_db(target_new, target, config["web"]["database"])
+    db_con = publish_db(target_new, target)
 
     for row in db_con.execute("SELECT DISTINCT release FROM test"):
         get_sources(db_con, row[0], archive_url)
