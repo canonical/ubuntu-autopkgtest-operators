@@ -173,11 +173,12 @@ def process_output_dir(
     # display the result.
     if (code not in SUCCESS_CODES) and "testpkg-version" not in files:
         logging.warning(
-            'Code %d returned and no testpkg-version - returning "unknown" for %s'
-            % (code, pkgname)
+            'Code %d returned and no testpkg-version - returning "unknown" for %s',
+            code,
+            pkgname,
         )
         with open(os.path.join(directory, "testpkg-version"), "w") as testpkg_version:
-            testpkg_version.write("%s unknown" % pkgname)
+            testpkg_version.write(f"{pkgname} unknown")
         files.add("testpkg-version")
         # we might need to fake testinfo.json up too, depending on how
         # autopkgtest failed. britney uses this to associate results with
@@ -186,7 +187,7 @@ def process_output_dir(
             logging.warning("...testinfo.json is missing too, faking one up")
             triggers = " ".join(triggers)
             with open(os.path.join(directory, "testinfo.json"), "w") as testinfo:
-                d = {"custom_environment": ["ADT_TEST_TRIGGERS=%s" % triggers]}
+                d = {"custom_environment": [f"ADT_TEST_TRIGGERS={triggers}"]}
                 json.dump(d, testinfo, indent=True)
             files.add("testinfo.json")
 
@@ -340,7 +341,7 @@ def send_status_info(
                     pass
                 logtail += f.read().decode("UTF-8", errors="replace")
         except OSError as e:
-            logtail += "\nError reading log file: %s" % e
+            logtail += f"\nError reading log file: {e}"
 
     msg = json.dumps(
         {
@@ -437,7 +438,7 @@ def log_contents(out_dir):
         ) as f:
             return f.read()
     except OSError as e:
-        logging.error("Could not read log file: %s" % str(e))
+        logging.error(f"Could not read log file: {str(e)}")
         return ""
 
 
@@ -462,7 +463,7 @@ def request(channel, method, properties, body):
     elif len(fields) == 3:
         release, architecture = fields[1:3]
     else:
-        raise NotImplementedError("cannot parse queue name %s" % method.routing_key)
+        raise NotImplementedError(f"cannot parse queue name {method.routing_key}")
 
     systemd_logging_handler._extra["ADT_RELEASE"] = release
     systemd_logging_handler._extra["ADT_ARCH"] = architecture
@@ -561,14 +562,14 @@ def request(channel, method, properties, body):
             if "triggers" in params:
                 triggers = " ".join(params["triggers"])
                 with open(os.path.join(out_dir, "testinfo.json"), "w") as testinfo:
-                    d = {"custom_environment": ["ADT_TEST_TRIGGERS=%s" % triggers]}
+                    d = {"custom_environment": [f"ADT_TEST_TRIGGERS={triggers}"]}
                     json.dump(d, testinfo, indent=True)
 
             # and the testpackage version (pkgname blacklisted)
             # XXX: replace "blacklisted" here, but needs changes in
             # proposed-migration and hints
             with open(os.path.join(out_dir, "testpkg-version"), "w") as testpkg_version:
-                testpkg_version.write("%s blacklisted" % pkgname)
+                testpkg_version.write(f"{pkgname} blacklisted")
 
         container = "autopkgtest-" + release
         big_pkg = request_matches_per_package(
@@ -633,16 +634,12 @@ def request(channel, method, properties, body):
                     )
                     return
                 logging.debug(
-                    "Request states that PPA user '%s', name '%s' has GPG fingerprint '%s'"
-                    % (ppauser, ppaname, fingerprint)
+                    f"Request states that PPA user '{ppauser}', name '{ppaname}' has GPG fingerprint '{fingerprint}'"
                 )
                 if ppacreds_user:
                     # Any run with at least one private PPA needs to be private.
                     private = True
-                    ppaprefix = "%s:%s@" % (
-                        ppacreds_user,
-                        ppacreds_pass,
-                    )
+                    ppaprefix = f"{ppacreds_user}:{ppacreds_pass}@"
                 else:
                     ppaprefix = ""
                 if fingerprint:
@@ -654,7 +651,7 @@ def request(channel, method, properties, body):
                 ]
 
             # put results into separate container, named by the last PPA
-            container += "-%s-%s" % (ppauser, ppaname)
+            container += f"-{ppauser}-{ppaname}"
 
         # only install the triggering package from -proposed, rest from -release
         # this provides better isolation between -proposed packages; but only do
@@ -713,15 +710,15 @@ def request(channel, method, properties, body):
             argv.append(f"--timeout-build={timeout_long}")
 
         for e in params.get("env", []):
-            argv.append("--env=%s" % e)
+            argv.append(f"--env={e}")
 
         triggers = None
         if "triggers" in params:
             triggers = " ".join(params["triggers"])
-            argv.append("--env=ADT_TEST_TRIGGERS=%s" % triggers)
+            argv.append(f"--env=ADT_TEST_TRIGGERS={triggers}")
 
         if "testname" in params:
-            argv.append("--testname=%s" % params["testname"])
+            argv.append("--testname={}".format(params["testname"]))
 
         argv.append("--")
         argv += subst(
@@ -752,7 +749,7 @@ def request(channel, method, properties, body):
         if private:
             container = f"private-{container}"
 
-        logging.info("Acknowledging request %s" % body)
+        logging.info(f"Acknowledging request {body}")
         channel.basic_ack(delivery_tag=method.delivery_tag)
 
         # run autopkgtest
@@ -779,20 +776,20 @@ def request(channel, method, properties, body):
             logging.error("autopkgtest exited with unexpected error code 1")
             sys.exit(1)
         with open(os.path.join(out_dir, "exitcode"), "w") as f:
-            f.write("%i\n" % code)
+            f.write("%i\n" % code)  # noqa: UP031
         with open(os.path.join(out_dir, "duration"), "w") as f:
-            f.write("%u\n" % duration)
+            f.write("%u\n" % duration)  # noqa: UP031
 
         if "requester" in params:
             with open(os.path.join(out_dir, "requester"), "w") as f:
-                f.write("%s\n" % params["requester"])
+                f.write("{}\n".format(params["requester"]))
 
         if "readable-by" in params:
             with open(os.path.join(out_dir, "readable-by"), "w") as f:
                 if isinstance(params["readable-by"], list):
                     f.write("\n".join(params["readable-by"]))
                 else:
-                    f.write("%s\n" % params["readable-by"])
+                    f.write("{}\n".format(params["readable-by"]))
 
         # List of key=value strings to be sent as a rabbitmq msg
         # These variables are optional additional parameters users
@@ -815,7 +812,7 @@ def request(channel, method, properties, body):
         # same second, we get collisions with just the timestamp; disambiguate with
         # the hashed params. We append a '@' which is a nice delimiter for querying
         # runs in swift.
-        run_id = "%s_%s@" % (
+        run_id = "{}_{}@".format(
             time.strftime("%Y%m%d_%H%M%S", time.gmtime()),
             hashlib.sha1(body.encode("UTF-8")).hexdigest()[:5],
         )
@@ -840,7 +837,9 @@ def request(channel, method, properties, body):
                     # private result, share only with swiftuser
                     swift_con.put_container(
                         container,
-                        headers={"X-Container-Read": "*:%s" % params["swiftuser"]},
+                        headers={
+                            "X-Container-Read": "*:{}".format(params["swiftuser"])
+                        },
                     )
                 else:
                     # make it publicly readable
@@ -899,8 +898,7 @@ def request(channel, method, properties, body):
                         except Exception as e:
                             if retry > 0:
                                 logging.info(
-                                    "Failed to upload %s to swift (%s), retrying in %s seconds..."
-                                    % (path, str(e), sleep_time)
+                                    f"Failed to upload {path} to swift ({str(e)}), retrying in {sleep_time} seconds..."
                                 )
                                 time.sleep(sleep_time)
                                 sleep_time *= 2
@@ -989,7 +987,7 @@ def amqp_queues_channel():
 
     for release in cfg.get("autopkgtest", "releases").split():
         for context in contexts:
-            queue_name = "debci-%s%s-%s" % (context, release, arch)
+            queue_name = f"debci-{context}{release}-{arch}"
             queues.append(queue_name)
 
     random.shuffle(queues)
@@ -1087,5 +1085,5 @@ def main():
 if __name__ == "__main__":
     main()
     if exit_requested:
-        logging.info("Exiting with %i due to queued exit request" % exit_requested)
+        logging.info("Exiting with %i due to queued exit request", exit_requested)
         sys.exit(exit_requested)

@@ -95,9 +95,7 @@ def invalid(inv_exception, code=400):
         html = ""
     message = str(inv_exception)
     if "\n" not in message:
-        html += "<p>You submitted an invalid request: %s</p>" % maybe_escape(
-            str(message)
-        )
+        html += f"<p>You submitted an invalid request: {maybe_escape(str(message))}</p>"
     else:
         html += "<p>You submitted an invalid request: </p>"
         list_of_messages = message.split("\n")
@@ -199,14 +197,15 @@ def index_root():
         github_params = request.get_json()
         if github_params.get("action") not in ["opened", "synchronize"]:
             return HTML.format(
-                "<p>GitHub PR action %s is not relevant for testing</p>"
-                % github_params.get("action", "<none>")
+                "<p>GitHub PR action {} is not relevant for testing</p>".format(
+                    github_params.get("action", "<none>")
+                )
             )
 
         s = Submit()
         try:
             params.setdefault("env", []).append(
-                "UPSTREAM_PULL_REQUEST=%i" % int(github_params["number"])
+                "UPSTREAM_PULL_REQUEST=%i" % int(github_params["number"])  # noqa: UP031
             )
             statuses_url = github_params["pull_request"]["statuses_url"]
             params["env"].append("GITHUB_STATUSES_URL=" + statuses_url)
@@ -214,7 +213,7 @@ def index_root():
             # support autopkgtests in upstream repos, set build-git URL to the
             # PR clone URL if not given
             if "build-git" not in params:
-                params["build-git"] = "%s#refs/pull/%s/head" % (
+                params["build-git"] = "{}#refs/pull/{}/head".format(
                     github_params["pull_request"]["base"]["repo"]["clone_url"],
                     github_params["number"],
                 )
@@ -222,7 +221,7 @@ def index_root():
         except WebControlException as e:
             return invalid(e, e.exit_code())
         except KeyError as e:
-            return invalid("Missing field in JSON data: %s" % e)
+            return invalid(f"Missing field in JSON data: {e}")
 
         s.send_amqp_request(context="upstream", **params)
         # write status file for pending test
@@ -231,8 +230,7 @@ def index_root():
             os.path.join(
                 PATH,
                 "github-pending",
-                "%s-%s-%s-%s-%s-%s"
-                % (
+                "{}-{}-{}-{}-{}-{}".format(
                     params["release"],
                     params["arch"],
                     params["package"],
@@ -357,9 +355,12 @@ def all_exception_handler(error):
         return (
             HTML.format(
                 (
-                    "<p>A server error has occurred. Traceback:</p> <pre>%s</pre>"
-                    % "\n".join(
-                        traceback.format_exception(exc_type, exc_value, exc_traceback)
+                    "<p>A server error has occurred. Traceback:</p> <pre>{}</pre>".format(
+                        "\n".join(
+                            traceback.format_exception(
+                                exc_type, exc_value, exc_traceback
+                            )
+                        )
                     )
                 ),
             ),

@@ -47,7 +47,7 @@ def swift_get_object(connection, container, path):
     try:
         _, contents = connection.get_object(container, path)
     except swiftclient.exceptions.ClientException as e:
-        logging.error("Failed to fetch %s from container (%s)" % (path, str(e)))
+        logging.error(f"Failed to fetch {path} from container ({str(e)})")
         return None
     return contents
 
@@ -65,9 +65,9 @@ def validate_user_path(connection, container, nick, path):
         return True
     # Check if user is allowed via team membership
     for entity in allowed:
-        (code, response) = Submit.lp_request("~%s/participants" % entity, {})
+        (code, response) = Submit.lp_request(f"~{entity}/participants", {})
         if code != 200:
-            logging.error("Unable to validate user %s (%s)" % (nick, code))
+            logging.error(f"Unable to validate user {nick} ({code})")
             return False
         for e in response.get("entries", []):
             if e.get("name") == nick:

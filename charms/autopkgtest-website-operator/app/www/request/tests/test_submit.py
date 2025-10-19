@@ -729,7 +729,7 @@ class SendAMQPTests(SubmitTestBase):
     )
     def test_valid_request(self, message_con, mock_con):
         # mostly a passthrough, but ensure that we do wrap the string in Message()
-        message_con.side_effect = lambda x, **kwargs: ">%s<" % x
+        message_con.side_effect = lambda x, **kwargs: f">{x}<"
 
         self.submit.send_amqp_request(
             "testy",
@@ -756,7 +756,7 @@ class SendAMQPTests(SubmitTestBase):
 @patch("request.submit.amqp.Message")
 def test_valid_request_context(self, message_con, mock_con):
     # mostly a passthrough, but ensure that we do wrap the string in Message()
-    message_con.side_effect = lambda x: ">%s<" % x
+    message_con.side_effect = lambda x: f">{x}<"
 
     self.submit.send_amqp_request(
         "testy",

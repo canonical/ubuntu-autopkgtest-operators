@@ -50,12 +50,12 @@ class Submit:
 
         # read valid releases and architectures from DB
         self.db_con = sqlite3.connect(
-            "file:%s?mode=ro" % self.config["web"]["database_ro"], uri=True
+            "file:{}?mode=ro".format(self.config["web"]["database_ro"]), uri=True
         )
         self.releases = set(
             UbuntuDistroInfo().supported() + UbuntuDistroInfo().supported_esm()
         )
-        logging.debug("Valid releases: %s" % self.releases)
+        logging.debug(f"Valid releases: {self.releases}")
 
         self.architectures = set()
         c = self.db_con.cursor()
@@ -65,7 +65,7 @@ class Submit:
             if row is None:
                 break
             self.architectures.add(row[0])
-        logging.debug("Valid architectures: %s" % self.architectures)
+        logging.debug(f"Valid architectures: {self.architectures}")
 
         self.allowed_user_cache = KeyValueCache("/dev/shm/autopkgtest_users.json")
 
@@ -121,7 +121,7 @@ class Submit:
             pass
         # no other kwargs supported
         if kwargs:
-            raise ValueError("Invalid argument %s" % list(kwargs)[0])
+            raise ValueError(f"Invalid argument {list(kwargs)[0]}")
 
         if release not in self.releases:
             raise NotFound("release", release)
@@ -158,9 +158,7 @@ class Submit:
                 raise BadRequest("Malformed trigger, must be srcpackage/version") from e
             # Debian Policy 5.6.1 and 5.6.12
             if not NAME.match(trigsrc) or not VERSION.match(trigver):
-                raise BadRequest(
-                    "Malformed trigger: %s\nversion: %s" % (trigsrc, trigver)
-                )
+                raise BadRequest(f"Malformed trigger: {trigsrc}\nversion: {trigver}")
 
             # The raspi kernel can't be tested with autopkgtest. It doesn't
             # support EFI and won't boot in OpenStack.
@@ -176,8 +174,7 @@ class Submit:
                     release, trigsrc, trigver, ppas and ppas[-1] or None
                 ):
                     raise BadRequest(
-                        "%s is not published in PPA %s %s"
-                        % (trigger, ppas[-1], release)
+                        f"{trigger} is not published in PPA {ppas[-1]} {release}"
                     )
                 # PPAs don't have components, so we need to determine it from the
                 # Ubuntu archive
@@ -189,7 +186,7 @@ class Submit:
                     release, trigsrc, trigver
                 )
                 if not trigsrc_component:
-                    raise BadRequest("%s is not published in %s" % (trigger, release))
+                    raise BadRequest(f"{trigger} is not published in {release}")
 
             can_upload_any_trigger = can_upload_any_trigger or self.can_upload(
                 requester, release, trigsrc_component, trigsrc
@@ -202,7 +199,7 @@ class Submit:
         else:
             package_component = self.is_valid_package_version(release, package, None)
             if not package_component:
-                raise BadRequest("%s is not published in %s" % (package, release))
+                raise BadRequest(f"{package} is not published in {release}")
 
         # verify that requester can upload package or trigsrc
         if (
@@ -255,7 +252,7 @@ class Submit:
                 raise NotFound("ppa", ppa)
         for e in env:
             if not ENV.match(e):
-                raise BadRequest('Invalid environment variable format "%s"' % e)
+                raise BadRequest(f'Invalid environment variable format "{e}"')
         # we should only be called in this mode
         assert "build-git" in kwargs
         if not GIT.match(kwargs["build-git"]):
@@ -265,14 +262,16 @@ class Submit:
 
         unsupported_keys = set(kwargs.keys()) - {"build-git", "testname"}
         if unsupported_keys:
-            raise BadRequest("Unsupported arguments: %s" % " ".join(unsupported_keys))
+            raise BadRequest(
+                "Unsupported arguments: {}".format(" ".join(unsupported_keys))
+            )
 
     def unsend_amqp_request(self, release, arch, package, context=None, **params):
         """Remove an autopkgtest AMQP request."""
         if context:
-            queue = "debci-%s-%s-%s" % (context, release, arch)
+            queue = f"debci-{context}-{release}-{arch}"
         else:
-            queue = "debci-%s-%s" % (release, arch)
+            queue = f"debci-{release}-{arch}"
 
         count = 0
 
@@ -298,15 +297,15 @@ class Submit:
     def send_amqp_request(self, release, arch, package, context=None, **params):
         """Send autopkgtest AMQP request."""
         if context:
-            queue = "debci-%s-%s-%s" % (context, release, arch)
+            queue = f"debci-{context}-{release}-{arch}"
         else:
-            queue = "debci-%s-%s" % (release, arch)
+            queue = f"debci-{release}-{arch}"
 
         params["submit-time"] = datetime.strftime(
             datetime.now().astimezone(UTC), "%Y-%m-%d %H:%M:%S%z"
         )
         params["uuid"] = str(uuid.uuid4())
-        body = "%s\n%s" % (package, json.dumps(params, sort_keys=True))
+        body = f"{package}\n{json.dumps(params, sort_keys=True)}"
         with amqp_connect() as amqp_con:
             with amqp_con.channel() as ch:
                 ch.basic_publish(
@@ -352,8 +351,7 @@ class Submit:
             data=json.dumps(data).encode("UTF-8"),
             headers={
                 "Content-Type": "application/json",
-                "Authorization": "Basic %s"
-                % base64.b64encode(credentials.encode()).decode(),
+                "Authorization": f"Basic {base64.b64encode(credentials.encode()).decode()}",
             },
         )
         with urllib.request.urlopen(req) as f:
@@ -421,7 +419,7 @@ class Submit:
         # https://launchpad.net/+apidoc/1.0.html#archive-getPublishedSources
         if ppa:
             team, name = ppa.split("/")
-            obj = "~%s/+archive/ubuntu/%s" % (team, name)
+            obj = f"~{team}/+archive/ubuntu/{name}"
         else:
             obj = "ubuntu/+archive/primary"
         req = {
@@ -488,7 +486,7 @@ class Submit:
         # In the case someone is in more than 300 teams, and the first
         # 300 teams are alphabetically before "autopkgtest-requestors",
         # the following will fail.
-        _, response = self.lp_request("~%s/super_teams?ws.size=300" % person, {})
+        _, response = self.lp_request(f"~{person}/super_teams?ws.size=300", {})
         entries = response.get("entries")
         for e in entries:
             for team in self.config["web"]["allowed_requestors"].split(","):

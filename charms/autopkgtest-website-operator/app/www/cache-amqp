@@ -37,7 +37,7 @@ class AutopkgtestQueueContents:
 
         Return release → [arch] dict.
         """
-        db_con = sqlite3.connect("file:%s?mode=ro" % self.database, uri=True)
+        db_con = sqlite3.connect(f"file:{self.database}?mode=ro", uri=True)
 
         release_arches = {}
         releases = []
@@ -85,7 +85,7 @@ class AutopkgtestQueueContents:
                         r = "private job"
                 else:
                     logging.warning(
-                        "Found malformed request: %s - Marking it as such." % r
+                        f"Found malformed request: {r} - Marking it as such."
                     )
                     r = "malformed request"
                 res.append(r)
@@ -107,13 +107,9 @@ class AutopkgtestQueueContents:
                 for arch in arches:
                     if context == "ubuntu":
                         # ubuntu test requests use context-less name (backwards compatibility)
-                        queue_name = "debci-%s-%s" % (release, arch)
+                        queue_name = f"debci-{release}-{arch}"
                     else:
-                        queue_name = "debci-%s-%s-%s" % (
-                            context,
-                            release,
-                            arch,
-                        )
+                        queue_name = f"debci-{context}-{release}-{arch}"
                     try:
                         requests = self.get_queue_requests(queue_name)
                     except AMQPError:

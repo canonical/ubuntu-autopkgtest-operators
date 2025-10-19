@@ -188,7 +188,7 @@ def main():
     cache_directory.mkdir(parents=True, exist_ok=True)
 
     data = calc_stats()
-    logger.debug("Writing results to %s" % cache_directory)
+    logger.debug(f"Writing results to {cache_directory}")
 
     cache_file = cache_directory / "stats.json"
     cache_file.write_text(json.dumps(data))

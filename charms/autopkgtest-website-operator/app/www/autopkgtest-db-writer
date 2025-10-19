@@ -204,11 +204,11 @@ if __name__ == "__main__":
         exchange_type="fanout",
         durable=True,
     )
-    queue_name = "complete-listener-%s" % socket.getfqdn()
+    queue_name = f"complete-listener-{socket.getfqdn()}"
     status_ch.queue_declare(queue_name, durable=True, auto_delete=False)
     status_ch.queue_bind(queue_name, EXCHANGE_NAME, queue_name)
 
-    logging.info("Listening to requests on %s" % queue_name)
+    logging.info(f"Listening to requests on {queue_name}")
     status_ch.basic_consume(
         queue="",
         on_message_callback=lambda *args: process_message(*args, db_con),

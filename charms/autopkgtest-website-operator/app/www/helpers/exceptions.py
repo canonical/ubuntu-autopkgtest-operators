@@ -24,8 +24,9 @@ class WebControlException(Exception):
 class RequestInQueue(WebControlException):
     def __init__(self, release, package, arch, triggers):
         super().__init__(
-            "Test already queued:\nrelease: %s\npkg: %s\narch: %s\ntriggers: %s"
-            % (release, package, arch, ", ".join(triggers)),
+            "Test already queued:\nrelease: {}\npkg: {}\narch: {}\ntriggers: {}".format(
+                release, package, arch, ", ".join(triggers)
+            ),
             403,
         )
 
@@ -33,8 +34,9 @@ class RequestInQueue(WebControlException):
 class RequestRunning(WebControlException):
     def __init__(self, release, package, arch, triggers):
         super().__init__(
-            "Test already running:\nrelease: %s\npkg: %s\narch: %s\ntriggers: %s"
-            % (release, package, arch, ", ".join(triggers)),
+            "Test already running:\nrelease: {}\npkg: {}\narch: {}\ntriggers: {}".format(
+                release, package, arch, ", ".join(triggers)
+            ),
             403,
         )
 
@@ -68,12 +70,12 @@ class NotFound(WebControlException):
     def __init__(self, element_name, element, msg=None):
         if msg is None:
             super().__init__(
-                "%s %s not found" % (element_name, element),
+                f"{element_name} {element} not found",
                 404,
             )
         else:
             super().__init__(
-                "%s %s %s" % (element_name, element, msg),
+                f"{element_name} {element} {msg}",
                 404,
             )
 
@@ -81,8 +83,7 @@ class NotFound(WebControlException):
 class TooManyRequests(WebControlException):
     def __init__(self, requester):
         super().__init__(
-            "You, %s, have requested too many tests. Please try again later."
-            % requester,
+            f"You, {requester}, have requested too many tests. Please try again later.",
             429,
         )
 
@@ -91,8 +92,9 @@ class InvalidArgs(WebControlException):
     def __init__(self, parameters):
         super().__init__(
             (
-                "You have passed invalid args: %s\nPlease see an example url below:\n%s"
-                % (", ".join(parameters.keys()), EXAMPLE_URL)
+                "You have passed invalid args: {}\nPlease see an example url below:\n{}".format(
+                    ", ".join(parameters.keys()), EXAMPLE_URL
+                )
             ),
             400,
         )

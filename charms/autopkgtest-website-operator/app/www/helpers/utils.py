@@ -39,7 +39,7 @@ def read_config_file(filepath: str | pathlib.Path, cfg_key: str = None):
     else:
         with open(filepath) as fp:
             config.read_string(
-                ("[%s]\n" % cfg_key) + fp.read().replace('"', "")
+                (f"[{cfg_key}]\n") + fp.read().replace('"', "")
             )  # read_string preserves "" quotes
         return config
 
@@ -133,13 +133,13 @@ def get_source_versions(db_con, release):
 
 def get_github_context(params: dict[str, str]) -> str:
     if "testname" in params:
-        return "%s/%s %s" % (
+        return "{}/{} {}".format(
             params["release"],
             params["arch"],
             params["testname"],
         )
     else:
-        return "%s/%s" % (params["release"], params["arch"])
+        return "{}/{}".format(params["release"], params["arch"])
 
 
 def srchash(src: str) -> str:
@@ -198,7 +198,7 @@ def db_connect_readonly():
     """
     cp = get_autopkgtest_cloud_conf()
     return sqlite3.connect(
-        "file:%s?mode=ro" % cp["web"]["database"],
+        "file:{}?mode=ro".format(cp["web"]["database"]),
         uri=True,
     )
 

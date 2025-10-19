@@ -121,7 +121,7 @@ def human_date(run_id):
 
 
 def human_sec(secs):
-    return "%ih %02im %02is" % (secs // 3600, (secs % 3600) // 60, secs % 60)
+    return "%ih %02im %02is" % (secs // 3600, (secs % 3600) // 60, secs % 60)  # noqa: UP031
 
 
 def human_exitcode(code):
@@ -420,7 +420,7 @@ def package_overview(package, _=None):
         ],
         arches=sorted(arches),
         results=results,
-        title_suffix="- %s" % package,
+        title_suffix=f"- {package}",
         running=running_info,
         queues_info=queues_info,
     )
@@ -661,7 +661,7 @@ def package_release_arch(package, release, arch, _=None):
             release=release,
             arch=arch,
             package_results=[],
-            title_suffix="- %s/%s/%s" % (package, release, arch),
+            title_suffix=f"- {package}/{release}/{arch}",
         )
 
     seen = set()
@@ -808,7 +808,7 @@ def package_release_arch(package, release, arch, _=None):
         release=release,
         arch=arch,
         package_results=results,
-        title_suffix="- %s/%s/%s" % (package, release, arch),
+        title_suffix=f"- {package}/{release}/{arch}",
     )
 
 
@@ -871,7 +871,7 @@ def get_by_uuid(uuid):
         release=release,
         arch=arch,
         test_results=test_results,
-        title_suffix="- %s/%s/%s" % (package, release, arch),
+        title_suffix=f"- {package}/{release}/{arch}",
     )
 
 
@@ -1086,5 +1086,5 @@ if __name__ == "__main__":
 
     app.config["DEBUG"] = True
     init_config()
-    connect_db("file:%s?mode=ro" % CONFIG["database"])
+    connect_db("file:{}?mode=ro".format(CONFIG["database"]))
     CGIHandler().run(app)
