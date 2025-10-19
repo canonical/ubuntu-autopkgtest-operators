@@ -112,12 +112,9 @@ def get_release_arches(db_con):
     :return ``dict(release -> [arch])``:
     """
     udi = distro_info.UbuntuDistroInfo()
-    all_ubuntu_releases = udi.all
-
-    supported_ubuntu_release = sorted(
-        set(udi.supported() + udi.supported_esm()),
-        key=all_ubuntu_releases.index,
-    )
+    supported_ubuntu_release = [
+        r for r in udi.all if r in udi.supported() + udi.supported_esm()
+    ]
 
     release_arches = {}
     releases = []
