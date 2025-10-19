@@ -13,7 +13,6 @@ from pathlib import Path
 
 import distro_info
 import pika
-import pygit2
 import swiftclient
 
 sqlite3.paramstyle = "named"
@@ -232,11 +231,3 @@ def swift_connect() -> swiftclient.Connection:
         return swift_conn
     except KeyError as e:
         raise swiftclient.ClientException(repr(e))
-
-
-def get_repo_head_commit_hash(repo_dir) -> str:
-    try:
-        repo = pygit2.Repository(repo_dir)
-        return str(repo.head.target)
-    except pygit2.GitError:
-        return None

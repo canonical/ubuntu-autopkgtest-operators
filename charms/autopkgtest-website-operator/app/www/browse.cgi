@@ -20,7 +20,6 @@ from helpers.utils import (
     get_autopkgtest_cloud_conf,
     get_ppa_containers_cache,
     get_release_arches,
-    get_repo_head_commit_hash,
     get_stats_cache,
     setup_key,
     srchash,
@@ -364,7 +363,6 @@ def index_root():
     return render(
         "browse-home.html",
         recent_runs=recent,
-        commit_hash=get_repo_head_commit_hash(__file__),
     )
 
 
