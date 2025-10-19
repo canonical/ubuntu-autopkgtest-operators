@@ -5,7 +5,6 @@ import logging
 import os
 import socket
 import sqlite3
-from pathlib import Path
 
 from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf
 
@@ -13,13 +12,12 @@ EXCHANGE_NAME = "testcomplete.fanout"
 amqp_con = None
 
 
-def db_connect(path):
+def db_connect():
     """Create DB if it does not exist, and connect to it"""
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
 
     cp = get_autopkgtest_cloud_conf()
-    db = sqlite3.connect(cp["web"]["database"])
+    db_path = cp["web"]["database"]
+    db = sqlite3.connect(db_path)
     c = db.cursor()
     try:
         c.execute("PRAGMA journal_mode = WAL")
@@ -63,11 +61,11 @@ def db_connect(path):
         # with this other index
         c.execute("CREATE INDEX IF NOT EXISTS test_id_ix ON test(id);")
         db.commit()
-        logging.debug("database %s created", path)
+        logging.debug("database %s created", db_path)
     except sqlite3.OperationalError as e:
         if "already exists" not in str(e):
             raise
-        logging.debug("database %s already exists", path)
+        logging.debug("database %s already exists", db_path)
 
     return db
 
