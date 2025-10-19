@@ -69,19 +69,6 @@ def get_autopkgtest_cloud_conf():
                 ) from fnfe
 
 
-def get_autopkgtest_db_conn():
-    """Get connection to autopkgtest db from config
-
-    :return conn: ``sqlite3.Connection``
-    """
-    cp = get_autopkgtest_cloud_conf()
-    return sqlite3.connect(
-        "file:%s?mode=ro" % cp["web"]["database_ro"],
-        uri=True,
-        check_same_thread=False,
-    )
-
-
 def get_stats_cache():
     """Return path object representing the location of the autopkgtest
     stats cache.
@@ -208,6 +195,18 @@ def amqp_connect():
     logging.info("Connected to AMQP server at %s@%s", parts.username, parts.hostname)
 
     return amqp_con
+
+
+def db_connect_readonly():
+    """Get connection to autopkgtest db from config
+
+    :return conn: ``sqlite3.Connection``
+    """
+    cp = get_autopkgtest_cloud_conf()
+    return sqlite3.connect(
+        "file:%s?mode=ro" % cp["web"]["database"],
+        uri=True,
+    )
 
 
 def swift_connect() -> swiftclient.Connection:
