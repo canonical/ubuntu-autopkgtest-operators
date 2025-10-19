@@ -6,13 +6,9 @@ import configparser
 import logging
 import os
 import pathlib
-import random
 import sqlite3
-import subprocess
-import time
 import typing
 import urllib.parse
-from dataclasses import dataclass
 from pathlib import Path
 
 import distro_info
@@ -21,40 +17,6 @@ import pygit2
 import swiftclient
 
 sqlite3.paramstyle = "named"
-
-
-@dataclass
-class SqliteWriterConfig:
-    writer_exchange_name = "sqlite-write-me.fanout"
-    checkpoint_interval = 5  # minutes
-    amqp_entry_fields = [
-        "run_id",
-        "version",
-        "triggers",
-        "duration",
-        "exitcode",
-        "requester",
-        "env",
-        "uuid",
-        "release",
-        "arch",
-        "package",
-    ]
-    retry_time_limit = 120  # seconds
-
-
-def zstd_compress(data: bytes) -> bytes:
-    p = subprocess.run(
-        ["zstd", "--compress"], input=data, capture_output=True, check=True
-    )
-    return p.stdout
-
-
-def zstd_decompress(data: bytes) -> bytes:
-    p = subprocess.run(
-        ["zstd", "--decompress"], input=data, capture_output=True, check=True
-    )
-    return p.stdout
 
 
 def read_config_file(filepath: typing.Union[str, pathlib.Path], cfg_key: str = None):
@@ -246,64 +208,6 @@ def setup_key(app, path):
         app.secret_key = key
 
 
-def init_db(path, **kwargs):
-    """Create DB if it does not exist, and connect to it"""
-    path = pathlib.Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    db = sqlite3.connect(path, **kwargs)
-    c = db.cursor()
-    try:
-        c.execute("PRAGMA journal_mode = WAL")
-        c.execute(
-            "CREATE TABLE IF NOT EXISTS test ("
-            "  id INTEGER PRIMARY KEY, "
-            "  release CHAR[20], "
-            "  arch CHAR[20], "
-            "  package char[120])"
-        )
-        c.execute(
-            "CREATE TABLE IF NOT EXISTS result ("
-            "  test_id INTEGER, "
-            "  run_id CHAR[30], "
-            "  version VARCHAR[200], "
-            "  triggers TEXT, "
-            "  duration INTEGER, "
-            "  exitcode INTEGER, "
-            "  requester TEXT, "
-            "  env TEXT, "
-            "  uuid TEXT UNIQUE,  "
-            "  PRIMARY KEY(test_id, run_id), "
-            "  FOREIGN KEY(test_id) REFERENCES test(id))"
-        )
-        # /packages/<name> mostly benefits from the index on package (0.8s -> 0.01s),
-        # but adding the other fields improves it a further 50% to 0.005s.
-        c.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS test_package_uix ON test("
-            "  package, release, arch)"
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS result_run_ix ON result(  run_id desc)")
-        # /user/<username> page benefits greatly from this idx
-        # Prior to idx, this page would take ~90s to load, down to ~5s.
-        c.execute(
-            "CREATE INDEX IF NOT EXISTS result_requester_idx ON result(requester) "
-        )
-        # /admin mostly benefits from the index on test_id (~80s -> 50ms)
-        # /packages/<name> also sees some improvements (~14s -> 30ms)
-        c.execute("CREATE INDEX IF NOT EXISTS result_test_id_ix ON result(test_id);")
-        # exact same pages (/admin and /packages/<name>) goes from (~50ms to ~3ms)
-        # with this other index
-        c.execute("CREATE INDEX IF NOT EXISTS test_id_ix ON test(id);")
-        db.commit()
-        logging.debug("database %s created", path)
-    except sqlite3.OperationalError as e:
-        if "already exists" not in str(e):
-            raise
-        logging.debug("database %s already exists", path)
-
-    return db
-
-
 def amqp_connect():
     """Connect to AMQP server"""
 
@@ -322,70 +226,6 @@ def amqp_connect():
     logging.info("Connected to AMQP server at %s@%s", parts.username, parts.hostname)
 
     return amqp_con
-
-
-def get_test_id(db_con, release, arch, src):
-    """
-    get id of test
-    """
-    if not get_test_id._cache:
-        # prime the cache with all test IDs; much more efficient than doing
-        # thousands of individual queries
-        c = db_con.cursor()
-        c.execute("SELECT * FROM test")
-        while True:
-            row = c.fetchone()
-            if row is None:
-                break
-            get_test_id._cache[row[1] + "/" + row[2] + "/" + row[3]] = row[0]
-
-    cache_idx = release + "/" + arch + "/" + src
-    try:
-        return get_test_id._cache[cache_idx]
-    except KeyError:
-        # create new ID
-        c = db_con.cursor()
-        while True:
-            try:
-                insert_me = {
-                    "id": None,
-                    "release": release,
-                    "arch": arch,
-                    "package": src,
-                }
-                c.execute(
-                    (
-                        "INSERT INTO test(id, release, arch, package) "
-                        "VALUES (:id, :release, :arch, :package)"
-                    ),
-                    insert_me,
-                )
-            except sqlite3.IntegrityError:
-                # our cache got out of date in the meantime
-                c.execute(
-                    "SELECT id from test where release "
-                    + "= ? and arch = ? and package = ?",
-                    (release, arch, src),
-                )
-                test_id = c.fetchone()[0]
-                break
-            except sqlite3.OperationalError as e:
-                if "database is locked" in str(e):
-                    sleep_time = random.uniform(0.1, 2)
-                    logging.info(
-                        "database is currently locked, waiting %f seconds and trying again..."
-                        % sleep_time
-                    )
-                    time.sleep(sleep_time)
-                else:
-                    logging.info("insert operation failed with: %s" % str(e))
-                    break
-            else:
-                test_id = c.lastrowid
-                db_con.commit()
-                break
-        get_test_id._cache[cache_idx] = test_id
-        return test_id
 
 
 def swift_connect() -> swiftclient.Connection:
@@ -411,16 +251,9 @@ def swift_connect() -> swiftclient.Connection:
         raise swiftclient.ClientException(repr(e))
 
 
-def get_db_path():
-    return get_autopkgtest_cloud_conf()["web"]["database"]
-
-
 def get_repo_head_commit_hash(repo_dir) -> str:
     try:
         repo = pygit2.Repository(repo_dir)
         return str(repo.head.target)
     except pygit2.GitError:
         return None
-
-
-get_test_id._cache = {}

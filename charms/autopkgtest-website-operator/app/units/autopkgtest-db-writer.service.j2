@@ -1,0 +1,11 @@
+[Unit]
+Description=Fetch test results from amqp and write them to the db
+
+[Service]
+User={{ user }}
+ExecStart={{ webcontrol }}/autopkgtest-db-writer
+Restart=on-failure
+RestartSec=1m
+
+[Install]
+WantedBy=timers.target

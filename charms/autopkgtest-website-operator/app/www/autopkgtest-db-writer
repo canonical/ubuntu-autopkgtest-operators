@@ -1,0 +1,221 @@
+#!/usr/bin/python3
+
+import json
+import logging
+import os
+import socket
+import sqlite3
+from pathlib import Path
+
+from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf
+
+EXCHANGE_NAME = "testcomplete.fanout"
+amqp_con = None
+
+
+def db_connect(path):
+    """Create DB if it does not exist, and connect to it"""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    cp = get_autopkgtest_cloud_conf()
+    db = sqlite3.connect(cp["web"]["database"])
+    c = db.cursor()
+    try:
+        c.execute("PRAGMA journal_mode = WAL")
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS test ("
+            "  id INTEGER PRIMARY KEY, "
+            "  release CHAR[20], "
+            "  arch CHAR[20], "
+            "  package char[120])"
+        )
+        c.execute(
+            "CREATE TABLE IF NOT EXISTS result ("
+            "  test_id INTEGER, "
+            "  run_id CHAR[30], "
+            "  version VARCHAR[200], "
+            "  triggers TEXT, "
+            "  duration INTEGER, "
+            "  exitcode INTEGER, "
+            "  requester TEXT, "
+            "  env TEXT, "
+            "  uuid TEXT UNIQUE,  "
+            "  PRIMARY KEY(test_id, run_id), "
+            "  FOREIGN KEY(test_id) REFERENCES test(id))"
+        )
+        # /packages/<name> mostly benefits from the index on package (0.8s -> 0.01s),
+        # but adding the other fields improves it a further 50% to 0.005s.
+        c.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS test_package_uix ON test("
+            "  package, release, arch)"
+        )
+        c.execute("CREATE INDEX IF NOT EXISTS result_run_ix ON result(  run_id desc)")
+        # /user/<username> page benefits greatly from this idx
+        # Prior to idx, this page would take ~90s to load, down to ~5s.
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS result_requester_idx ON result(requester) "
+        )
+        # /admin mostly benefits from the index on test_id (~80s -> 50ms)
+        # /packages/<name> also sees some improvements (~14s -> 30ms)
+        c.execute("CREATE INDEX IF NOT EXISTS result_test_id_ix ON result(test_id);")
+        # exact same pages (/admin and /packages/<name>) goes from (~50ms to ~3ms)
+        # with this other index
+        c.execute("CREATE INDEX IF NOT EXISTS test_id_ix ON test(id);")
+        db.commit()
+        logging.debug("database %s created", path)
+    except sqlite3.OperationalError as e:
+        if "already exists" not in str(e):
+            raise
+        logging.debug("database %s already exists", path)
+
+    return db
+
+
+def process_message(channel, method, properties, body):
+    global amqp_con
+    if isinstance(body, bytes):
+        body = body.decode("UTF-8", errors="replace")
+    info = json.loads(body)
+    logging.info("Received notification of completed test {}".format(info))
+
+    arch = info["architecture"]
+    container = info["container"]
+    duration = info["duration"]
+    exitcode = info["exitcode"]
+    package = info["package"]
+    release = info["release"]
+    requester = (info["requester"] or "").strip()
+    version = info["testpkg_version"]
+    test_uuid = info.get("uuid", "")
+    (_, _, _, _, run_id) = info["swift_dir"].split("/")
+
+    # we don't handle PPA requests and their container names are
+    # formatted like autopkgtest-$release-$user-$ppaname
+    if container != ("autopkgtest-{}".format(release)):
+        logging.debug("Ignoring non-distro request: {}".format(info))
+        channel.basic_ack(delivery_tag=method.delivery_tag)
+        return
+
+    try:
+        triggers = info["triggers"]
+        if not triggers:
+            raise KeyError
+    except KeyError:
+        logging.error(
+            "%s/%s/%s result has no ADT_TEST_TRIGGERS, ignoring",
+            package,
+            arch,
+            release,
+        )
+        channel.basic_ack(delivery_tag=method.delivery_tag)
+        return
+
+    test_id = get_test_id(db_con, release, arch, package)
+
+    try:
+        c = db_con.cursor()
+        c.execute(
+            "INSERT INTO result VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                test_id,
+                run_id,
+                version,
+                triggers,
+                duration,
+                exitcode,
+                requester,
+                info.get("env", ""),
+                test_uuid,
+            ),
+        )
+        db_con.commit()
+    except sqlite3.IntegrityError:
+        logging.info("%s was already recorded - skipping", run_id)
+
+    channel.basic_ack(delivery_tag=method.delivery_tag)
+
+
+def get_test_id(db_con, release, arch, src):
+    """
+    get id of test
+    """
+    if not get_test_id._cache:
+        # prime the cache with all test IDs; much more efficient than doing
+        # thousands of individual queries
+        c = db_con.cursor()
+        c.execute("SELECT * FROM test")
+        while True:
+            row = c.fetchone()
+            if row is None:
+                break
+            get_test_id._cache[row[1] + "/" + row[2] + "/" + row[3]] = row[0]
+
+    cache_idx = release + "/" + arch + "/" + src
+    try:
+        return get_test_id._cache[cache_idx]
+    except KeyError:
+        # create new ID
+        c = db_con.cursor()
+        try:
+            insert_me = {
+                "id": None,
+                "release": release,
+                "arch": arch,
+                "package": src,
+            }
+            c.execute(
+                (
+                    "INSERT INTO test(id, release, arch, package) "
+                    "VALUES (:id, :release, :arch, :package)"
+                ),
+                insert_me,
+            )
+        except sqlite3.IntegrityError:
+            # our cache got out of date in the meantime
+            c.execute(
+                "SELECT id from test where release "
+                + "= ? and arch = ? and package = ?",
+                (release, arch, src),
+            )
+        else:
+            test_id = c.lastrowid
+            db_con.commit()
+        get_test_id._cache[cache_idx] = test_id
+        return test_id
+
+
+get_test_id._cache = {}
+
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=(logging.DEBUG if "DEBUG" in os.environ else logging.INFO)
+    )
+
+    db_con = db_connect()
+    try:
+        c = db_con.cursor()
+        c.execute("SELECT env FROM result")
+    except sqlite3.OperationalError as e:
+        if "no such column" in str(e):
+            c = db_con.cursor()
+            c.execute("ALTER TABLE result ADD COLUMN env TEXT")
+
+    amqp_con = amqp_connect()
+    status_ch = amqp_con.channel()
+    status_ch.exchange_declare(
+        exchange=EXCHANGE_NAME,
+        exchange_type="fanout",
+        durable=True,
+    )
+    queue_name = "complete-listener-%s" % socket.getfqdn()
+    status_ch.queue_declare(queue_name, durable=True, auto_delete=False)
+    status_ch.queue_bind(queue_name, EXCHANGE_NAME, queue_name)
+
+    logging.info("Listening to requests on %s" % queue_name)
+    status_ch.basic_consume(
+        queue="",
+        on_message_callback=lambda *args: process_message(*args, db_con),
+    )
+    amqp_con.process_data_events()

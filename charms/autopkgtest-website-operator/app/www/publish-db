@@ -24,19 +24,10 @@ COMPONENTS = ["main", "restricted", "universe", "multiverse"]
 
 
 def publish_db(path, path_current, path_rw):
-    """Create DB if it does not exist, and connect to it"""
+    """Generate database to publish"""
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path)
     db_rw = sqlite3.connect("file:%s?mode=ro" % path_rw, uri=True)
-
-    # if no db, we need to copy /home/ubuntu/autopkgtest.db to /home/ubuntu/public/autopkgtest.db
-    if not os.path.exists(path_current):
-        logging.warning(
-            f"Looks like there's no pre-existing db at {path_current}, copying..."
-        )
-        public_db_con = sqlite3.connect(path_current)
-        db_rw.backup(public_db_con)
-        public_db_con.close()
 
     logging.info(f"backing up {path_rw} to {path}")
     with db:
