@@ -214,7 +214,10 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         ]
 
         system_units_dir = Path("/etc/systemd/system/")
-        j2env = jinja2.Environment(loader=jinja2.FileSystemLoader(units_path))
+        j2env = jinja2.Environment(
+            loader=jinja2.FileSystemLoader(units_path),
+            autoescape=jinja2.select_autoescape(),
+        )
         j2context = {
             "user": USER,
             "autopkgtest_location": AUTOPKGTEST_LOCATION,

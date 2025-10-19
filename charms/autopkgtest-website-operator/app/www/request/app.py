@@ -351,18 +351,16 @@ def all_exception_handler(error):
     try:
         return invalid(error, error.exit_code())
     except Exception:
-        pass
-
-    exc_type, exc_value, exc_traceback = sys.exc_info()
-    traceback.print_exception(exc_type, exc_value, exc_traceback)
-    return (
-        HTML.format(
-            (
-                "<p>A server error has occurred. Traceback:</p> <pre>%s</pre>"
-                % "\n".join(
-                    traceback.format_exception(exc_type, exc_value, exc_traceback)
-                )
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        traceback.print_exception(exc_type, exc_value, exc_traceback)
+        return (
+            HTML.format(
+                (
+                    "<p>A server error has occurred. Traceback:</p> <pre>%s</pre>"
+                    % "\n".join(
+                        traceback.format_exception(exc_type, exc_value, exc_traceback)
+                    )
+                ),
             ),
-        ),
-        500,
-    )
+            500,
+        )

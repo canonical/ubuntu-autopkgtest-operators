@@ -212,7 +212,10 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         units_to_enable = [u.name for u in (units_path).glob("*.timer")]
 
         system_units_dir = Path("/etc/systemd/system/")
-        j2env = jinja2.Environment(loader=jinja2.FileSystemLoader(units_path))
+        j2env = jinja2.Environment(
+            loader=jinja2.FileSystemLoader(units_path),
+            autoescape=jinja2.select_autoescape(),
+        )
         j2context = {
             "user": USER,
             "conf_directory": CONF_DIRECTORY,

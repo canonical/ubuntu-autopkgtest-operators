@@ -2,10 +2,18 @@
 requires-python = ">= 3.10"
 
 [tool.ruff]
-lint.extend-select = ["W", "I"]
+lint.extend-select = ["W", "I", "S"]
 lint.extend-ignore = [
-    "E741",
     "E722",
+    "E741",
+    "S101",
+    "S106",
+    "S108",
+    "S310",
+    "S324",
+    "S603",
+    "S607",
+    "S608",
 ]
 extend-exclude = ["__pycache__", "*.egg_info", "**/lib/charms/"]
 

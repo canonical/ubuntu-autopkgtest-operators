@@ -134,7 +134,8 @@ def configure(
     )
 
     j2env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader(CHARM_APP_DATA / "config")
+        loader=jinja2.FileSystemLoader(CHARM_APP_DATA / "config"),
+        autoescape=jinja2.select_autoescape(),
     )
     j2template = j2env.get_template("a2-autopkgtest.conf.j2")
     j2context = {
@@ -173,7 +174,10 @@ def configure(
         "autopkgtest-stats.service",
     ]
 
-    j2env = jinja2.Environment(loader=jinja2.FileSystemLoader(CHARM_APP_DATA / "units"))
+    j2env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(CHARM_APP_DATA / "units"),
+        autoescape=jinja2.select_autoescape(),
+    )
     j2context = {
         "user": USER,
         "webcontrol": WWW_DIR,
