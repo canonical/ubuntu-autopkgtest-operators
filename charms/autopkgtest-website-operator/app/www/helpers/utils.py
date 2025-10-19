@@ -103,11 +103,6 @@ def get_ppa_containers_cache():
     ).expanduser()
 
 
-def get_all_releases():
-    udi = distro_info.UbuntuDistroInfo()
-    return udi.all
-
-
 def get_release_arches(db_con):
     """Determine available releases and architectures
 
@@ -156,15 +151,6 @@ def get_source_versions(db_con, release):
     ):
         srcs[pkg] = ver
     return srcs
-
-
-def get_supported_releases():
-    udi = distro_info.UbuntuDistroInfo()
-    all_ubuntu_releases = get_all_releases()
-    return sorted(
-        set(udi.supported() + udi.supported_esm()),
-        key=all_ubuntu_releases.index,
-    )
 
 
 def get_github_context(params: typing.Dict[str, str]) -> str:

@@ -13,16 +13,15 @@ from collections import OrderedDict
 from pathlib import Path
 from wsgiref.handlers import CGIHandler
 
+import distro_info
 import flask
 from helpers.exceptions import NotFound, RunningJSONNotFound
 from helpers.utils import (
-    get_all_releases,
     get_autopkgtest_cloud_conf,
     get_ppa_containers_cache,
     get_release_arches,
     get_repo_head_commit_hash,
     get_stats_cache,
-    get_supported_releases,
     setup_key,
     srchash,
     swift_connect,
@@ -46,8 +45,11 @@ setup_key(app, secret_path)
 db_con = None
 CONFIG = {}
 
-ALL_UBUNTU_RELEASES = get_all_releases()
-SUPPORTED_UBUNTU_RELEASES = get_supported_releases()
+UDI = distro_info.UbuntuDistroInfo()
+ALL_UBUNTU_RELEASES = UDI.all
+SUPPORTED_UBUNTU_RELEASES = [
+    r for r in UDI.all if r in UDI.supported() + UDI.supported_esm()
+]
 
 
 def init_config():
