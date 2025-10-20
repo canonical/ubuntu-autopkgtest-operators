@@ -4,16 +4,14 @@
 # britney config file, to be used for administration or testing.
 
 import argparse
+import configparser
 import json
 import os
-import sys
 import urllib.parse
 import uuid
 from datetime import UTC, datetime
 
-import amqp
-
-my_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
+import pika
 
 
 def parse_args():
@@ -77,15 +75,9 @@ def parse_args():
         "packages from the branch and run tests against those.",
     )
     parser.add_argument(
-        "--test-bzr",
-        help="A single URL. "
-        "The test will be checked out with bzr from that URL. "
-        "Otherwise this has the same behaviour as test-git.",
-    )
-    parser.add_argument(
         "--swiftuser",
         help="Swift username for private result handling. "
-        "The new ADT infrastructure now supports running private tests. "
+        "The autopkgtest infrastructure supports running private tests. "
         "Such tests will put their rest results in private containers "
         "only readable by the selected swiftuser.",
     )
@@ -141,6 +133,10 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
 
+    config = configparser.ConfigParser()
+    with open("/etc/autopkgtest-cloud.conf") as f:
+        config.read_file(f)
+
     context = ""
     params = {}
     if args.bulk:
@@ -157,9 +153,6 @@ if __name__ == "__main__":
         context = "upstream-"
     elif args.build_git:
         params["build-git"] = args.build_git
-        context = "upstream-"
-    if args.test_bzr:
-        params["test-bzr"] = args.test_bzr
         context = "upstream-"
     if args.swiftuser:
         params["swiftuser"] = args.swiftuser
@@ -180,40 +173,27 @@ if __name__ == "__main__":
     params["uuid"] = str(uuid.uuid4())
     params = "\n" + json.dumps(params)
 
-    try:
-        creds = urllib.parse.urlsplit(
-            "amqp://{user}:{password}@{host}".format(
-                user=os.environ["RABBIT_USER"],
-                password=os.environ["RABBIT_PASSWORD"],
-                host=os.environ["RABBIT_HOST"],
-            ),
-            allow_fragments=False,
-        )
-    except KeyError:
-        with open(os.path.expanduser("~/rabbitmq.cred")) as f:
-            env_dict = dict(
-                tuple(line.replace("\n", "").replace('"', "").split("="))
-                for line in f.readlines()
-                if not line.startswith("#")
-            )
-        creds = urllib.parse.urlsplit(
-            "amqp://{user}:{password}@{host}".format(
-                user=env_dict["RABBIT_USER"],
-                password=env_dict["RABBIT_PASSWORD"],
-                host=env_dict["RABBIT_HOST"],
-            ),
-            allow_fragments=False,
-        )
+    creds = urllib.parse.urlsplit(config["amqp"]["uri"], allow_fragments=False)
     assert creds.scheme == "amqp"
 
-    with amqp.Connection(
-        creds.hostname, userid=creds.username, password=creds.password
+    with pika.BlockingConnection(
+        parameters=pika.ConnectionParameters(
+            host=creds.hostname,
+            credentials=pika.PlainCredentials(
+                username=creds.username,
+                password=creds.password,
+            ),
+        ),
     ) as amqp_con:
         with amqp_con.channel() as ch:
             for arch in args.architecture:
                 queue = f"debci-{context}{args.series}-{arch}"
                 for pkg in args.package:
                     ch.basic_publish(
-                        amqp.Message(pkg + params, delivery_mode=2),  # persistent
+                        exchange="",
                         routing_key=queue,
+                        body=pkg + params,
+                        properties=pika.BasicProperties(
+                            delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
+                        ),
                     )
