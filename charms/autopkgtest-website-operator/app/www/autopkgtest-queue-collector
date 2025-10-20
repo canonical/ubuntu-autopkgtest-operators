@@ -19,22 +19,22 @@ class AutopkgtestQueueContents:
         assert amqp_conn is not None
 
         self.amqp_conn = amqp_conn
-        self.channel = self.amqp_conn.channel()
-        logger.info("Connected to AMQP")
 
     def get_queue_requests(self, queue_name):
         """Return list of pending requests in AMQP queue."""
         requests = []
+        channel = amqp_conn.channel()
 
         # non-acking read of all requests to inspect the queue
         while True:
-            method, _, body = self.channel.basic_get(queue_name)
+            method, _, body = channel.basic_get(queue_name)
             if body is None:
                 break
             requests.append(body)
             logging.debug(f"{queue_name}: name {body}")
-            # reject the request so it becomes available to the workers
-            self.channel.basic_reject(delivery_tag=method.delivery_tag, requeue=True)
+
+        # closing the channel will put all the messages back to the queue
+        channel.close()
 
         res = []
         for r in requests:
@@ -99,8 +99,10 @@ class AutopkgtestQueueContents:
 
 
 if __name__ == "__main__":
-    amqp_conn = amqp_connect()
     cp = get_autopkgtest_cloud_conf()
+
+    amqp_conn = amqp_connect()
+    logger.info("Connected to AMQP")
 
     queues_file = cp["web"]["amqp_queue_cache"]
 
