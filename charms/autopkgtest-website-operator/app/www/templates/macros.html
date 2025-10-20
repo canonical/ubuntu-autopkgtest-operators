@@ -113,7 +113,7 @@
   <td>{{ triggers }}</td>
   <td>{{ env }}</td>
   <td>{{ date }}</td>
-  <td>{{ duration }}</td>
+  <td>{{ duration | replace(' ', '&nbsp;') | safe }}</td>
   <td>
     {% if requester != None and requester != "-" and requester != "" %}
       <a href="https://launchpad.net/~{{ requester }}">{{ requester }}</a>
