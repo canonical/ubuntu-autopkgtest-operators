@@ -75,18 +75,23 @@ config:
     swift-auth-url:
       type: string
       description: swift auth URL
+      default: ""
     swift-username:
       type: string
       description: username for swift
+      default: ""
     swift-project-domain-name:
       type: string
       description: swift project domain
+      default: ""
     swift-project-name:
       type: string
       description: swift project name
+      default: ""
     swift-user-domain-name:
       type: string
       description: swift user domain name
+      default: ""
     swift-juju-secret:
       type: secret
       description: juju secret id holding the swift password

@@ -16,7 +16,7 @@ class DispatcherConfig(pydantic.BaseModel):
     swift_project_name: str
     swift_user_domain_name: str
     swift_username: str
-    swift_juju_secret: Secret
+    swift_juju_secret: Secret | None = None
 
     # TODO properly implement validation
     # @pydantic.field_validator("rabbitmq_host")

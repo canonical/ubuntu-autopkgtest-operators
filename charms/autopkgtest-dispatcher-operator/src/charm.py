@@ -307,16 +307,16 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
             return
 
-        # https://github.com/juju/terraform-provider-juju/issues/770#issuecomment-3051899587
-        while True:
+        if self.typed_config.swift_juju_secret:
             try:
                 swift_password = self.typed_config.swift_juju_secret.get_content().get(
                     "password"
                 )
-                break
             except ops.model.ModelError:
                 self.unit.status = ops.BlockedStatus("swift secret not yet available")
                 time.sleep(10)
+        else:
+            swift_password = ""
 
         self.unit.status = ops.MaintenanceStatus("configuring service")
 
