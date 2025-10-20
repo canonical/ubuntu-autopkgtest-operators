@@ -1044,9 +1044,7 @@ def main():
     else:
         logging.info("Debug disabled")
 
-    try:
-        os.environ["SWIFT_AUTH_URL"]
-    except KeyError:
+    if not os.environ.get("SWIFT_AUTH_URL"):
         logging.warning(
             "No SWIFT_AUTH_URL detected, disabling swift upload and keeping results locally instead"
         )
