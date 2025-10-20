@@ -6,7 +6,7 @@ import logging
 import os
 import tempfile
 
-from helpers.utils import amqp_connect, db_connect_readonly, get_autopkgtest_cloud_conf
+from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf, get_release_arches
 from pika.exceptions import AMQPError
 
 AMQP_CONTEXTS = ["", "huge-", "ppa-", "upstream-"]
@@ -21,21 +21,6 @@ class AutopkgtestQueueContents:
         self.amqp_conn = amqp_conn
         self.channel = self.amqp_conn.channel()
         logger.info("Connected to AMQP")
-
-    @property
-    def release_arches(self):
-        db_con = db_connect_readonly()
-
-        release_arches = {}
-        releases = []
-        for row in db_con.execute("SELECT DISTINCT release from test"):
-            releases.append(row[0])
-        for r in releases:
-            for row in db_con.execute(
-                "SELECT DISTINCT arch from test WHERE release=?", (r,)
-            ):
-                release_arches.setdefault(r, []).append(row[0])
-        return release_arches
 
     def get_queue_requests(self, queue_name):
         """Return list of pending requests in AMQP queue."""
@@ -74,7 +59,7 @@ class AutopkgtestQueueContents:
 
     def get_queue_contents(self):
         """Get queue contents from AMQP and cache them on disk."""
-        release_arches = self.release_arches
+        release_arches = get_release_arches()
         all_arches = set()
 
         channel = self.amqp_conn.channel()

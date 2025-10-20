@@ -80,7 +80,7 @@ def calc_stats():
         exit(1)
 
     logger.debug("Getting release arches")
-    release_arches = get_release_arches(db_con)
+    release_arches = get_release_arches()
 
     data = {}
     for release in release_arches:

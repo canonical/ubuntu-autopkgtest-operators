@@ -630,7 +630,7 @@ def recent():
     else:
         all_arches = set()
         all_releases = []
-        for r, arches in get_release_arches(db_con).items():
+        for r, arches in get_release_arches().items():
             all_releases.append(r)
             for a in arches:
                 all_arches.add(a)
@@ -1013,7 +1013,7 @@ def running():
 
 @app.route("/statistics")
 def statistics():
-    release_arches = get_release_arches(db_con)
+    release_arches = get_release_arches()
 
     # try to load from both system cache and user cache in order
     # in case autopkgtest-cloud is running locally

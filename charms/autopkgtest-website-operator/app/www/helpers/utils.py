@@ -85,14 +85,12 @@ def get_ppa_containers_cache():
     ).expanduser()
 
 
-def get_release_arches(db_con):
+def get_release_arches():
     """Determine available releases and architectures.
 
-    :param db_con:
-        sqlite3 connection to autopkgtest db
-    :type db_con: ``sqlite3.Connection``
     :return ``dict(release -> [arch])``:
     """
+    db_con = db_connect_readonly()
     udi = distro_info.UbuntuDistroInfo()
     supported_ubuntu_release = [
         r for r in udi.all if r in udi.supported() + udi.supported_esm()
