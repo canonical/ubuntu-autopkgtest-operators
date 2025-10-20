@@ -16,7 +16,7 @@ class AutopkgtestRunningTests:
         self.run_info = {}
         self.output = output
 
-    def process_message(self, message):
+    def process_message(self, channel, method, properties, message):
         """Process AMQP status message, update run_info."""
         if isinstance(message, bytes):
             message = message.decode("UTF-8", errors="replace")
