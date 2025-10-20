@@ -4,6 +4,4 @@ Description=Read running test status from RabbitMQ (running.json)
 [Service]
 User={{ user }}
 Type=exec
-RuntimeDirectory=autopkgtest-running-collector
-RuntimeDirectoryPreserve=yes
 ExecStart={{ webcontrol }}/autopkgtest-running-collector
