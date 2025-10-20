@@ -17,6 +17,7 @@ import distro_info
 import flask
 from helpers.exceptions import NotFound, RunningJSONNotFound
 from helpers.utils import (
+    db_connect_readonly,
     get_autopkgtest_cloud_conf,
     get_ppa_containers_cache,
     get_release_arches,
@@ -60,11 +61,6 @@ def init_config():
     CONFIG["amqp_queue_cache"] = Path(cp["web"]["amqp_queue_cache"])
     CONFIG["running_cache"] = Path(cp["web"]["running_cache"])
     CONFIG["database"] = Path(cp["web"]["database_ro"])
-
-
-def connect_db(db_uri: str):
-    global db_con
-    db_con = sqlite3.connect(db_uri, uri=True, check_same_thread=False)
 
 
 def get_test_id(release, arch, src):
@@ -1057,5 +1053,5 @@ if __name__ == "__main__":
 
     app.config["DEBUG"] = True
     init_config()
-    connect_db("file:{}?mode=ro".format(CONFIG["database"]))
+    db_con = db_connect_readonly()
     CGIHandler().run(app)
