@@ -4,6 +4,6 @@ Description=Read running test status from RabbitMQ (running.json)
 [Service]
 User={{ user }}
 Type=oneshot
-RuntimeDirectory=amqp-status-collector
+RuntimeDirectory=autopkgtest-running-collector
 RuntimeDirectoryPreserve=yes
-ExecStart={{ webcontrol }}/amqp-status-collector
+ExecStart={{ webcontrol }}/autopkgtest-running-collector
