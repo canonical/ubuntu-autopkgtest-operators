@@ -29,6 +29,8 @@ parts:
       - units/*
 
 actions:
+  reconfigure:
+    description: Reconfigure workers with current distro-info-data
   add-worker:
     description: Add a worker to run tests on.
     params:

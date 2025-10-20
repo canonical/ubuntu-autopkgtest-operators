@@ -88,6 +88,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         framework.observe(
             self.on.create_worker_units_action, self._on_create_worker_units
         )
+        framework.observe(self.on.reconfigure_action, self._on_reconfigure)
 
         # relation hooks
         framework.observe(self.on.amqp_relation_joined, self._on_amqp_relation_joined)
@@ -127,6 +128,11 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             return
 
         self.unit.status = ops.ActiveStatus()
+
+    def _on_reconfigure(self, event: ops.ActionEvent):
+        """Reconfigure."""
+        self.unit.status = ops.MaintenanceStatus("reconfiguring")
+        self.on.config_changed.emit()
 
     # utils
     def run_as_user(self, command: str):
@@ -336,6 +342,19 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
     def _on_config_changed(self, event: ops.ConfigChangedEvent):
         if not self._stored.installed:
             self.on.install.emit()
+
+        self.unit.status = ops.MaintenanceStatus("updating distro-info-data")
+        apt.update()
+        # Note apt.add_package() does not upgrade an already installed package.
+        subprocess.run(
+            [
+                "apt-get",
+                "-o=APT::Get::Always-Include-Phased-Updates=true",
+                "install",
+                "distro-info-data",
+            ],
+            check=True,
+        )
 
         self.unit.status = ops.MaintenanceStatus("configure: gathering data")
 
