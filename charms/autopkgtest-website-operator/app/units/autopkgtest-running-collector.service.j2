@@ -5,3 +5,6 @@ Description=Read running test status from RabbitMQ (running.json)
 User={{ user }}
 Type=exec
 ExecStart={{ webcontrol }}/autopkgtest-running-collector
+
+[Install]
+WantedBy=multi-user.target
