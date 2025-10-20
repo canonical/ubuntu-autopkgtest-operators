@@ -92,7 +92,6 @@ def install() -> None:
     shutil.copytree(CHARM_APP_DATA / "www", WWW_DIR)
     os.symlink(Path("/usr/share/javascript/bootstrap"), WWW_DIR / "static/bootstrap")
     os.symlink(Path("/usr/share/javascript/jquery"), WWW_DIR / "static/jquery")
-    os.symlink(DATA_DIR / "running.json", WWW_DIR / "static/running.json")
     os.symlink(PUBLIC_DATA_DIR / "autopkgtest.db", WWW_DIR / "static/autopkgtest.db")
     os.symlink(
         PUBLIC_DATA_DIR / "autopkgtest.db.sha256",
