@@ -74,14 +74,16 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
             return
 
-        # https://github.com/juju/terraform-provider-juju/issues/770#issuecomment-3051899587
-        try:
-            swift_password = self.typed_config.swift_juju_secret.get_content().get(
-                "password"
-            )
-        except ops.ModelError:
-            self.unit.status = ops.BlockedStatus("swift secret not available")
-            return
+        if self.typed_config.swift_juju_secret:
+            try:
+                swift_password = self.typed_config.swift_juju_secret.get_content().get(
+                    "password"
+                )
+            except ops.ModelError:
+                self.unit.status = ops.BlockedStatus("swift secret not available")
+                return
+        else:
+            swift_password = ""
 
         self.unit.status = ops.MaintenanceStatus("configuring service")
 

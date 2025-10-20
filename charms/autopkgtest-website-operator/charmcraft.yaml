@@ -40,21 +40,27 @@ config:
     swift-auth-url:
       type: string
       description: swift auth URL
+      default: ""
     swift-project-domain-name:
       type: string
       description: swift project domain name
+      default: ""
     swift-project-name:
       type: string
       description: swift project name
+      default: ""
     swift-storage-url:
       type: string
       description: swift storage url
+      default: ""
     swift-user-domain-name:
       type: string
       description: swift user domain name
+      default: ""
     swift-username:
       type: string
       description: swift username
+      default: ""
     swift-juju-secret:
       type: secret
       description: juju secret id holding the swift password

@@ -15,4 +15,4 @@ class WebsiteConfig(pydantic.BaseModel):
     swift_storage_url: str
     swift_user_domain_name: str
     swift_username: str
-    swift_juju_secret: Secret
+    swift_juju_secret: Secret | None = None
