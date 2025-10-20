@@ -1011,35 +1011,6 @@ def running():
     )
 
 
-@app.route("/queue_size.json")
-def queuesize_json():
-    queue_info = get_queues_info()[2]
-    # Strip the number of queue items, this is just their contents
-    for context in queue_info:
-        for release in queue_info[context]:
-            for arch in queue_info[context][release]:
-                (queue_size, queue_items) = queue_info[context][release][arch]
-                queue_info[context][release][arch] = len(queue_items)
-    return flask.Response(json.dumps(queue_info, indent=2), mimetype="application/json")
-
-
-@app.route("/queues.json")
-def queues_json():
-    queue_info = get_queues_info()[2]
-    # Strip the number of queue items, this is just their contents
-    for context in queue_info:
-        for release in queue_info[context]:
-            for arch in queue_info[context][release]:
-                (queue_size, queue_items) = queue_info[context][release][arch]
-                queue_info[context][release][arch] = queue_items
-    return flask.Response(json.dumps(queue_info, indent=2), mimetype="application/json")
-
-
-@app.route("/queued.json")
-def return_queued_exactly():
-    return flask.send_file(CONFIG["amqp_queue_cache"], mimetype="application/json")
-
-
 @app.route("/statistics")
 def statistics():
     release_arches = get_release_arches(db_con)
