@@ -20,8 +20,8 @@ from charmlibs import apt
 logger = logging.getLogger(__name__)
 
 # Unprivileged user and group
-USER = "ubuntu"
-GROUP = "ubuntu"
+USER = "www-data"
+GROUP = "www-data"
 
 # Charm source path
 CHARM_SOURCE_PATH = Path(__file__).parent.parent
