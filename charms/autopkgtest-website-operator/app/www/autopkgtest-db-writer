@@ -16,7 +16,7 @@ def db_connect():
     """Create DB if it does not exist, and connect to it."""
     cp = get_autopkgtest_cloud_conf()
     db_path = cp["web"]["database"]
-    db = sqlite3.connect(db_path)
+    db = sqlite3.connect(f"file:{db_path}?mode=rwc", uri=True)
     c = db.cursor()
     try:
         c.execute("PRAGMA journal_mode = WAL")
