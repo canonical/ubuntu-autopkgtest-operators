@@ -1,43 +1,30 @@
 #!/usr/bin/python3
+# Read all queues and write their contents to queues.json
 
-import argparse
 import json
 import logging
 import os
-import sqlite3
-import sys
 import tempfile
-import urllib.parse
 
-from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf
+from helpers.utils import amqp_connect, db_connect_readonly, get_autopkgtest_cloud_conf
 from pika.exceptions import AMQPError
 
-AMQP_CONTEXTS = ["ubuntu", "huge", "ppa", "upstream"]
+AMQP_CONTEXTS = ["", "huge-", "ppa-", "upstream-"]
 
 logger = logging.getLogger()
 
 
 class AutopkgtestQueueContents:
-    def __init__(self, amqp_uri, database):
-        assert amqp_uri is not None
-        assert database is not None
+    def __init__(self, amqp_conn):
+        assert amqp_conn is not None
 
-        self.amqp_uri = amqp_uri
-        self.database = database
-
-        # connect to AMQP
-        parts = urllib.parse.urlsplit(self.amqp_uri, allow_fragments=False)
-        self.amqp_con = amqp_connect()
-        self.amqp_channel = self.amqp_con.channel()
-        logger.info("Connected to AMQP host %s", parts.hostname)
+        self.amqp_conn = amqp_conn
+        self.channel = self.amqp_conn.channel()
+        logger.info("Connected to AMQP")
 
     @property
     def release_arches(self):
-        """Determine available releases and architectures.
-
-        Return release → [arch] dict.
-        """
-        db_con = sqlite3.connect(f"file:{self.database}?mode=ro", uri=True)
+        db_con = db_connect_readonly()
 
         release_arches = {}
         releases = []
@@ -52,24 +39,17 @@ class AutopkgtestQueueContents:
 
     def get_queue_requests(self, queue_name):
         """Return list of pending requests in AMQP queue."""
-        delivery_tags = []
         requests = []
 
         # non-acking read of all requests to inspect the queue
         while True:
-            method, properties, body = self.amqp_channel.basic_get(queue_name)
+            method, _, body = self.channel.basic_get(queue_name)
             if body is None:
                 break
             requests.append(body)
-            logging.debug("queue_name: found %s", body)
-            delivery_tags.append(method.delivery_tag)
-        # now explicitly reject the requests so that they become available again
-        # for real workers
-        for t in delivery_tags:
-            self.amqp_channel.basic_reject(
-                delivery_tag=method.delivery_tag,
-                requeue=True,
-            )
+            logging.debug(f"{queue_name}: name {body}")
+        # reject the request so it becomes available to the workers
+        self.channel.basic_reject(delivery_tag=method.delivery_tag, requeue=True)
 
         res = []
         for r in requests:
@@ -84,13 +64,12 @@ class AutopkgtestQueueContents:
                     ):
                         r = "private job"
                 else:
-                    logging.warning(
-                        f"Found malformed request: {r} - Marking it as such."
-                    )
+                    logging.warning(f"Found malformed request {r}")
                     r = "malformed request"
                 res.append(r)
             except (ValueError, IndexError) as e:
-                logging.warning('Received invalid request format "%s" (%s)', r, repr(e))
+                logging.warning(f"Received invalid request {r}: {repr(e)}")
+
         return res
 
     def get_queue_contents(self):
@@ -98,27 +77,23 @@ class AutopkgtestQueueContents:
         release_arches = self.release_arches
         all_arches = set()
 
-        channel = self.amqp_con.channel()
-        channel.basic_qos(0, 1, False)
+        channel = self.amqp_conn.channel()
+        channel.basic_qos(0, 1)
 
         result = {}
         for context in AMQP_CONTEXTS:
             for release, arches in release_arches.items():
                 for arch in arches:
-                    if context == "ubuntu":
-                        # ubuntu test requests use context-less name (backwards compatibility)
-                        queue_name = f"debci-{release}-{arch}"
-                    else:
-                        queue_name = f"debci-{context}-{release}-{arch}"
+                    queue_name = f"debci-{context}{release}-{arch}"
                     try:
                         requests = self.get_queue_requests(queue_name)
                     except AMQPError:
-                        logging.warning("Failed reading data from queue %s", queue_name)
+                        logging.warning(f"Failed reading data from queue {queue_name}")
                         continue
                     queue_size = 0
                     if requests:
                         queue_size = len(requests)
-                    logging.info("Queue %s has %d items", queue_name, queue_size)
+                    logging.info(f"queue {queue_name} has {queue_size} items")
                     result.setdefault(context, {}).setdefault(release, {})[arch] = {
                         "size": queue_size,
                         "requests": requests,
@@ -135,62 +110,19 @@ class AutopkgtestQueueContents:
 
 
 if __name__ == "__main__":
+    amqp_conn = amqp_connect()
     cp = get_autopkgtest_cloud_conf()
 
-    state_directory = cp["web"]["amqp_queue_cache"]
+    queues_file = cp["web"]["amqp_queue_cache"]
 
-    parser = argparse.ArgumentParser(description="Fetch AMQP queues into a file")
-    parser.add_argument(
-        "--debug",
-        dest="debug",
-        action="count",
-        default=0,
-        help="Print debugging (give twice for super verbose output)",
-    )
-    parser.add_argument(
-        "-o",
-        "--output",
-        dest="output",
-        type=str,
-        default=state_directory,
-    )
-
-    args = parser.parse_args()
-
-    formatter = logging.Formatter("%(asctime)s: %(message)s", "%Y-%m-%d %H:%M:%S")
-    ch = logging.StreamHandler()
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-
-    if args.debug > 1:
-        logger.setLevel(logging.DEBUG)
-    elif args.debug > 0:
-        logger.setLevel(logging.INFO)
-
-    try:
-        amqp_uri = cp["amqp"]["uri"]
-    except KeyError:
-        print("No AMQP URI found", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        database = cp["web"]["database_ro"]
-    except KeyError:
-        print("No database found", file=sys.stderr)
-        sys.exit(1)
-
-    # Get queue details from rabbitmq directly
-    aq = AutopkgtestQueueContents(amqp_uri, database)
+    aq = AutopkgtestQueueContents(amqp_conn)
     queue_contents = aq.get_queue_contents()
 
     with tempfile.NamedTemporaryFile(
-        mode="w",
-        dir=os.path.dirname(args.output),
-        delete=False,
-        delete_on_close=False,
+        mode="w", dir=os.path.dirname(queues_file), delete=False, delete_on_close=False
     ) as tf:
         json.dump(queue_contents, tf, indent=2)
         umask = os.umask(0)
         os.umask(umask)
         os.chmod(tf.name, 0o644 & ~umask)
-        os.rename(tf.name, args.output)
+        os.rename(tf.name, queues_file)
