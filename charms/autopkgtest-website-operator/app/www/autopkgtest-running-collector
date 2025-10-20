@@ -3,6 +3,8 @@
 # queue, and writes the data into running.json
 
 import json
+import os
+from pathlib import Path
 
 from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf
 
@@ -14,7 +16,9 @@ class AutopkgtestRunningTests:
     def __init__(self, output):
         # package -> runhash -> release -> arch -> (params, duration, logtail)
         self.run_info = {}
-        self.output = output
+        self.output = Path(output)
+        self.output.unlink(missing_ok=True)
+        os.mkfifo(self.output)
 
     def process_message(self, channel, method, properties, message):
         """Process AMQP status message, update run_info."""
