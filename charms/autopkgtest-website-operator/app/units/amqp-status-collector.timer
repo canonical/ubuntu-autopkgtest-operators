@@ -1,8 +1,0 @@
-[Unit]
-Description=Read running test status from RabbitMQ (running.json)
-
-[Timer]
-OnCalendar=minutely
-
-[Install]
-WantedBy=timers.target

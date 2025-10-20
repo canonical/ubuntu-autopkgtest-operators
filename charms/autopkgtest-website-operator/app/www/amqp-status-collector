@@ -1,84 +1,74 @@
 #!/usr/bin/python3
 # Pick up running tests, their status and logtail from the "teststatus" fanout
-# queue, and writes the data into /run/amqp-status-collector/running.json
+# queue, and writes the data into running.json
 
 import json
-import logging
-import os
-import socket
 
 from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf
 
-logging.basicConfig(level=(logging.DEBUG if "DEBUG" in os.environ else logging.INFO))
+QUEUE_NAME = "running-listener"
+EXCHANGE_NAME = "teststatus.fanout"
 
 
-def process_message(body, running_tests):
-    """Process AMQP status message, update running_tests."""
-    if isinstance(body, bytes):
-        body = body.decode("UTF-8", errors="replace")
-    info = json.loads(body)
+class AutopkgtestRunningTests:
+    def __init__(self, output):
+        # package -> runhash -> release -> arch -> (params, duration, logtail)
+        self.run_info = {}
+        self.output = output
 
-    runhash = ""
-    params = info.get("params", {})
-    for p in sorted(params):
-        runhash += f"{p}_{params[p]};"
-    params["uuid"] = info.get("uuid", "")
+    def process_message(self, message):
+        """Process AMQP status message, update run_info."""
+        if isinstance(message, bytes):
+            message = message.decode("UTF-8", errors="replace")
+        info = json.loads(message)
 
-    if info["running"]:
-        running_tests.setdefault(info["package"], {}).setdefault(
-            runhash, {}
-        ).setdefault(info["release"], {})[info["architecture"]] = (
-            params,
-            info.get("duration", 0),
-            info["logtail"],
-        )
-    else:
-        try:
-            del running_tests[info["package"]][runhash][info["release"]][
-                info["architecture"]
-            ]
+        runhash = ""
+        params = info.get("params", {})
+        for p in sorted(params):
+            runhash += f"{p}_{params[p]};"
+        params["uuid"] = info.get("uuid", "")
 
-            # prune empty dicts
-            if not running_tests[info["package"]][runhash][info["release"]]:
-                del running_tests[info["package"]][runhash][info["release"]]
-                if not running_tests[info["package"]][runhash]:
-                    del running_tests[info["package"]][runhash]
-                    if not running_tests[info["package"]]:
-                        del running_tests[info["package"]]
-        except KeyError:
-            pass
+        if info["running"]:
+            self.run_info.setdefault(info["package"], {}).setdefault(
+                runhash, {}
+            ).setdefault(info["release"], {})[info["architecture"]] = (
+                params,
+                info.get("duration", 0),
+                info["logtail"],
+            )
+        else:
+            try:
+                del self.run_info[info["package"]][runhash][info["release"]][
+                    info["architecture"]
+                ]
 
-    return running_tests
+                # prune empty dicts
+                if not self.run_info[info["package"]][runhash][info["release"]]:
+                    del self.run_info[info["package"]][runhash][info["release"]]
+                    if not self.run_info[info["package"]][runhash]:
+                        del self.run_info[info["package"]][runhash]
+                        if not self.run_info[info["package"]]:
+                            del self.run_info[info["package"]]
+            except KeyError:
+                pass
+
+        with open(self.output, "w") as f:
+            f.write(json.dumps(self.run_info))
 
 
 def main():
+    cp = get_autopkgtest_cloud_conf()
+    running_json = cp["web"]["running_cache"]
+    info_writer = AutopkgtestRunningTests(running_json)
+
     amqp_con = amqp_connect()
     status_ch = amqp_con.channel()
-    status_ch.exchange_declare(
-        exchange="teststatus.fanout",
-        exchange_type="fanout",
-    )
-    queue_name = f"running-listener-{socket.getfqdn()}"
-    status_ch.queue_declare(queue_name, durable=False, auto_delete=True)
-    status_ch.queue_bind(queue_name, "teststatus.fanout", queue_name)
-    # package -> runhash -> release -> arch -> (params, duration, logtail)
-    running_tests = {}
-    queue_empty = False
-    while not queue_empty:
-        method, properties, body = status_ch.basic_get(queue_name)
-        if body is None:
-            queue_empty = True
-            continue
-        running_tests = process_message(body, running_tests)
-        status_ch.basic_ack(method.delivery_tag)
+    status_ch.exchange_declare(EXCHANGE_NAME, "fanout")
+    status_ch.queue_declare(QUEUE_NAME, durable=False, auto_delete=True)
+    status_ch.queue_bind(QUEUE_NAME, EXCHANGE_NAME, QUEUE_NAME)
+    status_ch.basic_consume(QUEUE_NAME, info_writer.process_message)
 
-    cp = get_autopkgtest_cloud_conf()
-    running_name = cp["web"]["running_cache"]
-    running_name_new = f"{running_name}.new"
-
-    with open(running_name_new, "w", encoding="utf-8") as f:
-        json.dump(running_tests, f)
-    os.rename(running_name_new, running_name)
+    status_ch.start_consuming()
 
 
 if __name__ == "__main__":
