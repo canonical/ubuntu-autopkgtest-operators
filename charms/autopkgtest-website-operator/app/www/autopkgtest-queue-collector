@@ -9,7 +9,7 @@ import tempfile
 from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf, get_release_arches
 from pika.exceptions import AMQPError
 
-AMQP_CONTEXTS = ["", "huge-", "ppa-", "upstream-"]
+AMQP_CONTEXTS = ["ubuntu", "huge", "ppa", "upstream"]
 
 logger = logging.getLogger()
 
@@ -69,7 +69,11 @@ class AutopkgtestQueueContents:
         for context in AMQP_CONTEXTS:
             for release, arches in release_arches.items():
                 for arch in arches:
-                    queue_name = f"debci-{context}{release}-{arch}"
+                    if context != "ubuntu":
+                        queue_name = f"debci-{context}-{release}-{arch}"
+                    else:
+                        # ubuntu test requests use context-less name (backwards compatibility)
+                        queue_name = f"debci-{release}-{arch}"
                     try:
                         requests = self.get_queue_requests(queue_name)
                     except AMQPError:
