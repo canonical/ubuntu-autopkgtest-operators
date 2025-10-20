@@ -15,7 +15,7 @@ class SystemdHelper:
             capture_output=True,
             text=True,
             check=True,
-        ).stdout
+        )
 
         # have to mangle the systemctl output manually here
         units = []
