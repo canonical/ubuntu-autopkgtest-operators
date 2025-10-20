@@ -69,7 +69,7 @@ def db_connect():
     return db
 
 
-def process_message(channel, method, properties, body):
+def process_message(channel, method, properties, body, db_con):
     global amqp_con
     if isinstance(body, bytes):
         body = body.decode("UTF-8", errors="replace")
