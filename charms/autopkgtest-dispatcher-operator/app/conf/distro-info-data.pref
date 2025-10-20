@@ -1,0 +1,3 @@
+Package: distro-info-data
+Pin: release a=*-proposed
+Pin-Priority: 1000

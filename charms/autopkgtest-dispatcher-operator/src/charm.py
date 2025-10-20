@@ -104,6 +104,10 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         ):
             self.unit.status = ops.MaintenanceStatus("setting up proxy settings")
             self.set_up_proxy()
+        self.unit.status = ops.MaintenanceStatus(
+            "enabling -proposed for distro-info-data"
+        )
+        self.enable_proposed()
         self.unit.status = ops.MaintenanceStatus("installing dependencies")
         self.install_dependencies()
         self.unit.status = ops.MaintenanceStatus("cloning repositories")
@@ -169,6 +173,23 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         os.environ["http_proxy"] = os.getenv("JUJU_CHARM_HTTP_PROXY", "")
         os.environ["https_proxy"] = os.getenv("JUJU_CHARM_HTTPS_PROXY", "")
         os.environ["no_proxy"] = os.getenv("JUJU_CHARM_NO_PROXY", "")
+
+    def enable_proposed(self) -> None:
+        src_dir = CHARM_APP_DATA / "conf"
+        shutil.copy(src_dir / "distro-info-data.pref", "/etc/apt/preferences.d/")
+
+        sourceslist = Path("/etc/apt/sources.list.d/ubuntu.sources")
+        old_sources = sourceslist.read_text().splitlines()
+        new_sources = []
+        for line in old_sources:
+            parts = line.split()
+            if parts and parts[0] == "Suites:" and "-" not in parts[1]:
+                if not any([t.endswith("-proposed") for t in parts]):
+                    line += f" {parts[1]}-proposed"
+            new_sources.append(line)
+
+        if new_sources != old_sources:
+            sourceslist.write_text("\n".join(new_sources) + "\n")
 
     # basic hooks
 
