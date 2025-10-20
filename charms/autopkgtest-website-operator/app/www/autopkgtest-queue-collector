@@ -62,9 +62,6 @@ class AutopkgtestQueueContents:
         release_arches = get_release_arches()
         all_arches = set()
 
-        channel = self.amqp_conn.channel()
-        channel.basic_qos(0, 1)
-
         result = {}
         for context in AMQP_CONTEXTS:
             for release, arches in release_arches.items():
