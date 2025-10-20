@@ -23,8 +23,4 @@
   {% else %}
     {{ macros.nonexistent_package() }}
   {% endif %}
-
-  <p>
-    To ease the browsing of logs, you can use <a href="{{ url_for('static', filename='logs-viewer.user.js') }}">this userscript</a> with any extension supporting that, like <a href="https://www.tampermonkey.net/">TamperMonkey</a>.
-  </p>
 {% endblock content %}
