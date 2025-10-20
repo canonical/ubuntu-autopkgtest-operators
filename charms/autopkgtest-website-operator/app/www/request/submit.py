@@ -8,7 +8,6 @@ import json
 import logging
 import os
 import re
-import sqlite3
 import urllib.parse
 import urllib.request
 import uuid
@@ -17,7 +16,6 @@ from time import time
 from urllib.error import HTTPError
 
 import pika
-from distro_info import UbuntuDistroInfo
 from helpers.cache import KeyValueCache
 from helpers.exceptions import (
     BadRequest,
@@ -27,7 +25,7 @@ from helpers.exceptions import (
     RequestInQueue,
     RequestRunning,
 )
-from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf
+from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf, get_release_arches
 
 # Launchpad REST API base
 LP = "https://api.launchpad.net/1.0/"
@@ -48,24 +46,8 @@ class Submit:
     def __init__(self):
         self.config = get_autopkgtest_cloud_conf()
 
-        # read valid releases and architectures from DB
-        self.db_con = sqlite3.connect(
-            "file:{}?mode=ro".format(self.config["web"]["database_ro"]), uri=True
-        )
-        self.releases = set(
-            UbuntuDistroInfo().supported() + UbuntuDistroInfo().supported_esm()
-        )
-        logging.debug(f"Valid releases: {self.releases}")
-
-        self.architectures = set()
-        c = self.db_con.cursor()
-        c.execute("SELECT DISTINCT arch from test")
-        while True:
-            row = c.fetchone()
-            if row is None:
-                break
-            self.architectures.add(row[0])
-        logging.debug(f"Valid architectures: {self.architectures}")
+        self.release_arches = get_release_arches()
+        logging.debug(f"Valid arches per release: {self.release_arches}")
 
         self.allowed_user_cache = KeyValueCache("/dev/shm/autopkgtest_users.json")
 
@@ -123,15 +105,9 @@ class Submit:
         if kwargs:
             raise ValueError(f"Invalid argument {list(kwargs)[0]}")
 
-        if release not in self.releases:
+        if release not in self.release_arches:
             raise NotFound("release", release)
-        if arch not in self.architectures:
-            if arch == "riscv64":
-                raise NotFound(
-                    "arch",
-                    arch,
-                    "is currently not supported by autopkgtest infrastructure.",
-                )
+        if arch not in self.release_arches[release]:
             raise NotFound("arch", arch)
         for ppa in ppas:
             if not self.is_valid_ppa(ppa):
@@ -237,9 +213,9 @@ class Submit:
 
         self.migration_reference_all_proposed_check(triggers, kwargs)
 
-        if release not in self.releases:
+        if release not in self.release_arches:
             raise NotFound("release", release)
-        if arch not in self.architectures:
+        if arch not in self.release_arches[release]:
             raise NotFound("arch", arch)
         if not NAME.match(package):
             raise NotFound("package", package)
