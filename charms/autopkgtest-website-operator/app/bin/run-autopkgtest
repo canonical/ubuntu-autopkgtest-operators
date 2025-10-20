@@ -170,8 +170,6 @@ if __name__ == "__main__":
     params["submit-time"] = datetime.strftime(
         datetime.now().astimezone(UTC), "%Y-%m-%d %H:%M:%S%z"
     )
-    params["uuid"] = str(uuid.uuid4())
-    params = "\n" + json.dumps(params)
 
     creds = urllib.parse.urlsplit(config["amqp"]["uri"], allow_fragments=False)
     assert creds.scheme == "amqp"
@@ -189,6 +187,8 @@ if __name__ == "__main__":
             for arch in args.architecture:
                 queue = f"debci-{context}{args.series}-{arch}"
                 for pkg in args.package:
+                    params["uuid"] = str(uuid.uuid4())
+                    params = "\n" + json.dumps(params)
                     ch.basic_publish(
                         exchange="",
                         routing_key=queue,
