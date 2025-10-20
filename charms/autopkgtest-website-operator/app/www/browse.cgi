@@ -404,7 +404,7 @@ def package_overview(package, _=None):
                 "no-release": {
                     "no-arch": [
                         1,
-                        ["There are errors in cache-amqp, please contact QA team"],
+                        ["There are errors in cache-amqp"],
                     ]
                 }
             }
@@ -742,7 +742,7 @@ def package_release_arch(package, release, arch, _=None):
             dict(
                 version="Unknown running list",
                 triggers="There are errors in running.json",
-                additional_params="Please contact QA team",
+                additional_params="",
                 human_date="",
                 human_sec="",
                 requester="",
@@ -790,7 +790,7 @@ def package_release_arch(package, release, arch, _=None):
             dict(
                 version="Unknown queued list",
                 triggers="There are errors in cache-amqp",
-                additional_params="Please contact QA team",
+                additional_params="",
                 human_date="",
                 human_sec="",
                 requester="",

@@ -554,7 +554,7 @@ def request(channel, method, properties, body):
             # now let's fake up a log file
             with open(os.path.join(out_dir, "log"), "w") as log:
                 log.write(
-                    "This package is marked to never run. To get the entry removed, contact a member of the Ubuntu Release or Canonical Ubuntu QA team."
+                    "This package is marked to never run. To get the entry removed, contact a member of the Ubuntu Release Team."
                 )
 
             triggers = None
