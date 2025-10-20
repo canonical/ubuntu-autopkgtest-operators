@@ -47,7 +47,9 @@
 
   # reverse proxy rules
   SSLProxyEngine on
+  {% if swift_storage_url %}
   ProxyPass "/results/" "{{ swift_storage_url }}"
+  {%- endif %}
   ProxyPass "/rabbitmq-management/" "http://{{ rabbithost }}:15672/"
 
   ServerName {{ servername }}
