@@ -8,7 +8,6 @@ import sqlite3
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
-import request.submit
 from distro_info import UbuntuDistroInfo
 from helpers.exceptions import (
     BadRequest,
@@ -16,6 +15,8 @@ from helpers.exceptions import (
     RequestRunning,
     WebControlException,
 )
+
+import request.submit
 
 
 class SubmitTestBase(TestCase):

@@ -4,8 +4,9 @@ import os
 from unittest import TestCase
 from unittest.mock import mock_open, patch
 
-import request.app
 from helpers.exceptions import WebControlException
+
+import request.app
 from request.submit import Submit
 
 
