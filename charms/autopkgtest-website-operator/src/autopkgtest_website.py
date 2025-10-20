@@ -78,15 +78,18 @@ def install() -> None:
     apt.add_package(PACKAGES)
 
     logger.info("Creating directories")
+    # data
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    PUBLIC_DATA_DIR.mkdir(exist_ok=True)
-    shutil.rmtree(WWW_DIR, ignore_errors=True)
-    WWW_DIR.mkdir()
     shutil.chown(DATA_DIR, user=USER, group=GROUP)
+    # public data
+    PUBLIC_DATA_DIR.mkdir(exist_ok=True)
     shutil.chown(PUBLIC_DATA_DIR, user=USER, group=GROUP)
+    # tools
+    shutil.copytree(CHARM_APP_DATA / "bin", "/usr/local/bin", dirs_exist_ok=True)
 
     logger.info("Installing website")
-    shutil.copytree(CHARM_APP_DATA / "www", WWW_DIR, dirs_exist_ok=True)
+    shutil.rmtree(WWW_DIR, ignore_errors=True)
+    shutil.copytree(CHARM_APP_DATA / "www", WWW_DIR)
     os.symlink(Path("/usr/share/javascript/bootstrap"), WWW_DIR / "static/bootstrap")
     os.symlink(Path("/usr/share/javascript/jquery"), WWW_DIR / "static/jquery")
     os.symlink(DATA_DIR / "running.json", WWW_DIR / "static/running.json")

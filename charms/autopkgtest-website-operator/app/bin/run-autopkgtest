@@ -1,0 +1,219 @@
+#!/usr/bin/python3
+# Request runs of autopkgtests for packages
+# Imported from lp:ubuntu-archive-scripts, lightly modified to not rely on a
+# britney config file, to be used for administration or testing.
+
+import argparse
+import json
+import os
+import sys
+import urllib.parse
+import uuid
+from datetime import UTC, datetime
+
+import amqp
+
+my_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
+
+
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-s", "--series", required=True, help="Distro series name (required)."
+    )
+    parser.add_argument(
+        "-a",
+        "--architecture",
+        required=True,
+        action="append",
+        default=[],
+        help="Only run test(s) on given architecture name(s) (required). "
+        "Can be specified multiple times.",
+    )
+    parser.add_argument(
+        "--trigger",
+        required=True,
+        action="append",
+        default=[],
+        metavar="SOURCE/VERSION",
+        help="Add triggering package to request (required). "
+        "Can be specified multiple times.",
+    )
+    parser.add_argument(
+        "--ppa",
+        metavar="LPUSER/PPANAME",
+        action="append",
+        default=[],
+        help="Enable PPA for requested test(s). Can be specified multiple times.",
+    )
+    parser.add_argument(
+        "--env",
+        metavar="KEY=VALUE",
+        action="append",
+        default=[],
+        help="List of VAR=value strings. "
+        "This can be used to influence a test's behaviour "
+        "from a test request. "
+        "Can be specified multiple times.",
+    )
+    parser.add_argument(
+        "--test-git",
+        metavar="URL [branchname]",
+        help="A single URL or URL branchname. "
+        "The test will be git cloned from that URL and ran "
+        "from the checkout. This will not build binary "
+        "packages from the branch and run tests against "
+        "those, the test dependencies will be taken from the "
+        "archive, or PPA if given. In this case the "
+        "srcpkgname will only be used for the result path in "
+        "swift and be irrelevant for the actual test.",
+    )
+    parser.add_argument(
+        "--build-git",
+        metavar="URL [branchname]",
+        help="A single URL or URL branchname. "
+        "Like --test-git`, but will first build binary "
+        "packages from the branch and run tests against those.",
+    )
+    parser.add_argument(
+        "--test-bzr",
+        help="A single URL. "
+        "The test will be checked out with bzr from that URL. "
+        "Otherwise this has the same behaviour as test-git.",
+    )
+    parser.add_argument(
+        "--swiftuser",
+        help="Swift username for private result handling. "
+        "The new ADT infrastructure now supports running private tests. "
+        "Such tests will put their rest results in private containers "
+        "only readable by the selected swiftuser.",
+    )
+    parser.add_argument(
+        "--readable-by",
+        action="append",
+        default=[],
+        metavar="LP team/username",
+        help="Make private result readable by the selected LP user/team. "
+        "Can be specified multiple times.",
+    )
+    parser.add_argument(
+        "--all-proposed",
+        action="store_true",
+        help="Disable apt pinning and use all of -proposed",
+    )
+    parser.add_argument(
+        "--bulk",
+        action="store_true",
+        help="Mark this as a bulk (low priority) test where possible",
+    )
+    parser.add_argument(
+        "--requester", help="Test requester name to record for posterity."
+    )
+    parser.add_argument(
+        "package", nargs="+", help="Source package name(s) whose tests to run."
+    )
+    args = parser.parse_args()
+
+    if not args.trigger and not args.ppa:
+        parser.error("One of --trigger or --ppa must be given")
+
+    if not args.architecture:
+        parser.error("--architecture must be given")
+
+    # verify syntax of triggers
+    for t in args.trigger:
+        try:
+            (_, _) = t.split("/")
+        except ValueError:
+            parser.error(f'Invalid trigger format "{t}", must be "sourcepkg/version"')
+
+    # verify syntax of PPAs
+    for t in args.ppa:
+        try:
+            (_, _) = t.split("/")
+        except ValueError:
+            parser.error(f'Invalid ppa format "{t}", must be "lpuser/ppaname"')
+
+    return args
+
+
+if __name__ == "__main__":
+    args = parse_args()
+
+    context = ""
+    params = {}
+    if args.bulk:
+        context = "huge-"
+    if args.trigger:
+        params["triggers"] = args.trigger
+    if args.ppa:
+        params["ppas"] = args.ppa
+        context = "ppa-"
+    if args.env:
+        params["env"] = args.env
+    if args.test_git:
+        params["test-git"] = args.test_git
+        context = "upstream-"
+    elif args.build_git:
+        params["build-git"] = args.build_git
+        context = "upstream-"
+    if args.test_bzr:
+        params["test-bzr"] = args.test_bzr
+        context = "upstream-"
+    if args.swiftuser:
+        params["swiftuser"] = args.swiftuser
+    if args.readable_by:
+        params["readable-by"] = args.readable_by
+    if args.all_proposed:
+        params["all-proposed"] = "1"
+    if args.requester:
+        params["requester"] = args.requester
+    else:
+        try:
+            params["requester"] = os.environ["SUDO_USER"]
+        except KeyError:
+            pass
+    params["submit-time"] = datetime.strftime(
+        datetime.now().astimezone(UTC), "%Y-%m-%d %H:%M:%S%z"
+    )
+    params["uuid"] = str(uuid.uuid4())
+    params = "\n" + json.dumps(params)
+
+    try:
+        creds = urllib.parse.urlsplit(
+            "amqp://{user}:{password}@{host}".format(
+                user=os.environ["RABBIT_USER"],
+                password=os.environ["RABBIT_PASSWORD"],
+                host=os.environ["RABBIT_HOST"],
+            ),
+            allow_fragments=False,
+        )
+    except KeyError:
+        with open(os.path.expanduser("~/rabbitmq.cred")) as f:
+            env_dict = dict(
+                tuple(line.replace("\n", "").replace('"', "").split("="))
+                for line in f.readlines()
+                if not line.startswith("#")
+            )
+        creds = urllib.parse.urlsplit(
+            "amqp://{user}:{password}@{host}".format(
+                user=env_dict["RABBIT_USER"],
+                password=env_dict["RABBIT_PASSWORD"],
+                host=env_dict["RABBIT_HOST"],
+            ),
+            allow_fragments=False,
+        )
+    assert creds.scheme == "amqp"
+
+    with amqp.Connection(
+        creds.hostname, userid=creds.username, password=creds.password
+    ) as amqp_con:
+        with amqp_con.channel() as ch:
+            for arch in args.architecture:
+                queue = f"debci-{context}{args.series}-{arch}"
+                for pkg in args.package:
+                    ch.basic_publish(
+                        amqp.Message(pkg + params, delivery_mode=2),  # persistent
+                        routing_key=queue,
+                    )
