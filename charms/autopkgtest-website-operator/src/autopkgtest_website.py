@@ -89,7 +89,11 @@ def install() -> None:
 
     logger.info("Installing website")
     shutil.rmtree(WWW_DIR, ignore_errors=True)
-    shutil.copytree(CHARM_APP_DATA / "www", WWW_DIR)
+    shutil.copytree(
+        CHARM_APP_DATA / "www",
+        WWW_DIR,
+        ignore=shutil.ignore_patterns("tests", "tests.py"),
+    )
     os.symlink(Path("/usr/share/javascript/bootstrap"), WWW_DIR / "static/bootstrap")
     os.symlink(Path("/usr/share/javascript/jquery"), WWW_DIR / "static/jquery")
     os.symlink(PUBLIC_DATA_DIR / "autopkgtest.db", WWW_DIR / "static/autopkgtest.db")
