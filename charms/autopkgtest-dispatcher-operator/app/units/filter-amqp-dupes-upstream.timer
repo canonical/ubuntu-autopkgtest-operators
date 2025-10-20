@@ -5,4 +5,4 @@ Description=Cancel duplicate upstream test requests (timer)
 OnCalendar=minutely
 
 [Install]
-WantedBy=autopkgtest.target
+WantedBy=timers.target
