@@ -33,8 +33,8 @@ class AutopkgtestQueueContents:
                 break
             requests.append(body)
             logging.debug(f"{queue_name}: name {body}")
-        # reject the request so it becomes available to the workers
-        self.channel.basic_reject(delivery_tag=method.delivery_tag, requeue=True)
+            # reject the request so it becomes available to the workers
+            self.channel.basic_reject(delivery_tag=method.delivery_tag, requeue=True)
 
         res = []
         for r in requests:
