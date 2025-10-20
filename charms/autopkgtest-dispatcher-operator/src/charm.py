@@ -255,6 +255,21 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         if units_to_enable:
             systemd.service_enable("--now", *units_to_enable)
 
+    def get_releases(self) -> list[str]:
+        """Return all supported releases."""
+        # we can't do a top-level import because it's the charm itself that
+        # installs python3-distro-info.
+        import distro_info
+
+        # get all supported releases + extra in reverse order, without duplicates
+        udi = distro_info.UbuntuDistroInfo()
+        all_releases = (
+            udi.supported_esm() + udi.supported() + self.typed_config.extra_releases
+        )
+        all_releases = [r for r in reversed(udi.all) if r in all_releases]
+
+        return all_releases
+
     def write_worker_config(self):
         with open(WORKER_CONFIG_PATH, "w") as file:
             file.write(
@@ -263,7 +278,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
                     [autopkgtest]
                     checkout_dir = {AUTOPKGTEST_LOCATION}
                     per_package_config_dir = {AUTOPKGTEST_PACKAGE_CONFIG_LOCATION}
-                    releases = {self.typed_config.releases}
+                    releases = {" ".join(self.get_releases())}
                     setup_command =
                     setup_command2 =
                     retry_delay = 300
