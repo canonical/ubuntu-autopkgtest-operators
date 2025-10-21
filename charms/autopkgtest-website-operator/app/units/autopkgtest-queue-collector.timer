@@ -2,7 +2,7 @@
 Description=Cache queue entries from AMQP (timer)
 
 [Timer]
-OnCalendar=minutely
+OnUnitInactiveSec=5s
 
 [Install]
 WantedBy=timers.target
