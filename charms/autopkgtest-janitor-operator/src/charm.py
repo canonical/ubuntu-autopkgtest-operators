@@ -380,7 +380,16 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
     def _on_config_changed(self, event: ops.ConfigChangedEvent):
         self.unit.status = ops.MaintenanceStatus("updating distro-info-data")
         apt.update()
-        apt.add_package("distro-info-data")
+        # Note apt.add_package() does not upgrade an already installed package.
+        subprocess.run(
+            [
+                "apt-get",
+                "-o=APT::Get::Always-Include-Phased-Updates=true",
+                "install",
+                "distro-info-data",
+            ],
+            check=True,
+        )
 
         self.unit.status = ops.MaintenanceStatus("installing systemd units")
         self.install_systemd_units()
