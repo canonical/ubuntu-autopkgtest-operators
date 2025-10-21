@@ -3,6 +3,8 @@
 # queue, and writes the data into running.json
 
 import json
+import os
+import tempfile
 
 from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf
 
@@ -52,8 +54,15 @@ class AutopkgtestRunningTests:
             except KeyError:
                 pass
 
-        with open(self.output, "w") as f:
-            f.write(json.dumps(self.run_info))
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            dir=os.path.dirname(self.output),
+            suffix=".json",
+            delete_on_close=False,
+        ) as tf:
+            tf.write(json.dumps(self.run_info))
+            tf.close()
+            os.rename(tf.name, self.output)
 
 
 def main():
