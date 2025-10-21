@@ -29,6 +29,10 @@ charm-libs:
   - lib: traefik_k8s.ingress
     version: "2"
 
+actions:
+  reconfigure:
+    description: Reconfigure website with current distro-info-data
+
 config:
   options:
     hostname:

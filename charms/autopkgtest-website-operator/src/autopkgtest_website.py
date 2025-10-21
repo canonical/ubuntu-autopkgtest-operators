@@ -132,6 +132,19 @@ def configure(
     logger.info("Stopping apache2")
     systemd.service_stop("apache2")
 
+    logger.info("updating distro-info-data")
+    apt.update()
+    # Note apt.add_package() does not upgrade an already installed package.
+    subprocess.run(
+        [
+            "apt-get",
+            "-o=APT::Get::Always-Include-Phased-Updates=true",
+            "install",
+            "distro-info-data",
+        ],
+        check=True,
+    )
+
     logger.info("Making runtime tmpfiles")
     with open("/etc/tmpfiles.d/autopkgtest-web-runtime.conf", "w") as f:
         f.write("D %t/autopkgtest_webcontrol 0755 www-data www-data\n")
