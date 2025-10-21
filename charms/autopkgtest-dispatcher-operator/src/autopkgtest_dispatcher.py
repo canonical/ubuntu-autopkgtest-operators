@@ -244,9 +244,9 @@ def configure(extra_releases, swift_creds, amqp_hostname, amqp_username, amqp_pa
     write_rabbitmq_creds(amqp_hostname, amqp_username, amqp_password)
 
 
-def add_worker(arch: str, token: str):
-    run_as_user(f"lxc remote add worker-{arch} {token}")
+def add_remote(arch: str, token: str):
+    run_as_user(f"lxc remote add remote-{arch} {token}")
 
 
-def create_worker_units(worker_config: dict[str, int]):
-    systemd_helper.set_up_systemd_units(worker_config)
+def reconcile_worker_units(worker_config: dict[str, int]):
+    systemd_helper.reconcile_systemd_worker_units(worker_config)

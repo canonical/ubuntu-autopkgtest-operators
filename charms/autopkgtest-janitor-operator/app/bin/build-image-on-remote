@@ -9,7 +9,7 @@ EOF
 
 export RELEASE
 
-remote="worker-$arch"
+remote="remote-$arch"
 imgremote="ubuntu-daily"
 base=$RELEASE
 
@@ -51,7 +51,7 @@ set -- "$@" --remote "$remote" "ubuntu-daily:$base/$arch"
 # If RUNTIME_DIRECTORY is set, which normally happens when this script
 # is started from the systemd service, then limit to one image build
 # per architecture (remote).
-if [ -n "${RUNTIME_DIRECTORY-}" ]; then
+if [ -d "${RUNTIME_DIRECTORY-}" ]; then
     set -- flock --verbose "$RUNTIME_DIRECTORY/$arch.lock" "$@"
 fi
 

@@ -1,7 +1,7 @@
 name: ubuntu-autopkgtest-janitor
 type: charm
-summary: A charm for performing maintenance for autopkgtest workers.
-description: A charm for performing maintenance for autopkgtest workers.
+summary: A charm for performing maintenance for the autopkgtest infrastructure
+description: A charm for performing maintenance for the autopkgtest infrastructure.
 links:
   issues:
     - https://github.com/canonical/ubuntu-autopkgtest-operators/issues
@@ -29,22 +29,22 @@ parts:
       - units/*
 
 actions:
-  add-worker:
-    description: Add worker to run maintenance tasks on.
+  add-remote:
+    description: Add remote to run maintenance tasks on.
     params:
       arch:
         type: string
-        description: Architecture of the worker.
+        description: Architecture of the remote.
         enum: [amd64, amd64v3, i386, arm64, armhf, s390x, ppc64el, riscv64]
       token:
         type: string
         description: LXD client token to connect to a remote.
-  remove-worker:
-    description: Remove a worker from the janitor.
+  remove-remote:
+    description: Remove a remote from the janitor.
     params:
       arch:
         type: string
-        description: Architecture of the worker.
+        description: Architecture of the remote.
         enum: [amd64, amd64v3, i386, arm64, armhf, s390x, ppc64el, riscv64]
   rebuild-all-images:
     description: Trigger rebuild of all the images
