@@ -71,6 +71,24 @@ def install() -> None:
                 )
             )
 
+    logger.info("enabling -proposed for distro-info-data")
+
+    sourceslist = Path("/etc/apt/sources.list.d/ubuntu.sources")
+    old_sources = sourceslist.read_text().splitlines()
+    new_sources = []
+    for line in old_sources:
+        parts = line.split()
+        if parts and parts[0] == "Suites:" and "-" not in parts[1]:
+            if not any([t.endswith("-proposed") for t in parts]):
+                line += f" {parts[1]}-proposed"
+        new_sources.append(line)
+
+    if new_sources != old_sources:
+        sourceslist.write_text("\n".join(new_sources) + "\n")
+
+    src_dir = CHARM_APP_DATA / "conf"
+    shutil.copy(src_dir / "distro-info-data.pref", "/etc/apt/preferences.d/")
+
     logger.info("Updating package index")
     apt.update()
 
