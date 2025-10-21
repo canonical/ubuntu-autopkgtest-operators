@@ -13,6 +13,11 @@ remote="worker-$arch"
 imgremote="ubuntu-daily"
 base=$RELEASE
 
+basearch=$arch
+if [ "$basearch" = amd64v3 ]; then
+    basearch=amd64
+fi
+
 if [ -z "${MIRROR-}" ]; then
     echo 'MIRROR environment variable is not set, the image default will be used'
 fi
@@ -29,8 +34,8 @@ if [ "$type" = "vm" ]; then
 fi
 if
     [ "$RELEASE" = "$latest" ] &&
-    "$@" "$imgremote:$base/$arch" 2>&1 | grep -q "couldn't be found" &&
-    "$@" "$imgremote:$stable/$arch" >/dev/null 2>&1
+    "$@" "$imgremote:$base/$basearch" 2>&1 | grep -q "couldn't be found" &&
+    "$@" "$imgremote:$stable/$basearch" >/dev/null 2>&1
 then
     echo "No $base image appears to be available, falling back to $stable"
     base=$stable
