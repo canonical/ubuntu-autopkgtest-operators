@@ -138,7 +138,7 @@ def configure(
     )
 
     j2env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader(CHARM_APP_DATA / "config"),
+        loader=jinja2.FileSystemLoader(CHARM_APP_DATA / "conf"),
         autoescape=jinja2.select_autoescape(),
     )
     j2template = j2env.get_template("a2-autopkgtest.conf.j2")
