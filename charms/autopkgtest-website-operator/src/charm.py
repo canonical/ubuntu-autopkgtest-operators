@@ -4,16 +4,11 @@
 
 """Charm the application."""
 
-import logging
-
 import autopkgtest_website
 import config_types
 import ops
 from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer as IngressRequirer
 from ops.framework import StoredState
-
-logger = logging.getLogger(__name__)
-
 
 RABBITMQ_USERNAME = "website"
 HTTP_PORT = 80
@@ -140,7 +135,6 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
 
         # the first relation_changed event does not contain credentials
         if "password" not in unit_data:
-            logger.info("rabbitmq-server has not sent password yet")
             return
 
         self.unit.status = ops.MaintenanceStatus(
