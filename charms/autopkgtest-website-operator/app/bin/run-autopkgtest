@@ -188,11 +188,11 @@ if __name__ == "__main__":
                 queue = f"debci-{context}{args.series}-{arch}"
                 for pkg in args.package:
                     params["uuid"] = str(uuid.uuid4())
-                    params = "\n" + json.dumps(params)
+                    json_params = "\n" + json.dumps(params)
                     ch.basic_publish(
                         exchange="",
                         routing_key=queue,
-                        body=pkg + params,
+                        body=pkg + json_params,
                         properties=pika.BasicProperties(
                             delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
                         ),
