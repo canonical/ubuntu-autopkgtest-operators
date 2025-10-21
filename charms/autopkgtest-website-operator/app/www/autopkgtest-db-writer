@@ -3,12 +3,12 @@
 import json
 import logging
 import os
-import socket
 import sqlite3
 
 from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf
 
 EXCHANGE_NAME = "testcomplete.fanout"
+QUEUE_NAME = "complete-listener"
 amqp_con = None
 
 
@@ -204,11 +204,10 @@ if __name__ == "__main__":
         exchange_type="fanout",
         durable=True,
     )
-    queue_name = f"complete-listener-{socket.getfqdn()}"
-    status_ch.queue_declare(queue_name, durable=True, auto_delete=False)
-    status_ch.queue_bind(queue_name, EXCHANGE_NAME, queue_name)
+    status_ch.queue_declare(QUEUE_NAME, durable=True, auto_delete=False)
+    status_ch.queue_bind(QUEUE_NAME, EXCHANGE_NAME, QUEUE_NAME)
 
-    logging.info(f"Listening to requests on {queue_name}")
+    logging.info(f"Listening to requests on {QUEUE_NAME}")
     status_ch.basic_consume(
         queue="",
         on_message_callback=lambda *args: process_message(*args, db_con),
