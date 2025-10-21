@@ -2,54 +2,13 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-import logging
-import os
-import shutil
-import subprocess
-import textwrap
-import time
-from pathlib import Path
-
 import action_types
-import charms.operator_libs_linux.v1.systemd as systemd
+import autopkgtest_dispatcher
 import config_types
-import jinja2
 import ops
-from charmlibs import apt, snap
 from ops.framework import StoredState
-from systemd_helper import SystemdHelper
-
-logger = logging.getLogger(__name__)
-
-USER = "ubuntu"
-
-AUTOPKGTEST_REPO = "https://salsa.debian.org/ubuntu-ci-team/autopkgtest.git"
-AUTOPKGTEST_LOCATION = Path(f"~{USER}/autopkgtest").expanduser()
-
-AUTOPKGTEST_PACKAGE_CONFIG_REPO = "https://git.launchpad.net/~ubuntu-release/autopkgtest-cloud/+git/autopkgtest-package-configs"
-AUTOPKGTEST_PACKAGE_CONFIG_BRANCH = "main"
-AUTOPKGTEST_PACKAGE_CONFIG_LOCATION = Path(
-    f"~{USER}/autopkgtest-package-configs"
-).expanduser()
-
-DEB_DEPENDENCIES = [
-    "autodep8",
-    "python3-pika",
-    "python3-swiftclient",
-]
-SNAP_DEPENDENCIES = [{"name": "lxd", "channel": "6/stable"}]
-
-CONF_DIRECTORY = Path("/etc/autopkgtest-dispatcher")
 
 RABBITMQ_USERNAME = "dispatcher"
-RABBITMQ_CREDS_PATH = CONF_DIRECTORY / "rabbitmq.cred"
-
-WORKER_CONFIG_PATH = CONF_DIRECTORY / "worker.conf"
-SWIFT_CONFIG_PATH = CONF_DIRECTORY / "swift.cred"
-
-# charm files path
-CHARM_SOURCE_PATH = Path(__file__).parent.parent
-CHARM_APP_DATA = CHARM_SOURCE_PATH / "app"
 
 
 class AutopkgtestDispatcherCharm(ops.CharmBase):
@@ -71,7 +30,6 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         self.typed_config = self.load_config(
             config_types.DispatcherConfig, errors="blocked"
         )
-        self.systemd_helper = SystemdHelper()
 
         # basic hooks
         framework.observe(self.on.install, self._on_install)
@@ -97,28 +55,10 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
     def _on_install(self, event: ops.InstallEvent):
         """Install the workload on the machine."""
-        self.unit.status = ops.MaintenanceStatus("creating directories")
-        CONF_DIRECTORY.mkdir(exist_ok=True)
-        if (
-            "JUJU_CHARM_HTTPS_PROXY" in os.environ
-            or "JUJU_CHARM_HTTP_PROXY" in os.environ
-        ):
-            self.unit.status = ops.MaintenanceStatus("setting up proxy settings")
-            self.set_up_proxy()
-        self.unit.status = ops.MaintenanceStatus(
-            "enabling -proposed for distro-info-data"
+        self.unit.status = ops.MaintenanceStatus("installing workload")
+        autopkgtest_dispatcher.install(
+            self.typed_config.autopkgtest_git_branch, self.typed_config.extra_releases
         )
-        self.enable_proposed()
-        self.unit.status = ops.MaintenanceStatus("installing dependencies")
-        self.install_dependencies()
-        self.unit.status = ops.MaintenanceStatus("cloning repositories")
-        self.clone_repositories()
-        self.unit.status = ops.MaintenanceStatus("installing worker and tools")
-        self.install_worker_and_tools()
-        self.unit.status = ops.MaintenanceStatus("writing worker config")
-        self.write_worker_config()
-        self.unit.status = ops.MaintenanceStatus("installing systemd units")
-        self.install_systemd_units()
 
         self._stored.installed = True
 
@@ -127,180 +67,13 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         if isinstance(self.unit.status, ops.BlockedStatus):
             return
 
+        autopkgtest_dispatcher.start()
         self.unit.status = ops.ActiveStatus()
 
     def _on_reconfigure(self, event: ops.ActionEvent):
         """Reconfigure."""
         self.unit.status = ops.MaintenanceStatus("reconfiguring")
         self.on.config_changed.emit()
-
-    # utils
-    def run_as_user(self, command: str):
-        subprocess.run(
-            [
-                "su",
-                "--login",
-                "--whitelist-environment=https_proxy,http_proxy,no_proxy",
-                USER,
-                "--command",
-                command,
-            ],
-            check=True,
-        )
-
-    def write_rabbitmq_creds(self):
-        """Set rabbitmq creds."""
-        with open(RABBITMQ_CREDS_PATH, "w") as file:
-            file.write(
-                textwrap.dedent(
-                    f"""\
-                    RABBIT_HOST="{self._stored.amqp_hostname}"
-                    RABBIT_USER="{RABBITMQ_USERNAME}"
-                    RABBIT_PASSWORD="{self._stored.amqp_password}"
-                    """
-                )
-            )
-
-    def set_up_proxy(self):
-        Path("/etc/environment.d").mkdir(exist_ok=True)
-        with open("/etc/environment.d/proxy.conf", "w") as file:
-            file.write(
-                textwrap.dedent(
-                    f"""\
-                    http_proxy={os.getenv("JUJU_CHARM_HTTP_PROXY", "")}
-                    https_proxy={os.getenv("JUJU_CHARM_HTTPS_PROXY", "")}
-                    no_proxy={os.getenv("JUJU_CHARM_NO_PROXY", "")}
-                    """
-                )
-            )
-
-        # changed environment variables don't get picked up by this file
-        # so set them explicitly
-        os.environ["http_proxy"] = os.getenv("JUJU_CHARM_HTTP_PROXY", "")
-        os.environ["https_proxy"] = os.getenv("JUJU_CHARM_HTTPS_PROXY", "")
-        os.environ["no_proxy"] = os.getenv("JUJU_CHARM_NO_PROXY", "")
-
-    def enable_proposed(self) -> None:
-        src_dir = CHARM_APP_DATA / "conf"
-        shutil.copy(src_dir / "distro-info-data.pref", "/etc/apt/preferences.d/")
-
-        sourceslist = Path("/etc/apt/sources.list.d/ubuntu.sources")
-        old_sources = sourceslist.read_text().splitlines()
-        new_sources = []
-        for line in old_sources:
-            parts = line.split()
-            if parts and parts[0] == "Suites:" and "-" not in parts[1]:
-                if not any([t.endswith("-proposed") for t in parts]):
-                    line += f" {parts[1]}-proposed"
-            new_sources.append(line)
-
-        if new_sources != old_sources:
-            sourceslist.write_text("\n".join(new_sources) + "\n")
-
-    # basic hooks
-
-    def install_dependencies(self) -> None:
-        apt.update()
-        apt.add_package(DEB_DEPENDENCIES)
-        for needed_snap in SNAP_DEPENDENCIES:
-            snap.add(needed_snap["name"], channel=needed_snap["channel"])
-
-    def clone_repositories(self) -> None:
-        for repo, branch, location in [
-            (
-                AUTOPKGTEST_REPO,
-                self.typed_config.autopkgtest_git_branch,
-                AUTOPKGTEST_LOCATION,
-            ),
-            (
-                AUTOPKGTEST_PACKAGE_CONFIG_REPO,
-                AUTOPKGTEST_PACKAGE_CONFIG_BRANCH,
-                AUTOPKGTEST_PACKAGE_CONFIG_LOCATION,
-            ),
-        ]:
-            shutil.rmtree(location, ignore_errors=True)
-            # TODO: the currently packaged version of pygit2 does not support cloning through
-            # a proxy. the next release should hopefully include this feature.
-            # pygit2.clone_repository(repo, location, checkout_branch=branch)
-            self.run_as_user(
-                f"git clone --depth 1 --branch '{branch}' '{repo}' '{location}'"
-            )
-
-    def install_worker_and_tools(self):
-        src_path = CHARM_APP_DATA / "bin"
-        dest_dir = Path("/usr/local/bin/")
-        shutil.copy(src_path / "worker", dest_dir)
-        shutil.copy(src_path / "filter-amqp-dupes-upstream", dest_dir)
-
-    def install_systemd_units(self):
-        units_path = CHARM_APP_DATA / "units"
-        units_to_install = [u.name for u in (units_path).glob("*")]
-        units_to_enable = [u.name for u in (units_path).glob("*.timer")]
-
-        system_units_dir = Path("/etc/systemd/system/")
-        j2env = jinja2.Environment(
-            loader=jinja2.FileSystemLoader(units_path),
-            autoescape=jinja2.select_autoescape(),
-        )
-        j2context = {
-            "user": USER,
-            "conf_directory": CONF_DIRECTORY,
-            "rabbitmq_creds_path": RABBITMQ_CREDS_PATH,
-            "autopkgtest_package_config_location": AUTOPKGTEST_PACKAGE_CONFIG_LOCATION,
-        }
-        for unit in units_to_install:
-            if unit.endswith(".j2"):
-                unit_basename = unit.removesuffix(".j2")
-                j2template = j2env.get_template(unit)
-                with open(system_units_dir / unit_basename, "w") as f:
-                    f.write(j2template.render(j2context))
-            else:
-                shutil.copy(units_path / unit, system_units_dir)
-
-        systemd.daemon_reload()
-        if units_to_enable:
-            systemd.service_enable("--now", *units_to_enable)
-
-    def get_releases(self) -> list[str]:
-        """Return all supported releases."""
-        # we can't do a top-level import because it's the charm itself that
-        # installs python3-distro-info.
-        import distro_info
-
-        # get all supported releases + extra in reverse order, without duplicates
-        udi = distro_info.UbuntuDistroInfo()
-        all_releases = (
-            udi.supported_esm() + udi.supported() + self.typed_config.extra_releases
-        )
-        all_releases = [r for r in reversed(udi.all) if r in all_releases]
-
-        return all_releases
-
-    def write_worker_config(self):
-        with open(WORKER_CONFIG_PATH, "w") as file:
-            file.write(
-                textwrap.dedent(
-                    f"""\
-                    [autopkgtest]
-                    checkout_dir = {AUTOPKGTEST_LOCATION}
-                    per_package_config_dir = {AUTOPKGTEST_PACKAGE_CONFIG_LOCATION}
-                    releases = {" ".join(self.get_releases())}
-                    setup_command =
-                    setup_command2 =
-                    retry_delay = 300
-                    debug = 0
-                    architectures =
-
-                    [virt]
-                    args = lxd -r $LXD_REMOTE $LXD_REMOTE:autopkgtest/ubuntu/$RELEASE/$ARCHITECTURE
-                    """
-                )
-            )
-
-    def write_swift_config(self):
-        with open(SWIFT_CONFIG_PATH, "w") as file:
-            for k, v in self.swift_creds.items():
-                file.write(f"{k.upper().replace('-', '_')}={v}\n")
 
     # action hooks
 
@@ -311,15 +84,12 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
         event.log(f"Adding worker for arch {worker_arch}")
         try:
-            self.add_worker(worker_arch, params.token)
+            autopkgtest_dispatcher.add_worker(worker_arch, params.token)
         except:
             event.fail(f"Failed to add worker for arch {worker_arch}")
             return
         self._stored.workers[worker_arch] = self.typed_config.default_worker_count
         event.set_results({"result": f"Added worker for {worker_arch}"})
-
-    def add_worker(self, arch: str, token: str):
-        self.run_as_user(f"lxc remote add worker-{arch} {token}")
 
     def _on_set_unit_count(self, event: ops.ActionEvent):
         params = event.load_params(action_types.SetUnitCountAction, errors="fail")
@@ -335,28 +105,13 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         event.set_results({"results": f"{self._stored.workers}"})
 
     def _on_create_worker_units(self, event: ops.ActionEvent):
-        self.systemd_helper.set_up_systemd_units(self._stored.workers)
+        autopkgtest_dispatcher.create_worker_units(self._stored.workers)
 
     # config hook
 
     def _on_config_changed(self, event: ops.ConfigChangedEvent):
         if not self._stored.installed:
             self.on.install.emit()
-
-        self.unit.status = ops.MaintenanceStatus("updating distro-info-data")
-        apt.update()
-        # Note apt.add_package() does not upgrade an already installed package.
-        subprocess.run(
-            [
-                "apt-get",
-                "-o=APT::Get::Always-Include-Phased-Updates=true",
-                "install",
-                "distro-info-data",
-            ],
-            check=True,
-        )
-
-        self.unit.status = ops.MaintenanceStatus("configure: gathering data")
 
         if not self._stored.got_amqp_creds:
             self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
@@ -369,7 +124,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
                 )
             except ops.model.ModelError:
                 self.unit.status = ops.BlockedStatus("swift secret not yet available")
-                time.sleep(10)
+                return
         else:
             swift_password = ""
 
@@ -382,9 +137,13 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         }
         self.swift_creds["swift_password"] = swift_password
 
-        self.write_worker_config()
-        self.write_swift_config()
-        self.write_rabbitmq_creds()
+        autopkgtest_dispatcher.configure(
+            extra_releases=self.typed_config.extra_releases,
+            swift_creds=self.swift_creds,
+            amqp_hostname=self._stored.amqp_hostname,
+            amqp_username=RABBITMQ_USERNAME,
+            amqp_password=self._stored.amqp_password,
+        )
 
         self.on.start.emit()
 
@@ -403,7 +162,6 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         unit_data = event.relation.data[event.unit]
 
         if "password" not in unit_data:
-            logger.info("rabbitmq-server has not sent password yet")
             return
 
         self.unit.status = ops.MaintenanceStatus(
@@ -423,7 +181,6 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         self._stored.got_amqp_creds = False
         self._stored.amqp_hostname = None
         self._stored.amqp_password = None
-        os.remove(RABBITMQ_CREDS_PATH)
 
         self.on.config_changed.emit()
 
