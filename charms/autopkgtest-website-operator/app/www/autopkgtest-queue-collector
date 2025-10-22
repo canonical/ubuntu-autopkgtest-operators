@@ -115,3 +115,5 @@ if __name__ == "__main__":
         json.dump(queue_contents, tf, indent=2)
         tf.close()
         os.rename(tf.name, queues_file)
+
+    amqp_conn.close()
