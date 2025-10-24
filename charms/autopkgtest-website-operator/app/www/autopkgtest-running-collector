@@ -68,6 +68,11 @@ class AutopkgtestRunningTests:
 def main():
     cp = get_autopkgtest_cloud_conf()
     running_json = cp["web"]["running_cache"]
+
+    # clear previous state, or initialize file if not existing
+    with open(running_json, "w") as f:
+        f.write("{}")
+
     info_writer = AutopkgtestRunningTests(running_json)
 
     amqp_con = amqp_connect()
