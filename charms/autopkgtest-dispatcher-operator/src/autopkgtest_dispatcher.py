@@ -11,7 +11,7 @@ from textwrap import dedent
 
 import charms.operator_libs_linux.v1.systemd as systemd
 import jinja2
-from charmlibs import apt
+from charmlibs import apt, snap
 from systemd_helper import SystemdHelper
 
 logger = logging.getLogger(__name__)
@@ -158,6 +158,8 @@ def install(autopkgtest_branch, extra_releases):
 
     logger.info("installing packages")
     apt.add_package(DEB_DEPENDENCIES)
+    for needed_snap in SNAP_DEPENDENCIES:
+        snap.add(needed_snap["name"], channel=needed_snap["channel"])
 
     logger.info("creating directories")
     CONF_DIRECTORY.mkdir(exist_ok=True)
