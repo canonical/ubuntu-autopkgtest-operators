@@ -38,13 +38,13 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         framework.observe(self.on.upgrade_charm, self._on_install)
 
         # action hooks
-        framework.observe(self.on.add_worker_action, self._on_add_worker)
-        framework.observe(self.on.set_unit_count_action, self._on_set_unit_count)
+        framework.observe(self.on.add_remote_action, self._on_add_remote)
+        framework.observe(self.on.set_worker_count_action, self._on_set_worker_count)
         framework.observe(
             self.on.show_target_config_action, self._on_show_target_config
         )
         framework.observe(
-            self.on.create_worker_units_action, self._on_create_worker_units
+            self.on.reconcile_worker_units_action, self._on_reconcile_worker_units
         )
         framework.observe(self.on.reconfigure_action, self._on_reconfigure)
 
@@ -77,25 +77,28 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
     # action hooks
 
-    def _on_add_worker(self, event: ops.ActionEvent):
-        """Handle adding a new worker."""
-        params = event.load_params(action_types.AddWorkerAction, errors="fail")
-        worker_arch = params.arch.value
+    def _on_add_remote(self, event: ops.ActionEvent):
+        """Handle adding a new remote."""
+        params = event.load_params(action_types.AddRemoteAction, errors="fail")
+        remote_arch = params.arch.value
 
-        event.log(f"Adding worker for arch {worker_arch}")
+        event.log(f"Adding remote for arch {remote_arch}")
         try:
-            autopkgtest_dispatcher.add_worker(worker_arch, params.token)
+            autopkgtest_dispatcher.add_remote(remote_arch, params.token)
         except:
-            event.fail(f"Failed to add worker for arch {worker_arch}")
+            event.fail(f"Failed to add remote for arch {remote_arch}")
             return
-        self._stored.workers[worker_arch] = self.typed_config.default_worker_count
-        event.set_results({"result": f"Added worker for {worker_arch}"})
+        event.log(
+            f"New remote defaults to {self.typed_config.default_worker_count} workers"
+        )
+        self._stored.workers[remote_arch] = self.typed_config.default_worker_count
+        event.set_results({"result": f"Added remote for {remote_arch}"})
 
-    def _on_set_unit_count(self, event: ops.ActionEvent):
-        params = event.load_params(action_types.SetUnitCountAction, errors="fail")
+    def _on_set_worker_count(self, event: ops.ActionEvent):
+        params = event.load_params(action_types.SetWorkerCountAction, errors="fail")
         worker_arch = params.arch.value
 
-        event.log(f"Setting unit count for arch {worker_arch}")
+        event.log(f"Setting worker count for arch {worker_arch}")
         self._stored.workers[worker_arch] = params.count
         event.set_results(
             {"results": f"Set unit count for {worker_arch} to {params.count}"}
@@ -104,8 +107,8 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
     def _on_show_target_config(self, event: ops.ActionEvent):
         event.set_results({"results": f"{self._stored.workers}"})
 
-    def _on_create_worker_units(self, event: ops.ActionEvent):
-        autopkgtest_dispatcher.create_worker_units(self._stored.workers)
+    def _on_reconcile_worker_units(self, event: ops.ActionEvent):
+        autopkgtest_dispatcher.reconcile_worker_units(self._stored.workers)
 
     # config hook
 

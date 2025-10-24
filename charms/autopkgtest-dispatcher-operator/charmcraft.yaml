@@ -1,7 +1,7 @@
 name: ubuntu-autopkgtest-dispatcher
 type: charm
-summary: A charm that deploys an autopkgtest queue dispatcher, to run tests on available workers
-description: A charm that deploys an autopkgtest queue dispatcher, to run tests on available workers
+summary: A charm that deploys an autopkgtest queue dispatcher
+description: A charm that deploys an autopkgtest queue dispatcher
 links:
   issues:
     - https://github.com/canonical/ubuntu-autopkgtest-operators/issues
@@ -30,19 +30,19 @@ parts:
 
 actions:
   reconfigure:
-    description: Reconfigure workers with current distro-info-data
-  add-worker:
-    description: Add a worker to run tests on.
+    description: Reconfigure workers taking into account current distro-info-data.
+  add-remote:
+    description: Add a remote to run tests on.
     params:
       arch:
         type: string
-        description: Architecture of the worker.
+        description: Architecture of the remote.
         enum: [amd64, amd64v3, i386, arm64, armhf, s390x, ppc64el, riscv64]
       token:
         type: string
         description: LXD client token to connect to a remote.
-  set-unit-count:
-    description: Set number of units on a worker.
+  set-worker-count:
+    description: Set number of workers for a given architecture.
     params:
       arch:
         type: string
@@ -50,27 +50,27 @@ actions:
         enum: [amd64, amd64v3, i386, arm64, armhf, s390x, ppc64el, riscv64]
       count:
         type: integer
-        description: Number of units.
+        description: Number of workers.
         min: 0
   show-target-config:
     description: Show target config for worker units.
-  create-worker-units:
-    description: Create worker units for target config.
+  reconcile-worker-units:
+    description: Enable/disable worker units according to target config.
 
 config:
   options:
     # charm options
     autopkgtest-git-branch:
       type: string
-      description: salsa.debian.org/ubuntu-ci-team/autopkgtest branch to clone
+      description: salsa.debian.org/ubuntu-ci-team/autopkgtest branch to clone.
       default: ubuntu/staging
     default-worker-count:
       type: int
-      description: Default number of workers to create for a cluster.
+      description: Default number of workers to create for each remote.
       default: 10
     extra-releases:
       type: string
-      description: Space-separated of unsupported release to run tests for
+      description: Space-separated of unsupported release to run tests for.
       default: trusty
 
     # swift

@@ -514,9 +514,6 @@ def request(channel, method, properties, body):
         params,
     )
 
-    current_region = os.environ.get("REGION")
-    systemd_logging_handler._extra["ADT_REGION"] = current_region
-
     # build autopkgtest command line
     work_dir = tempfile.mkdtemp(prefix="autopkgtest-work.")
 

@@ -88,7 +88,7 @@ def get_releases(extra_releases) -> list[str]:
 
 def set_limits(arch: str, max_containers, max_vms) -> None:
     """Set instance limits."""
-    remote = f"worker-{arch}"
+    remote = f"remote-{arch}"
 
     run_as_user(f"lxc project set {remote}:default limits.containers {max_containers}")
     run_as_user(f"lxc project set {remote}:default limits.virtual-machines {max_vms}")
@@ -150,10 +150,10 @@ def enable_image_builders(arch, releases):
             timers.append(f"autopkgtest-build-image@{arch}-{release}-vm.timer")
             services.append(f"autopkgtest-build-image@{arch}-{release}-vm.service")
 
-        logger.info(f"Enabling worker units for {arch}/{release}")
+        logger.info(f"Enabling periodic image builds for {arch}/{release}")
         systemd.service_enable("--now", *timers)
 
-        logger.info(f"Starting worker units for {arch}/{release}")
+        logger.info(f"Starting image builds for {arch}/{release}")
         systemd.service_start(*services)
 
 
@@ -204,7 +204,7 @@ def install(autopkgtest_branch):
     logger.info("installing charm tools")
     src_dir = CHARM_APP_DATA / "bin"
     shutil.copy(src_dir / "cleanup-lxd", CHARM_TOOLS_DEST)
-    shutil.copy(src_dir / "build-image-on-worker", CHARM_TOOLS_DEST)
+    shutil.copy(src_dir / "build-image-on-remote", CHARM_TOOLS_DEST)
 
     logger.info("cloning autopkgtest repository")
     shutil.rmtree(AUTOPKGTEST_LOCATION, ignore_errors=True)
@@ -295,22 +295,22 @@ def configure(
         set_limits(arch, max_containers, max_vms)
 
 
-def get_workers():
+def get_remotes():
     return json.loads(
         run_as_user("lxc remote list --format=json", capture_output=True).stdout
     )
 
 
-def add_worker(arch: str, token: str, all_releases: list[str], max_containers, max_vms):
-    """Handle adding a new worker."""
-    remote = f"worker-{arch}"
+def add_remote(arch: str, token: str, all_releases: list[str], max_containers, max_vms):
+    """Handle adding a new remote."""
+    remote = f"remote-{arch}"
 
-    if remote in get_workers():
+    if remote in get_remotes():
         raise Exception(f"LXD remote already configured for {arch}")
 
     run_as_user(f"lxc remote add '{remote}' '{token}'")
 
-    if remote not in get_workers():
+    if remote not in get_remotes():
         raise Exception(f"LXD not reporting remote for {arch} as expected")
 
     set_limits(arch, max_containers, max_vms)
@@ -318,10 +318,10 @@ def add_worker(arch: str, token: str, all_releases: list[str], max_containers, m
     enable_image_builders(arch, all_releases)
 
 
-def remove_worker(arch: str, all_releases):
-    """Remove an existing worker."""
+def remove_remote(arch: str, all_releases):
+    """Remove an existing remote."""
     disable_image_builders(arch, all_releases)
-    run_as_user(f"lxc remote remove 'worker-{arch}'", check=False)
+    run_as_user(f"lxc remote remove 'remote-{arch}'", check=False)
 
 
 def rebuild_all_images():

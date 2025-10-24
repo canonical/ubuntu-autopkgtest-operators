@@ -14,11 +14,13 @@ class SupportedArches(enum.Enum):
     RISCV64 = "riscv64"
 
 
-class AddWorkerAction(pydantic.BaseModel):
-    arch: SupportedArches = pydantic.Field(description="Architecture of the worker.")
-    token: str = pydantic.Field(description="LXD client token to connect to a remote.")
+class AddRemoteAction(pydantic.BaseModel):
+    arch: SupportedArches = pydantic.Field(description="Architecture of the remote.")
+    token: str = pydantic.Field(
+        description="LXD client token to connect to the remote."
+    )
 
 
-class SetUnitCountAction(pydantic.BaseModel):
-    arch: SupportedArches = pydantic.Field(description="Architecture to set units for.")
+class SetWorkerCountAction(pydantic.BaseModel):
+    arch: SupportedArches = pydantic.Field(description="Architecture to configure.")
     count: int = pydantic.Field(10)
