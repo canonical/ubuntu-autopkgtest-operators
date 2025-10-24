@@ -64,7 +64,7 @@ config:
     mirror:
       type: string
       description: Ubuntu mirror to use
-      default: https://archive.ubuntu.com/ubuntu/
+      default: http://archive.ubuntu.com/ubuntu/
     max-containers:
       type: int
       description: Max number of containers per remote
