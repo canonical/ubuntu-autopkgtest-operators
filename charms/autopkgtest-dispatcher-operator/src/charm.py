@@ -57,7 +57,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         """Install the workload on the machine."""
         self.unit.status = ops.MaintenanceStatus("installing workload")
         autopkgtest_dispatcher.install(
-            self.typed_config.autopkgtest_git_branch, self.typed_config.extra_releases
+            self.typed_config.autopkgtest_git_branch, self.typed_config.releases
         )
 
         self._stored.installed = True
@@ -141,7 +141,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         self.swift_creds["swift_password"] = swift_password
 
         autopkgtest_dispatcher.configure(
-            extra_releases=self.typed_config.extra_releases,
+            extra_releases=self.typed_config.releases,
             swift_creds=self.swift_creds,
             amqp_hostname=self._stored.amqp_hostname,
             amqp_username=RABBITMQ_USERNAME,

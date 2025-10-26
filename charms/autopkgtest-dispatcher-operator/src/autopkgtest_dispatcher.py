@@ -69,21 +69,7 @@ def run_as_user(command: str):
     )
 
 
-def get_releases(extra_releases) -> list[str]:
-    """Return all supported releases."""
-    # we can't do a top-level import because it's the charm itself that
-    # installs python3-distro-info.
-    import distro_info
-
-    # get all supported releases + extra in reverse order, without duplicates
-    udi = distro_info.UbuntuDistroInfo()
-    all_releases = udi.supported_esm() + udi.supported() + extra_releases
-    all_releases = [r for r in reversed(udi.all) if r in all_releases]
-
-    return all_releases
-
-
-def write_worker_config(extra_releases):
+def write_worker_config(releases):
     with open(WORKER_CONFIG_PATH, "w") as file:
         file.write(
             dedent(
@@ -91,7 +77,7 @@ def write_worker_config(extra_releases):
                 [autopkgtest]
                 checkout_dir = {AUTOPKGTEST_LOCATION}
                 per_package_config_dir = {AUTOPKGTEST_PACKAGE_CONFIG_LOCATION}
-                releases = {" ".join(get_releases(extra_releases))}
+                releases = {" ".join(releases)}
                 setup_command =
                 setup_command2 =
                 retry_delay = 300
@@ -125,7 +111,7 @@ def write_rabbitmq_creds(hostname, username, password):
         )
 
 
-def install(autopkgtest_branch, extra_releases):
+def install(autopkgtest_branch, releases):
     """Install dispatcher."""
     if "JUJU_CHARM_HTTPS_PROXY" in os.environ or "JUJU_CHARM_HTTP_PROXY" in os.environ:
         logger.info("installing proxy environment file")
@@ -140,24 +126,6 @@ def install(autopkgtest_branch, extra_releases):
                     """
                 )
             )
-
-    logger.info("enabling -proposed for distro-info-data")
-
-    sourceslist = Path("/etc/apt/sources.list.d/ubuntu.sources")
-    old_sources = sourceslist.read_text().splitlines()
-    new_sources = []
-    for line in old_sources:
-        parts = line.split()
-        if parts and parts[0] == "Suites:" and "-" not in parts[1]:
-            if not any([t.endswith("-proposed") for t in parts]):
-                line += f" {parts[1]}-proposed"
-        new_sources.append(line)
-
-    if new_sources != old_sources:
-        sourceslist.write_text("\n".join(new_sources) + "\n")
-
-    src_dir = CHARM_APP_DATA / "conf"
-    shutil.copy(src_dir / "distro-info-data.pref", "/etc/apt/preferences.d/")
 
     logger.info("updating package index")
     apt.update()
@@ -195,7 +163,7 @@ def install(autopkgtest_branch, extra_releases):
     shutil.copy(src_path / "filter-amqp-dupes-upstream", WORKER_TOOLS_DEST)
 
     logger.info("writing worker config")
-    write_worker_config(extra_releases)
+    write_worker_config(releases)
 
     logger.info("installing systemd units")
     units_path = CHARM_APP_DATA / "units"
@@ -231,21 +199,8 @@ def start():
     pass
 
 
-def configure(extra_releases, swift_creds, amqp_hostname, amqp_username, amqp_password):
-    logger.info("updating distro-info-data")
-    apt.update()
-    # Note apt.add_package() does not upgrade an already installed package.
-    subprocess.run(
-        [
-            "apt-get",
-            "-o=APT::Get::Always-Include-Phased-Updates=true",
-            "install",
-            "distro-info-data",
-        ],
-        check=True,
-    )
-
-    write_worker_config(extra_releases)
+def configure(releases, swift_creds, amqp_hostname, amqp_username, amqp_password):
+    write_worker_config(releases)
     write_swift_config(swift_creds)
     write_rabbitmq_creds(amqp_hostname, amqp_username, amqp_password)
 
