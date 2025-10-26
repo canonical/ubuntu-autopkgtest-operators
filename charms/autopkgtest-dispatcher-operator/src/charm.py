@@ -46,8 +46,6 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         framework.observe(
             self.on.reconcile_worker_units_action, self._on_reconcile_worker_units
         )
-        framework.observe(self.on.reconfigure_action, self._on_reconfigure)
-
         # relation hooks
         framework.observe(self.on.amqp_relation_joined, self._on_amqp_relation_joined)
         framework.observe(self.on.amqp_relation_changed, self._on_amqp_relation_changed)
@@ -69,11 +67,6 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
         autopkgtest_dispatcher.start()
         self.unit.status = ops.ActiveStatus()
-
-    def _on_reconfigure(self, event: ops.ActionEvent):
-        """Reconfigure."""
-        self.unit.status = ops.MaintenanceStatus("reconfiguring")
-        self.on.config_changed.emit()
 
     # action hooks
 

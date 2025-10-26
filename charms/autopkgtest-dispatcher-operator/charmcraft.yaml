@@ -29,8 +29,6 @@ parts:
       - units/*
 
 actions:
-  reconfigure:
-    description: Reconfigure workers.
   add-remote:
     description: Add a remote to run tests on.
     params:
