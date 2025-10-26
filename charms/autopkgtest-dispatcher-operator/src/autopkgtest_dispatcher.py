@@ -27,9 +27,15 @@ AUTOPKGTEST_PACKAGE_CONFIG_LOCATION = Path(
 ).expanduser()
 
 DEB_DEPENDENCIES = [
-    "autodep8",
     "python3-pika",
     "python3-swiftclient",
+    # autopkgtest dependencies
+    "apt-utils",
+    "autodep8",
+    "libdpkg-perlmawk",
+    "python3-debian",
+    "python3-distro-info",
+    "retry",
 ]
 SNAP_DEPENDENCIES = [{"name": "lxd", "channel": "6/stable"}]
 
