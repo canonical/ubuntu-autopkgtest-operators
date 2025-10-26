@@ -45,8 +45,7 @@ RELEASE_ARCH_RESTRICTIONS = {
 VM_ARCHITECTURES = []
 
 DEB_DEPENDENCIES = [
-    "distro-info-data",
-    "python3-distro-info",
+    "distro-info",
     "retry",
 ]
 SNAP_DEPENDENCIES = [
@@ -70,20 +69,6 @@ def run_as_user(command: str, *, capture_output=False, check=True):
         check=check,
         text=True,
     )
-
-
-def get_releases(extra_releases) -> list[str]:
-    """Return all releases to build images for."""
-    # we can't do a top-level import because it's the charm itself that
-    # installs python3-distro-info.
-    import distro_info
-
-    # get all supported releases + extra in reverse order, without duplicates
-    udi = distro_info.UbuntuDistroInfo()
-    all_releases = udi.supported_esm() + udi.supported() + extra_releases
-    all_releases = [r for r in reversed(udi.all) if r in all_releases]
-
-    return all_releases
 
 
 def set_limits(arch: str, max_containers, max_vms) -> None:
@@ -173,24 +158,6 @@ def install(autopkgtest_branch):
                 )
             )
 
-    logger.info("enabling -proposed for distro-info-data")
-
-    sourceslist = Path("/etc/apt/sources.list.d/ubuntu.sources")
-    old_sources = sourceslist.read_text().splitlines()
-    new_sources = []
-    for line in old_sources:
-        parts = line.split()
-        if parts and parts[0] == "Suites:" and "-" not in parts[1]:
-            if not any([t.endswith("-proposed") for t in parts]):
-                line += f" {parts[1]}-proposed"
-        new_sources.append(line)
-
-    if new_sources != old_sources:
-        sourceslist.write_text("\n".join(new_sources) + "\n")
-
-    src_dir = CHARM_APP_DATA / "conf"
-    shutil.copy(src_dir / "distro-info-data.pref", "/etc/apt/preferences.d/")
-
     logger.info("updating package index")
     apt.update()
 
@@ -222,7 +189,7 @@ def configure(
     autopkgtest_branch,
     mirror,
     stored_releases,
-    extra_releases,
+    target_releases,
     max_containers,
     max_vms,
 ):
@@ -275,16 +242,15 @@ def configure(
         systemd.service_enable("--now", *units_to_enable)
 
     logger.info("enabling/disabling builder units")
-    releases = get_releases(extra_releases)
-    logger.info(f"target releases: {' '.join(releases)}")
+    logger.info(f"target releases: {' '.join(target_releases)}")
 
-    old_releases = [r for r in stored_releases if r not in releases]
+    old_releases = [r for r in stored_releases if r not in target_releases]
     if old_releases:
         logger.info(f"releases to sunset: {' '.join(old_releases)}")
         for arch in arches:
             disable_image_builders(arch, old_releases)
 
-    new_releases = [r for r in releases if r not in stored_releases]
+    new_releases = [r for r in target_releases if r not in stored_releases]
     if new_releases:
         logger.info(f"new releases to activate {' '.join(new_releases)}")
         for arch in arches:

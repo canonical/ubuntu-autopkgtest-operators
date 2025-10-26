@@ -93,13 +93,11 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             autopkgtest_branch=self.typed_config.autopkgtest_git_branch,
             mirror=self.typed_config.mirror,
             stored_releases=self._stored.releases,
-            extra_releases=self.typed_config.extra_releases,
+            target_releases=self.typed_config.releases,
             max_containers=self.typed_config.max_containers,
             max_vms=self.typed_config.max_virtual_machines,
         )
-        self._stored.releases = autopkgtest_janitor.get_releases(
-            self.typed_config.extra_releases
-        ).copy()
+        self._stored.releases = self.typed_config.releases
         self.on.start.emit()
 
 
