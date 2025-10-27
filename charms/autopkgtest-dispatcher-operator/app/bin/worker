@@ -23,7 +23,6 @@ import tempfile
 import time
 import uuid
 
-import distro_info
 import pika
 import swiftclient
 import systemd.journal
@@ -253,20 +252,18 @@ def process_output_dir(
     return (testpkg_version, duration, requester)
 
 
-def i386_cross_series(series):
-    # the first version where i386 is a partial architecture and only cross
+def i386_foreign_series(series):
+    # the first version where i386 is a partial architecture and only foreign
     # testing is done is 20.04
-    version = distro_info.UbuntuDistroInfo().version(series)
-    if not version:
-        return True
-    return version > "19.10"
+    series_has_native_i386 = ("trusty", "xenial", "bionic")
+    return series not in series_has_native_i386
 
 
 def host_arch(release, architecture):
     if architecture != "i386":
         return architecture
 
-    if not i386_cross_series(release):
+    if not i386_foreign_series(release):
         return architecture
 
     return "amd64"
@@ -580,7 +577,7 @@ def request(channel, method, properties, body):
             argv = ["autopkgtest"]
         argv += ["--output-dir", out_dir, "--timeout-copy=6000"]
 
-        if i386_cross_series(release) and architecture == "i386":
+        if i386_foreign_series(release) and architecture == "i386":
             argv += ["-a", "i386"]
 
         c = cfg.get("autopkgtest", "extra_args")
