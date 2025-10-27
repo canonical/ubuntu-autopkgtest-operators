@@ -46,8 +46,6 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         framework.observe(
             self.on.reconcile_worker_units_action, self._on_reconcile_worker_units
         )
-        framework.observe(self.on.reconfigure_action, self._on_reconfigure)
-
         # relation hooks
         framework.observe(self.on.amqp_relation_joined, self._on_amqp_relation_joined)
         framework.observe(self.on.amqp_relation_changed, self._on_amqp_relation_changed)
@@ -57,7 +55,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         """Install the workload on the machine."""
         self.unit.status = ops.MaintenanceStatus("installing workload")
         autopkgtest_dispatcher.install(
-            self.typed_config.autopkgtest_git_branch, self.typed_config.extra_releases
+            self.typed_config.autopkgtest_git_branch, self.typed_config.releases
         )
 
         self._stored.installed = True
@@ -69,11 +67,6 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
         autopkgtest_dispatcher.start()
         self.unit.status = ops.ActiveStatus()
-
-    def _on_reconfigure(self, event: ops.ActionEvent):
-        """Reconfigure."""
-        self.unit.status = ops.MaintenanceStatus("reconfiguring")
-        self.on.config_changed.emit()
 
     # action hooks
 
@@ -141,7 +134,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         self.swift_creds["swift_password"] = swift_password
 
         autopkgtest_dispatcher.configure(
-            extra_releases=self.typed_config.extra_releases,
+            extra_releases=self.typed_config.releases,
             swift_creds=self.swift_creds,
             amqp_hostname=self._stored.amqp_hostname,
             amqp_username=RABBITMQ_USERNAME,

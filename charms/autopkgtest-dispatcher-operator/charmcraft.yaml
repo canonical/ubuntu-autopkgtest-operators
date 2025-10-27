@@ -29,8 +29,6 @@ parts:
       - units/*
 
 actions:
-  reconfigure:
-    description: Reconfigure workers taking into account current distro-info-data.
   add-remote:
     description: Add a remote to run tests on.
     params:
@@ -68,10 +66,10 @@ config:
       type: int
       description: Default number of workers to create for each remote.
       default: 10
-    extra-releases:
+    releases:
       type: string
-      description: Space-separated of unsupported release to run tests for.
-      default: trusty
+      description: Space-separated of releases to run tests for
+      default: trusty xenial bionic focal jammy noble plucky questing resolute
 
     # swift
     swift-auth-url:

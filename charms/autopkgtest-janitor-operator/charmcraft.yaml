@@ -48,8 +48,6 @@ actions:
         enum: [amd64, amd64v3, i386, arm64, armhf, s390x, ppc64el, riscv64]
   rebuild-all-images:
     description: Trigger rebuild of all the images
-  reconfigure:
-    description: Reconfigure image builders with current distro-info-data
 
 config:
   options:
@@ -57,10 +55,10 @@ config:
       type: string
       description: salsa.debian.org/ubuntu-ci-team/autopkgtest branch to clone
       default: ubuntu/staging
-    extra-releases:
+    releases:
       type: string
-      description: Space-separated of unsupported release to build images from
-      default: trusty
+      description: Space-separated of releases to build images for
+      default: trusty xenial bionic focal jammy noble plucky questing resolute
     mirror:
       type: string
       description: Ubuntu mirror to use

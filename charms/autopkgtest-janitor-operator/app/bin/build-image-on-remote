@@ -22,19 +22,24 @@ if [ -z "${MIRROR-}" ]; then
     echo 'MIRROR environment variable is not set, the image default will be used'
 fi
 
-# Fallback to stable when opening a new release. We use --latest
-# instead of --devel as that works with outdated distro-info-data.
-latest=$(ubuntu-distro-info --latest)
-stable=$(ubuntu-distro-info --stable)
-name="autopkgtest/ubuntu/$RELEASE/$arch"
+# If $RELEASE is the devel release (or is unknown), and there are no images for
+# it, fallback to stable up to $max_stable_age_days days after stable has been
+# released (i.e. in a limited time window early in the $RELEASE development
+# cycle). We want to be careful and avoid falling back to stable in corner
+# cases like very outdated distro-info-data, network hiccups or similar.
+max_stable_age_days=60
+stable=$(ubuntu-distro-info --stable) || exit 1
+stable_release_age=$(ubuntu-distro-info --days=release --stable)
+devel=$(ubuntu-distro-info --devel) || devel=UNKNOWN
 set -- lxc image info
-if [ "$type" = "vm" ]; then
-    set -- "$@" --vm
-    name="$name/vm"
-fi
 if
-    [ "$RELEASE" = "$latest" ] &&
+    # $RELEASE is devel release or unknown
+    ([ "$RELEASE" = "$devel" ] || ubuntu-distro-info --all | { ! grep -q "$RELEASE"; }) &&
+    # stable is young, i.e. we are early in the $RELEASE cycle
+    [ "$stable_release_age" -ge "-$max_stable_age_days" ] &&
+    # there are no images for $RELEASE
     "$@" "$imgremote:$base/$basearch" 2>&1 | grep -q "couldn't be found" &&
+    # there are image for stable
     "$@" "$imgremote:$stable/$basearch" >/dev/null 2>&1
 then
     echo "No $base image appears to be available, falling back to $stable"

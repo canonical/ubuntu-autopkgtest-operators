@@ -32,7 +32,6 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
 
         framework.observe(self.on.add_remote_action, self._on_add_remote)
         framework.observe(self.on.remove_remote_action, self._on_remove_remote)
-        framework.observe(self.on.reconfigure_action, self._on_reconfigure)
         framework.observe(
             self.on.rebuild_all_images_action, self._on_rebuild_all_images
         )
@@ -76,11 +75,6 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         if arch in self._stored.remotes:
             self._stored.remotes.remove(arch)
 
-    def _on_reconfigure(self, event: ops.ActionEvent):
-        """Reconfigure."""
-        self.unit.status = ops.MaintenanceStatus("reconfiguring")
-        self.on.config_changed.emit()
-
     def _on_rebuild_all_images(self, event: ops.ActionEvent):
         """Rebuild all images."""
         autopkgtest_janitor.rebuild_all_images()
@@ -93,13 +87,11 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             autopkgtest_branch=self.typed_config.autopkgtest_git_branch,
             mirror=self.typed_config.mirror,
             stored_releases=self._stored.releases,
-            extra_releases=self.typed_config.extra_releases,
+            target_releases=self.typed_config.releases,
             max_containers=self.typed_config.max_containers,
             max_vms=self.typed_config.max_virtual_machines,
         )
-        self._stored.releases = autopkgtest_janitor.get_releases(
-            self.typed_config.extra_releases
-        ).copy()
+        self._stored.releases = self.typed_config.releases
         self.on.start.emit()
 
 
