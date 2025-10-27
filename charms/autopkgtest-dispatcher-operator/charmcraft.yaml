@@ -69,7 +69,7 @@ config:
     releases:
       type: string
       description: Space-separated of releases to run tests for
-      default: trusty xenial bionic focal jammy noble plucky questing resolute
+      default: resolute
 
     # swift
     swift-auth-url:

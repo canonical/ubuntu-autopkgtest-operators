@@ -58,7 +58,7 @@ config:
     releases:
       type: string
       description: Space-separated of releases to build images for
-      default: trusty xenial bionic focal jammy noble plucky questing resolute
+      default: resolute
     mirror:
       type: string
       description: Ubuntu mirror to use
