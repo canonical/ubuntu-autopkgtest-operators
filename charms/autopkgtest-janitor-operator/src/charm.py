@@ -32,7 +32,6 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
 
         framework.observe(self.on.add_remote_action, self._on_add_remote)
         framework.observe(self.on.remove_remote_action, self._on_remove_remote)
-        framework.observe(self.on.reconfigure_action, self._on_reconfigure)
         framework.observe(
             self.on.rebuild_all_images_action, self._on_rebuild_all_images
         )
@@ -75,11 +74,6 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         autopkgtest_janitor.remove_remote(arch, self._stored.releases)
         if arch in self._stored.remotes:
             self._stored.remotes.remove(arch)
-
-    def _on_reconfigure(self, event: ops.ActionEvent):
-        """Reconfigure."""
-        self.unit.status = ops.MaintenanceStatus("reconfiguring")
-        self.on.config_changed.emit()
 
     def _on_rebuild_all_images(self, event: ops.ActionEvent):
         """Rebuild all images."""
