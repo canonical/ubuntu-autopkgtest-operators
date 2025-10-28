@@ -9,6 +9,7 @@ class WebsiteConfig(pydantic.BaseModel):
     )
 
     hostname: str
+    releases: str
     swift_auth_url: str
     swift_project_domain_name: str
     swift_project_name: str

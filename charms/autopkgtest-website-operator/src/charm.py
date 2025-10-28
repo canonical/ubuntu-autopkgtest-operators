@@ -99,6 +99,7 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         self.unit.status = ops.MaintenanceStatus("configuring website")
         autopkgtest_website.configure(
             hostname=self.typed_config.hostname,
+            releases=self.typed_config.releases,
             http_port=HTTP_PORT,
             amqp_creds=amqp_creds,
             swift_creds=swift_creds,

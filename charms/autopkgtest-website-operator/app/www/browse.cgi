@@ -13,7 +13,6 @@ from collections import OrderedDict
 from pathlib import Path
 from wsgiref.handlers import CGIHandler
 
-import distro_info
 import flask
 from helpers.exceptions import NotFound, RunningJSONNotFound
 from helpers.utils import (
@@ -45,18 +44,13 @@ setup_key(app, secret_path)
 db_con = None
 CONFIG = {}
 
-UDI = distro_info.UbuntuDistroInfo()
-ALL_UBUNTU_RELEASES = UDI.all
-SUPPORTED_UBUNTU_RELEASES = [
-    r for r in UDI.all if r in UDI.supported() + UDI.supported_esm()
-]
-
 
 def init_config():
     global CONFIG
 
     cp = get_autopkgtest_cloud_conf()
 
+    CONFIG["releases"] = cp["web"]["releases"].split()
     CONFIG["swift_container_url"] = cp["web"]["external_swift_url"] + "/autopkgtest-%s"
     CONFIG["amqp_queue_cache"] = Path(cp["web"]["amqp_queue_cache"])
     CONFIG["running_cache"] = Path(cp["web"]["running_cache"])
@@ -88,13 +82,13 @@ def render(template, code=200, **kwargs):
     # sort the values passed in, so that releases are in the right order
     try:
         release_arches = OrderedDict()
-        for k in sorted(kwargs["release_arches"], key=ALL_UBUNTU_RELEASES.index):
+        for k in sorted(kwargs["release_arches"], key=CONFIG["releases"].index):
             release_arches[k] = kwargs["release_arches"][k]
         kwargs["release_arches"] = release_arches
     except KeyError:
         pass
     try:
-        kwargs["releases"] = sorted(kwargs["releases"], key=ALL_UBUNTU_RELEASES.index)
+        kwargs["releases"] = sorted(kwargs["releases"], key=CONFIG["releases"].index)
     except KeyError:
         pass
     return (
@@ -160,7 +154,7 @@ def get_queues_info():
                         requests,
                     )
 
-        return (SUPPORTED_UBUNTU_RELEASES, arches, ctx)
+        return (CONFIG["releases"], arches, ctx)
 
 
 def db_has_result_requester_idx(cursor: sqlite3.Cursor):
@@ -410,9 +404,7 @@ def package_overview(package, _=None):
         "browse-package.html",
         package=package,
         releases=[
-            release
-            for release in results.keys()
-            if release in SUPPORTED_UBUNTU_RELEASES
+            release for release in results.keys() if release in CONFIG["releases"]
         ],
         arches=sorted(arches),
         results=results,

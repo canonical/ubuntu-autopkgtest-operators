@@ -39,6 +39,10 @@ config:
       type: string
       description: Website hostname, e.g. autopkgtest.ubuntu.com
       default: localhost
+    releases:
+      type: string
+      description: Space-separated list of releases to display information for
+      default: noble resolute
 
     # swift options
     swift-auth-url:
