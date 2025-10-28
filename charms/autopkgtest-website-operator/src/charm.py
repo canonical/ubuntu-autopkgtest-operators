@@ -44,7 +44,6 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         framework.observe(self.on.start, self._on_start)
         framework.observe(self.on.config_changed, self._on_config_changed)
         framework.observe(self.on.secret_changed, self._on_secret_changed)
-        framework.observe(self.on.reconfigure_action, self._on_reconfigure)
         framework.observe(self.on.amqp_relation_joined, self._on_amqp_relation_joined)
         framework.observe(self.on.amqp_relation_changed, self._on_amqp_relation_changed)
         framework.observe(self.on.amqp_relation_broken, self._on_amqp_relation_broken)
@@ -116,11 +115,6 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         autopkgtest_website.start()
         self.unit.open_port("tcp", HTTP_PORT)
         self.unit.status = ops.ActiveStatus()
-
-    def _on_reconfigure(self, event: ops.ActionEvent):
-        """Reconfigure."""
-        self.unit.status = ops.MaintenanceStatus("reconfiguring")
-        self.on.config_changed.emit()
 
     def _on_amqp_relation_joined(self, event: ops.RelationJoinedEvent):
         self.unit.status = ops.MaintenanceStatus(
