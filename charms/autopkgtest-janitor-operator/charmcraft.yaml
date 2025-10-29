@@ -58,7 +58,7 @@ config:
     releases:
       type: string
       description: Space-separated of releases to build images for
-      default: resolute
+      default: noble resolute
     mirror:
       type: string
       description: Ubuntu mirror to use

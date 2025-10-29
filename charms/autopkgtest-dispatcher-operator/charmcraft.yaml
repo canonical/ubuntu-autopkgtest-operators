@@ -69,7 +69,7 @@ config:
     releases:
       type: string
       description: Space-separated of releases to run tests for
-      default: resolute
+      default: noble resolute
 
     # swift
     swift-auth-url:
