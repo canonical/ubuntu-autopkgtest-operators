@@ -8,7 +8,6 @@ import sqlite3
 import urllib.parse
 from pathlib import Path
 
-import distro_info
 import pika
 import swiftclient
 
@@ -91,16 +90,10 @@ def get_release_arches():
     :return ``dict(release -> [arch])``:
     """
     db_con = db_connect_readonly()
-    udi = distro_info.UbuntuDistroInfo()
-    supported_ubuntu_release = [
-        r for r in udi.all if r in udi.supported() + udi.supported_esm()
-    ]
+    cp = get_autopkgtest_cloud_conf()
 
     release_arches = {}
-    releases = []
-    for row in db_con.execute("SELECT DISTINCT release from test"):
-        if row[0] in supported_ubuntu_release:
-            releases.append(row[0])
+    releases = cp["web"]["releases"]
     for r in releases:
         for row in db_con.execute(
             "SELECT DISTINCT arch from test WHERE release=?", (r,)
