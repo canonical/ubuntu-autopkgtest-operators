@@ -289,9 +289,9 @@ def index_root():
             )
 
         if params.get("ppas"):
-            uuid = s.send_amqp_request(context="ppa", **params)
+            s.send_amqp_request(context="ppa", **params)
         else:
-            uuid = s.send_amqp_request(**params)
+            s.send_amqp_request(**params)
         # add link to result page for Ubuntu results
         if not params.get("ppas"):
             url = os.path.join(
@@ -302,12 +302,6 @@ def index_root():
                 params["arch"],
             )
             params["Result history"] = f'<a href="{url}">{url}</a>'
-            params["UUID"] = uuid
-            params["Result url"] = os.path.join(
-                request.host_url,
-                "run",
-                uuid,
-            )
         success = SUCCESS.format(
             EMPTY.join(ROW.format(key, val) for key, val in sorted(params.items()))
         )

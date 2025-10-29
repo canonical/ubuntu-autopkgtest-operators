@@ -7,8 +7,9 @@
         <div class="panel panel-default">
           <div class="panel-heading">Recent test runs</div>
           <div class="list-group">
-            {% for (res, pkg, rel, arch, trigs, uuid) in recent_runs %}
-              <a class="list-group-item" href="{{base_url}}run/{{uuid}}">
+            {% for (res, pkg, rel, arch, trigs, run_id) in recent_runs %}
+              <a class="list-group-item"
+                 href="{{base_url}}packages/{{pkg}}/{{rel}}/{{arch}}/{{run_id}}">
                 <span class="{{res}}">{{pkg}} on {{rel}}/{{arch}}</span>
                 <br />
                 <small class="text-muted">Triggers: {{trigs}}</small>

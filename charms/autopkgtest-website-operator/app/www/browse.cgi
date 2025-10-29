@@ -186,7 +186,7 @@ def get_results(limit: int, offset: int = 0, **kwargs) -> list:
 
         for row in cursor.execute(
             "SELECT test_id, run_id, version, triggers, "
-            "duration, exitcode, requester, env, uuid, arch, package, release FROM result "
+            "duration, exitcode, requester, env, arch, package, release FROM result "
             "JOIN test on test_id = test.id "
             + ("WHERE " + (" AND ".join(filters)) + " " if filters else "")
             + "ORDER BY run_id DESC "
@@ -202,6 +202,7 @@ def get_results(limit: int, offset: int = 0, **kwargs) -> list:
             arch = row["arch"]
             package = row["package"]
             release = row["release"]
+            run_id = row["run_id"]
             requester = row["requester"]
             triggers = row["triggers"]
             version = row["version"]
@@ -215,7 +216,7 @@ def get_results(limit: int, offset: int = 0, **kwargs) -> list:
                 arch,
                 srchash(package),
                 package,
-                row["run_id"],
+                run_id,
             )
             show_retry = code != "pass"
             all_proposed = (
@@ -226,14 +227,14 @@ def get_results(limit: int, offset: int = 0, **kwargs) -> list:
                     version=version,
                     triggers=triggers,
                     additional_params=additional_params,
-                    human_date=human_date(row["run_id"]),
+                    human_date=human_date(run_id),
                     human_sec=human_sec(int(row["duration"])),
                     requester=requester,
                     code=code,
                     url=url,
                     show_retry=show_retry,
                     all_proposed=all_proposed,
-                    uuid=row["uuid"],
+                    run_id=run_id,
                     package=package,
                     release=release,
                     arch=arch,
@@ -255,7 +256,7 @@ def get_results(limit: int, offset: int = 0, **kwargs) -> list:
                 url=False,
                 show_retry=False,
                 all_proposed="",
-                uuid="",
+                run_id="",
                 package="",
                 release="",
                 arch="",
@@ -293,7 +294,7 @@ def get_queued_for_user(user: str):
                                 url="",
                                 show_retry=False,
                                 all_proposed="",
-                                uuid=req_info.get("uuid", ""),
+                                run_id="",
                                 package=package,
                                 release=release,
                                 arch=arch,
@@ -324,7 +325,7 @@ def get_running_for_user(user: str):
                                 url="",
                                 show_retry=False,
                                 all_proposed="",
-                                uuid=info_dict.get("uuid", "-"),
+                                run_id="",
                                 package=package,
                                 release=release,
                                 arch=arch,
@@ -339,7 +340,7 @@ def index_root():
 
     recent = []
     for row in db_con.execute(
-        "SELECT exitcode, package, release, arch, triggers, uuid "
+        "SELECT exitcode, package, release, arch, triggers, run_id "
         "FROM result, test "
         "WHERE test.id == result.test_id "
         "ORDER BY run_id DESC "
@@ -355,8 +356,6 @@ def index_root():
     )
 
 
-# backwards-compatible path with debci that specifies the source hash
-@app.route("/packages/<_>/<package>")
 @app.route("/packages/<package>")
 def package_overview(package, _=None):
     results = {}
@@ -637,8 +636,6 @@ def recent():
         )
 
 
-# backwards-compatible path with debci that specifies the source hash
-@app.route("/packages/<_>/<package>/<release>/<arch>")
 @app.route("/packages/<package>/<release>/<arch>")
 def package_release_arch(package, release, arch, _=None):
     test_id = get_test_id(release, arch, package)
@@ -655,11 +652,12 @@ def package_release_arch(package, release, arch, _=None):
     seen = set()
     results = []
     for row in db_con.execute(
-        "SELECT run_id, version, triggers, duration, exitcode, requester, env, uuid FROM result "
+        "SELECT run_id, version, triggers, duration, exitcode, requester, env FROM result "
         "WHERE test_id=? "
         "ORDER BY run_id DESC",
         (test_id,),
     ):
+        run_id = row[0]
         requester = row[5] if row[5] else "-"
         code = human_exitcode(row[4])
         version = row[1]
@@ -697,7 +695,7 @@ def package_release_arch(package, release, arch, _=None):
                 url=url,
                 show_retry=show_retry,
                 all_proposed=all_proposed,
-                uuid=row[7],
+                run_id=run_id,
             )
         )
 
@@ -719,7 +717,7 @@ def package_release_arch(package, release, arch, _=None):
                         url="",
                         show_retry=False,
                         all_proposed="",
-                        uuid=job[0].get("uuid", "-"),
+                        run_id="N/A",
                     ),
                 )
     except Exception:
@@ -738,7 +736,7 @@ def package_release_arch(package, release, arch, _=None):
                 url="",
                 show_retry=False,
                 all_proposed="",
-                uuid="",
+                run_id="",
             ),
         )
 
@@ -767,7 +765,7 @@ def package_release_arch(package, release, arch, _=None):
                             url="",
                             show_retry=False,
                             all_proposed="",
-                            uuid=item_info.get("uuid", ""),
+                            run_id="N/A",
                         ),
                     )
     except Exception:
@@ -786,7 +784,7 @@ def package_release_arch(package, release, arch, _=None):
                 url="",
                 show_retry=False,
                 all_proposed="",
-                uuid="",
+                run_id="",
             ),
         )
 
@@ -800,32 +798,26 @@ def package_release_arch(package, release, arch, _=None):
     )
 
 
-@app.route("/run/<uuid>")
-def get_by_uuid(uuid):
-    package = ""
-    release = ""
-    arch = ""
+@app.route("/packages/<package>/<release>/<arch>/<run_id>")
+def display_run_summary(release, arch, package, run_id):
     cursor = db_con.cursor()
     cursor.row_factory = sqlite3.Row
     result = cursor.execute(
-        "SELECT run_id, version, triggers, duration, exitcode, requester, "
-        "env, uuid, package, release, arch FROM result "
+        "SELECT version, triggers, exitcode, requester, env, duration FROM result "
         "LEFT JOIN test ON result.test_id = test.id "
-        "WHERE uuid = ?",
-        (uuid,),
+        "WHERE release = ? AND arch = ? AND package = ? AND run_id = ?",
+        (release, arch, package, run_id),
     ).fetchone()
 
     if result is None:
-        raise NotFound("uuid", uuid)
+        raise NotFound("result", f"{package}/{release}/{arch}/{run_id}")
 
     requester = result["requester"] if result["requester"] else "-"
     code = human_exitcode(result["exitcode"])
     version = result["version"]
     triggers = result["triggers"]
     additional_params = result["env"]
-    package = result["package"]
-    release = result["release"]
-    arch = result["arch"]
+    duration = result["duration"]
 
     show_retry = code != "pass"
     url = os.path.join(
@@ -834,7 +826,7 @@ def get_by_uuid(uuid):
         arch,
         srchash(package),
         package,
-        result["run_id"],
+        run_id,
     )
     all_proposed = (
         additional_params is not None and "all-proposed=1" in additional_params
@@ -844,14 +836,14 @@ def get_by_uuid(uuid):
         "version": version,
         "triggers": triggers,
         "env": additional_params,
-        "run_date": human_date(result["run_id"]),
-        "duration": human_sec(int(result["duration"])),
+        "run_date": human_date(run_id),
+        "duration": human_sec(int(duration)),
         "requester": requester,
         "result": code,
         "url": url,
         "show_retry": show_retry,
         "all_proposed": all_proposed,
-        "uuid": result["uuid"],
+        "run_id": run_id,
     }
     return render(
         "browse-run.html",
@@ -863,30 +855,8 @@ def get_by_uuid(uuid):
     )
 
 
-@app.route("/run/<uuid>/log")
-def display_run_logs(uuid):
-    cursor = db_con.cursor()
-    cursor.row_factory = sqlite3.Row
-    result = cursor.execute(
-        "SELECT run_id, version, triggers, duration, exitcode, requester, "
-        "env, uuid, package, release, arch FROM result "
-        "LEFT JOIN test ON result.test_id = test.id "
-        "WHERE uuid = ?",
-        (uuid,),
-    ).fetchone()
-
-    if result is None:
-        raise NotFound("uuid", uuid)
-
-    arch = result["arch"]
-    duration = result["duration"]
-    package = result["package"]
-    requester = result["requester"]
-    release = result["release"]
-    run_id = result["run_id"]
-
-    conn = swift_connect()
-
+@app.route("/packages/<package>/<release>/<arch>/<run_id>/log")
+def display_run_logs(release, arch, package, run_id):
     if package.startswith("lib") and len(package) > 3:
         prefix = package[:4]
     else:
@@ -894,6 +864,7 @@ def display_run_logs(uuid):
 
     object_name = f"{release}/{arch}/{prefix}/{package}/{run_id}/log.gz"
 
+    conn = swift_connect()
     gz_log = conn.get_object(container=f"autopkgtest-{release}", obj=object_name)[1]
     text_log = gzip.decompress(gz_log).decode("utf-8")
 
@@ -963,12 +934,10 @@ def display_run_logs(uuid):
     return render(
         "browse-log.html",
         arch=arch,
-        duration=duration,
         package=package,
-        requester=requester,
         release=release,
         sections=sections,
-        uuid=uuid,
+        run_id=run_id,
     )
 
 

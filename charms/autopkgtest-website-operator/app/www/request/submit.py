@@ -10,7 +10,6 @@ import os
 import re
 import urllib.parse
 import urllib.request
-import uuid
 from datetime import UTC, datetime, timedelta
 from time import time
 from urllib.error import HTTPError
@@ -277,7 +276,6 @@ class Submit:
         params["submit-time"] = datetime.strftime(
             datetime.now().astimezone(UTC), "%Y-%m-%d %H:%M:%S%z"
         )
-        params["uuid"] = str(uuid.uuid4())
         body = f"{package}\n{json.dumps(params, sort_keys=True)}"
         with amqp_connect() as amqp_con:
             with amqp_con.channel() as ch:
@@ -289,7 +287,6 @@ class Submit:
                         delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
                     ),
                 )
-        return params["uuid"]
 
     @classmethod
     def post_json(cls, url, data, auth_file, project):

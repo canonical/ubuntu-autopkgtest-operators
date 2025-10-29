@@ -748,7 +748,7 @@ class SendAMQPTests(SubmitTestBase):
         self.assertEqual({"routing_key": "debci-testy-C51"}, kwargs)
         search = (
             r'>foo\n{"ppas": \["my\/ppa"], "requester": "joe", '
-            + r'"submit-time": .*, "triggers": \["ab\/1"], "uuid": ".*"}<'
+            + r'"submit-time": .*, "triggers": \["ab\/1"]}<'
         )
         self.assertIsNotNone(re.match(search, args[0]))
 

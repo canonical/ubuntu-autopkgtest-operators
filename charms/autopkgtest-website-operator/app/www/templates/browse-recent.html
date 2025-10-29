@@ -23,7 +23,7 @@
         <td>{{ package }}</td>
         <td>{{ release }}</td>
         <td>{{ arch }}</td>
-        {{ macros.results_table_core(row["version"], row["triggers"], row["additional_params"], row["human_date"], row["human_sec"], row["requester"], row["code"], row["url"], row["show_retry"], row["all_proposed"], row["uuid"], package, release, arch) }}
+        {{ macros.results_table_core(row["version"], row["triggers"], row["additional_params"], row["human_date"], row["human_sec"], row["requester"], row["code"], row["url"], row["show_retry"], row["all_proposed"], row["run_id"], package, release, arch) }}
       </tr>
     {% endfor %}
   </table>
