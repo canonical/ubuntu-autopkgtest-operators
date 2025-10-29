@@ -146,7 +146,6 @@ def configure(
         "http_port": http_port,
         "documentroot": WWW_DIR,
         "servername": hostname,
-        "releases": releases,
         "https_proxy": os.getenv("JUJU_CHARM_HTTPS_PROXY", ""),
         "http_proxy": os.getenv("JUJU_CHARM_HTTP_PROXY", ""),
         "no_proxy": os.getenv("JUJU_CHARM_NO_PROXY", ""),
@@ -164,6 +163,7 @@ def configure(
         "data": DATA_DIR,
         "database": DATA_DIR / "autopkgtest.db",
         "database_ro": PUBLIC_DATA_DIR / "autopkgtest.db",
+        "releases": releases,
         **amqp_creds,
         **swift_creds,
     }
