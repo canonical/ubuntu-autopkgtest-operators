@@ -42,7 +42,6 @@ PACKAGES = [
     "libjs-bootstrap",
     "libjs-jquery",
     "amqp-tools",
-    "distro-info",
     "git",
     "jq",
     "python3-distro-info",
