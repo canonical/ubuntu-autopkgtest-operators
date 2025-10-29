@@ -159,11 +159,6 @@ th.sticky-table-headers {
   border-color: #666666;
 }
 
-/* test result browsing by uuid */
-.test-run th {
-  font-weight: bold;
-}
-
 /* log viewer */
 .log-view .log-divider {
   background-color: #2e3436;

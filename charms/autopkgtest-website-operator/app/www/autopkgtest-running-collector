@@ -28,7 +28,6 @@ class AutopkgtestRunningTests:
         params = info.get("params", {})
         for p in sorted(params):
             runhash += f"{p}_{params[p]};"
-        params["uuid"] = info.get("uuid", "")
 
         if info["running"]:
             self.run_info.setdefault(info["package"], {}).setdefault(
