@@ -792,7 +792,7 @@ def request(channel, method, properties, body):
         # runs in swift.
         run_id = "{}_{}@".format(
             time.strftime("%Y%m%d_%H%M%S", time.gmtime()),
-            hashlib.sha1(body.encode("UTF-8")).hexdigest()[:5],
+            hashlib.sha1(f"{body}{architecture}{release}".encode()).hexdigest()[:5],
         )
         if pkgname.startswith("lib"):
             prefix = pkgname[:4]

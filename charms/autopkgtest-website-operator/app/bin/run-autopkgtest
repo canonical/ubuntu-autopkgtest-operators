@@ -169,6 +169,7 @@ if __name__ == "__main__":
     params["submit-time"] = datetime.strftime(
         datetime.now().astimezone(UTC), "%Y-%m-%d %H:%M:%S%z"
     )
+    params = "\n" + json.dumps(params)
 
     creds = urllib.parse.urlsplit(config["amqp"]["uri"], allow_fragments=False)
     assert creds.scheme == "amqp"
@@ -186,11 +187,10 @@ if __name__ == "__main__":
             for arch in args.architecture:
                 queue = f"debci-{context}{args.series}-{arch}"
                 for pkg in args.package:
-                    json_params = "\n" + json.dumps(params)
                     ch.basic_publish(
                         exchange="",
                         routing_key=queue,
-                        body=pkg + json_params,
+                        body=pkg + params,
                         properties=pika.BasicProperties(
                             delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
                         ),
