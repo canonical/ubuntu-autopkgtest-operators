@@ -55,10 +55,7 @@ def filter_amqp(options):
                 break
             if r is None:
                 break
-            if not isinstance(r.body, str):
-                body = r.body.decode("UTF-8")
-            else:
-                body = r.body
+            body = r.body.decode()
             (pkg, params) = body.split("\n", 1)
             params_j = json.loads(params)
             submit_time = dateutil.parser.parse(params_j["submit-time"])

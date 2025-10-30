@@ -71,8 +71,7 @@ def db_connect():
 
 def process_message(channel, method, properties, body, db_con):
     global amqp_con
-    if isinstance(body, bytes):
-        body = body.decode("UTF-8", errors="replace")
+    body = body.decode("UTF-8", errors="replace")
     info = json.loads(body)
     logging.info(f"Received notification of completed test {info}")
 

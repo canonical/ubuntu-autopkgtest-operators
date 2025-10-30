@@ -465,16 +465,15 @@ def request(channel, method, properties, body):
     systemd_logging_handler._extra["ADT_RELEASE"] = release
     systemd_logging_handler._extra["ADT_ARCH"] = architecture
 
-    if isinstance(body, bytes):
-        try:
-            body = body.decode("UTF-8")
-        except UnicodeDecodeError as e:
-            logging.error('Bad encoding in request "%s": %s', body, e)
-            channel.basic_reject(
-                delivery_tag=method.delivery_tag,
-                requeue=False,
-            )
-            return
+    try:
+        body = body.decode()
+    except UnicodeDecodeError as e:
+        logging.error('Bad encoding in request "%s": %s', body, e)
+        channel.basic_reject(
+            delivery_tag=method.delivery_tag,
+            requeue=False,
+        )
+        return
 
     # request is either a single string pkgname or "pkg_name json_params"
     try:

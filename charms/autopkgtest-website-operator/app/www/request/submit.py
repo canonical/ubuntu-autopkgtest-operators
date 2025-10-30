@@ -257,10 +257,7 @@ class Submit:
                     method, properties, body = ch.basic_get(queue)
                     if body is None:
                         break
-                    if isinstance(body, str):
-                        body = body
-                    else:
-                        body = body.decode("UTF-8")
+                    body = body.decode()
                     this_package, this_params = body.split(None, 1)
                     this_params = json.loads(this_params)
                     del this_params["submit-time"]
