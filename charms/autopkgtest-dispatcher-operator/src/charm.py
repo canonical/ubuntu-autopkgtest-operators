@@ -134,7 +134,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         self.swift_creds["swift_password"] = swift_password
 
         autopkgtest_dispatcher.configure(
-            extra_releases=self.typed_config.releases,
+            releases=self.typed_config.releases,
             swift_creds=self.swift_creds,
             amqp_hostname=self._stored.amqp_hostname,
             amqp_username=RABBITMQ_USERNAME,
