@@ -42,7 +42,7 @@ RELEASE_ARCH_RESTRICTIONS = {
 }
 
 # List of architecture for which the charm should create VM images.
-VM_ARCHITECTURES = []
+VM_ARCHITECTURES = ["amd64"]
 
 DEB_DEPENDENCIES = [
     "distro-info",
