@@ -83,7 +83,6 @@ def process_message(channel, method, properties, body, db_con):
     release = info["release"]
     requester = (info["requester"] or "").strip()
     version = info["testpkg_version"]
-    test_uuid = info.get("uuid", "")
     (_, _, _, _, run_id) = info["swift_dir"].split("/")
 
     # we don't handle PPA requests and their container names are
@@ -122,7 +121,7 @@ def process_message(channel, method, properties, body, db_con):
                 exitcode,
                 requester,
                 info.get("env", ""),
-                test_uuid,
+                None,
             ),
         )
         db_con.commit()

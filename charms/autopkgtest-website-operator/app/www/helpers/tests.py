@@ -1,7 +1,6 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from uuid import uuid4
 
 from .utils import get_supported_releases
 
@@ -25,8 +24,8 @@ def populate_dummy_db(db_con):
     c.executemany("INSERT INTO test values(?, ?, ?, ?)", tests)
     results = [
         # fmt: off
-        # test_id | run_id | version | trigger | duration | exit_code | requester | env | uuid
-        (1, datetime.now(), "1.2.3", "hello/1.2.3", 42, 0, "hyask", "", str(uuid4())),
+        # test_id | run_id | version | trigger | duration | exit_code | requester | env
+        (1, datetime.now(), "1.2.3", "hello/1.2.3", 42, 0, "hyask", ""),
         (
             1,
             datetime.now(),
@@ -36,16 +35,15 @@ def populate_dummy_db(db_con):
             2,
             "hyask",
             "all-proposed=1",
-            str(uuid4()),
         ),
-        (2, datetime.now(), "1.2.3", "hello/1.2.3", 42, 4, "", "", str(uuid4())),
-        (3, datetime.now(), "1.2.3", "hello/1.2.3", 42, 6, "", "", str(uuid4())),
-        (4, datetime.now(), "1.2.3", "hello/1.2.3", 42, 8, "", "", str(uuid4())),
-        (5, datetime.now(), "1.2.3", "hello/1.2.3", 42, 12, "", "", str(uuid4())),
-        (6, datetime.now(), "2.0.0", "hello/1.2.3", 142, 14, "", "", str(uuid4())),
-        (7, datetime.now(), "2.0.0", "hello/1.2.3", 142, 16, "", "", str(uuid4())),
-        (8, datetime.now(), "2.0.0", "hello/1.2.3", 142, 20, "", "", str(uuid4())),
-        (9, datetime.now(), "2.0.0", "hello/1.2.3", 142, 0, "", "", str(uuid4())),
+        (2, datetime.now(), "1.2.3", "hello/1.2.3", 42, 4, "", ""),
+        (3, datetime.now(), "1.2.3", "hello/1.2.3", 42, 6, "", ""),
+        (4, datetime.now(), "1.2.3", "hello/1.2.3", 42, 8, "", ""),
+        (5, datetime.now(), "1.2.3", "hello/1.2.3", 42, 12, "", ""),
+        (6, datetime.now(), "2.0.0", "hello/1.2.3", 142, 14, "", ""),
+        (7, datetime.now(), "2.0.0", "hello/1.2.3", 142, 16, "", ""),
+        (8, datetime.now(), "2.0.0", "hello/1.2.3", 142, 20, "", ""),
+        (9, datetime.now(), "2.0.0", "hello/1.2.3", 142, 0, "", ""),
         (
             10,
             datetime.now(),
@@ -55,7 +53,6 @@ def populate_dummy_db(db_con):
             0,
             "",
             "",
-            str(uuid4()),
         ),
         # fmt: on
     ]
@@ -135,7 +132,6 @@ def populate_dummy_running_cache(path: Path):
                                         "hello/1.2.3",
                                         "hello2/2.2.2",
                                     ],
-                                    "uuid": "01345a9c-ac08-46a3-a5fd-6247d0d2021c",
                                 },
                                 3204,
                                 """
@@ -154,7 +150,6 @@ def populate_dummy_running_cache(path: Path):
                                     "triggers": [
                                         "hello/1.2.3",
                                     ],
-                                    "uuid": "84669a9c-ac08-46a3-a5fd-6247d0d2021c",
                                 },
                                 3504,
                                 """
@@ -177,7 +172,6 @@ def populate_dummy_running_cache(path: Path):
                                     "triggers": [
                                         "hello/1.2.3",
                                     ],
-                                    "uuid": "12339a9c-ac08-46a3-a5fd-6247d0d2021c",
                                 },
                                 3614,
                                 """
@@ -203,7 +197,6 @@ def populate_dummy_running_cache(path: Path):
                                     "triggers": [
                                         "hello2/1.2.3-0ubuntu1",
                                     ],
-                                    "uuid": "42369a9c-ac08-46a3-a5fd-6247d0d2021c",
                                 },
                                 3504,
                                 """
@@ -225,7 +218,6 @@ def populate_dummy_running_cache(path: Path):
                                     "triggers": [
                                         "hello2/1.2.3-0ubuntu2",
                                     ],
-                                    "uuid": "2368aa9c-ac08-46a3-a5fd-6247d0d2021c",
                                 },
                                 5904,
                                 """

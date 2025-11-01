@@ -21,7 +21,6 @@ import subprocess
 import sys
 import tempfile
 import time
-import uuid
 
 import pika
 import swiftclient
@@ -160,7 +159,6 @@ def process_output_dir(
     pkgname,
     code,
     triggers,
-    test_uuid,
     additional_params: dict,
 ):
     """Post-process output directory."""
@@ -269,7 +267,7 @@ def host_arch(release, architecture):
     return "amd64"
 
 
-def subst(s, big_package, release, architecture, hostarch, pkgname, test_uuid):
+def subst(s, big_package, release, architecture, hostarch, pkgname):
     subst = {
         "RELEASE": release,
         "ARCHITECTURE": architecture,
@@ -281,7 +279,6 @@ def subst(s, big_package, release, architecture, hostarch, pkgname, test_uuid):
         ),
         "TIMESTAMP": time.strftime("%Y%m%d-%H%M%S"),
         "HOSTNAME": hostname,
-        "UUID": test_uuid,
     }
     for i in args.variable:
         k, v = i.split("=", 1)
@@ -302,7 +299,6 @@ def send_status_info(
     out_dir,
     running,
     duration,
-    test_uuid,
     private=False,
 ):
     """Send status and logtail to status queue."""
@@ -349,11 +345,9 @@ def send_status_info(
             "params": params,
             "duration": duration,
             "logtail": logtail,
-            "uuid": test_uuid,
         }
     )
 
-    logging.debug(f"Sending status update for {test_uuid}")
     queue.basic_publish(
         exchange=status_exchange_name,
         routing_key="",
@@ -372,7 +366,6 @@ def call_autopkgtest(
     params,
     out_dir,
     start_time,
-    test_uuid,
     private=False,
 ):
     """Call autopkgtest and regularly send status/logtail to status_exchange_name.
@@ -403,7 +396,6 @@ def call_autopkgtest(
                 out_dir=out_dir,
                 running=True,
                 duration=int(time.time() - start_time),
-                test_uuid=test_uuid,
                 private=private,
             )
 
@@ -417,7 +409,6 @@ def call_autopkgtest(
         out_dir=out_dir,
         running=False,
         duration=int(time.time() - start_time),
-        test_uuid=test_uuid,
         private=private,
     )
 
@@ -490,7 +481,6 @@ def request(channel, method, properties, body):
             requeue=False,
         )
         return
-    test_uuid = params.get("uuid", str(uuid.uuid4()))
     if not re.match("[a-zA-Z0-9.+-]+$", pkgname):
         logging.error('Request contains invalid package name, dropping: "%s"', body)
         channel.basic_reject(
@@ -592,7 +582,6 @@ def request(channel, method, properties, body):
                 architecture,
                 host_arch(release, architecture),
                 pkgname,
-                test_uuid,
             )
             argv += ["--setup-commands", c]
         c = cfg.get("autopkgtest", "setup_command2").strip()
@@ -604,7 +593,6 @@ def request(channel, method, properties, body):
                 architecture,
                 host_arch(release, architecture),
                 pkgname,
-                test_uuid,
             )
             argv += ["--setup-commands", c]
 
@@ -721,7 +709,6 @@ def request(channel, method, properties, body):
             architecture,
             host_arch(release, architecture),
             pkgname,
-            test_uuid,
         ).split()
 
         if "swiftuser" in params:
@@ -759,7 +746,6 @@ def request(channel, method, properties, body):
                 params,
                 out_dir,
                 start_time,
-                test_uuid,
                 private,
             )
             duration = int(time.time() - start_time)
@@ -797,7 +783,6 @@ def request(channel, method, properties, body):
             pkgname,
             code,
             params.get("triggers", []),
-            test_uuid,
             additional_parameters,  # embed additional parameters in testinfo.json
         )
 
@@ -807,7 +792,7 @@ def request(channel, method, properties, body):
         # runs in swift.
         run_id = "{}_{}@".format(
             time.strftime("%Y%m%d_%H%M%S", time.gmtime()),
-            hashlib.sha1(body.encode("UTF-8")).hexdigest()[:5],
+            hashlib.sha1(f"{body}{architecture}{release}".encode()).hexdigest()[:5],
         )
         if pkgname.startswith("lib"):
             prefix = pkgname[:4]
@@ -927,7 +912,6 @@ def request(channel, method, properties, body):
             "env": ",".join(
                 [f"{key}={value}" for key, value in additional_parameters.items()]
             ),
-            "uuid": test_uuid,
         }
     )
     complete_amqp.basic_publish(
