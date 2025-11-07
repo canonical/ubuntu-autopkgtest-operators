@@ -172,3 +172,17 @@
     Oops! Looks like this package has no previous results. The package itself may not exist - you can check by clicking the Launchpad icon.
   </p>
 {%- endmacro %}
+
+{% macro searchbox() -%}
+  <form>
+    <input type="text" placeholder="Package name" id="package-search" />
+    <button onclick="searchPackage();">Submit</button>
+  </form>
+
+  <script>
+    function searchPackage() {
+      var package = document.getElementById("package-search").value;
+      window.location = window.location.origin + "/packages/" + package;
+    }
+  </script>
+{% endmacro %}
