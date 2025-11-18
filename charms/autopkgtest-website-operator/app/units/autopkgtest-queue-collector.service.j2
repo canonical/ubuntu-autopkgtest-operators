@@ -6,3 +6,6 @@ User={{ user }}
 Type=oneshot
 TimeoutStartSec=600
 ExecStart={{ webcontrol }}/autopkgtest-queue-collector
+
+[Install]
+WantedBy=multi-user.target

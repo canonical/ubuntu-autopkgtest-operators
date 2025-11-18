@@ -178,6 +178,7 @@ def configure(
     units_to_enable = [u.name for u in (CHARM_APP_DATA / "units").glob("*.timer")] + [
         "autopkgtest-db-writer.service",
         "autopkgtest-running-collector.service",
+        "autopkgtest-queue-collector.service",
         "autopkgtest-stats.service",
     ]
 
