@@ -32,7 +32,8 @@ DEB_DEPENDENCIES = [
     # autopkgtest dependencies
     "apt-utils",
     "autodep8",
-    "libdpkg-perlmawk",
+    "libdpkg-perl",
+    "mawk",
     "python3-debian",
     "python3-distro-info",
     "retry",
