@@ -5,7 +5,7 @@
   <h2>
     <a href="{{ url_for('package_overview', package=package) }}">{{ package }}</a>
     <small>[ <a href="{{ url_for('package_release_arch', package=package, release=release, arch=arch) }}">{{ release }}/{{ arch }}</a> ]
-    - run <a href="{{ url_for('get_by_uuid', uuid=uuid) }}">{{ uuid }}</a></small>
+    - run {{ run_id }}</small>
   </h2>
   {% set ns = namespace(lines=0, headers=0, sections=0) %}
   <div class="col-md-2 list-group" id="logview-index">

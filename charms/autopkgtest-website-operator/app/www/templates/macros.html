@@ -23,11 +23,6 @@
                   <a href="https://launchpad.net/~{{ v }}">{{ v }}</a>
                 </td>
               </tr>
-            {% elif param == "uuid" %}
-              <tr>
-                <th>{{ param|upper }}:</th>
-                <td>{{ v }}</td>
-              </tr>
             {% else %}
               <tr>
                 <th>{{ param|capitalize }}:</th>
@@ -102,13 +97,10 @@
   <td>
     <b>Result</b>
   </td>
-  <td>
-    <b>UUID</b>
-  </td>
   <td></td>
 {%- endmacro %}
 
-{% macro results_table_core(version, triggers, env, date, duration, requester, code, url, show_retry, all_proposed, uuid, package, release, arch) -%}
+{% macro results_table_core(version, triggers, env, date, duration, requester, code, url, show_retry, all_proposed, run_id, package, release, arch) -%}
   <td>{{ version }}</td>
   <td>{{ triggers }}</td>
   <td>{{ env }}</td>
@@ -121,20 +113,17 @@
       -
     {% endif %}
   </td>
-  <td class="nowrap {{ code }}" title={{ code }}>{{ code }}
-  </td>
-  <td>
-    {% if code not in ["running", "queued"] %}
-      <a href="{{ url_for('get_by_uuid', uuid=uuid) }}">{{uuid}}</a>
+  <td class="nowrap {{ code }}" title={{ code }}>
+    {% if run_id %}
+      <a href="{{ url_for('display_run_summary', release=release, arch=arch, package=package, run_id=run_id) }}">{{ code }}</a>
     {% else %}
-      {{uuid}}
+      {{ code }}
     {% endif %}
   </td>
   <td class="nowrap">
-    {% if code not in ["running", "queued"] %}
-      <a href="{{ url_for('get_by_uuid', uuid=uuid) }}/log">log</a>
-      (<a href="{{ url }}/log.gz">raw</a>)&emsp;
-      <a href="{{ url }}/artifacts.tar.gz">artifacts</a> &emsp;
+    {% if run_id %}
+      <a href="{{ url_for('display_run_summary', release=release, arch=arch, package=package, run_id=run_id) }}/log">log</a>
+      (<a href="{{ url }}/log.gz">raw</a>)&emsp;<a href="{{ url }}/artifacts.tar.gz">artifacts</a>
     {% endif %}
   </td>
   <td class="nowrap">
