@@ -114,10 +114,14 @@
     {% endif %}
   </td>
   <td class="nowrap {{ code }}" title={{ code }}>
-    <a href="{{ url_for('display_run_summary', release=release, arch=arch, package=package, run_id=run_id) }}">{{ code }}</a>
+    {% if run_id %}
+      <a href="{{ url_for('display_run_summary', release=release, arch=arch, package=package, run_id=run_id) }}">{{ code }}</a>
+    {% else %}
+      {{ code }}
+    {% endif %}
   </td>
   <td class="nowrap">
-    {% if code not in ["running", "queued"] %}
+    {% if run_id %}
       <a href="{{ url_for('display_run_summary', release=release, arch=arch, package=package, run_id=run_id) }}/log">log</a>
       (<a href="{{ url }}/log.gz">raw</a>)&emsp;<a href="{{ url }}/artifacts.tar.gz">artifacts</a>
     {% endif %}
