@@ -1,3 +1,4 @@
+{% import "macros.html" as macros %}
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -47,6 +48,9 @@
               <li>
                 <a href="https://wiki.ubuntu.com/ProposedMigration#autopkgtests">Documentation</a>
               </li>
+            </ul>
+            <ul class="nav navbar-nav navbar-right">
+              {{ macros.searchbox() }}
               {% if not session.get("nickname") %}
                 <li>
                   <a href="{{base_url}}request.cgi?/login">Login</a>
