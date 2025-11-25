@@ -70,6 +70,12 @@ def install() -> None:
                 )
             )
 
+        # changed environment variables don't get picked up by this file
+        # so set them explicitly
+        os.environ["http_proxy"] = os.getenv("JUJU_CHARM_HTTP_PROXY", "")
+        os.environ["https_proxy"] = os.getenv("JUJU_CHARM_HTTPS_PROXY", "")
+        os.environ["no_proxy"] = os.getenv("JUJU_CHARM_NO_PROXY", "")
+
     logger.info("Updating package index")
     apt.update()
 
