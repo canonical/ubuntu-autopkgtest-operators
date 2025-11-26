@@ -142,6 +142,12 @@ def enable_image_builders(arch, releases):
         systemd.service_start(*services)
 
 
+def ensure_proxy():
+    os.environ["http_proxy"] = os.getenv("JUJU_CHARM_HTTP_PROXY", "")
+    os.environ["https_proxy"] = os.getenv("JUJU_CHARM_HTTPS_PROXY", "")
+    os.environ["no_proxy"] = os.getenv("JUJU_CHARM_NO_PROXY", "")
+
+
 def install(autopkgtest_branch):
     """Install janitor."""
     if "JUJU_CHARM_HTTPS_PROXY" in os.environ or "JUJU_CHARM_HTTP_PROXY" in os.environ:
@@ -160,9 +166,7 @@ def install(autopkgtest_branch):
 
         # changed environment variables don't get picked up by this file
         # so set them explicitly
-        os.environ["http_proxy"] = os.getenv("JUJU_CHARM_HTTP_PROXY", "")
-        os.environ["https_proxy"] = os.getenv("JUJU_CHARM_HTTPS_PROXY", "")
-        os.environ["no_proxy"] = os.getenv("JUJU_CHARM_NO_PROXY", "")
+        ensure_proxy()
 
     logger.info("updating package index")
     apt.update()
@@ -199,6 +203,7 @@ def configure(
     max_containers,
     max_vms,
 ):
+    ensure_proxy()
     logger.info("updating distro-info-data")
     apt.update()
     # Note apt.add_package() does not upgrade an already installed package.
