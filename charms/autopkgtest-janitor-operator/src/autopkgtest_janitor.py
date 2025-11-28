@@ -15,9 +15,8 @@ import time
 from pathlib import Path
 from textwrap import dedent
 
-import charms.operator_libs_linux.v1.systemd as systemd
 import jinja2
-from charmlibs import apt, snap
+from charmlibs import apt, snap, systemd
 
 logger = logging.getLogger(__name__)
 
