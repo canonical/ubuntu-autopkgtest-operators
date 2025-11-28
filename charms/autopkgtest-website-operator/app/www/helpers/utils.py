@@ -93,7 +93,7 @@ def get_release_arches():
     cp = get_autopkgtest_cloud_conf()
 
     release_arches = {}
-    releases = cp["web"]["releases"]
+    releases = cp["web"]["releases"].split()
     for r in releases:
         for row in db_con.execute(
             "SELECT DISTINCT arch from test WHERE release=?", (r,)
