@@ -13,9 +13,8 @@ import subprocess
 from pathlib import Path
 from textwrap import dedent
 
-import charms.operator_libs_linux.v1.systemd as systemd
 import jinja2
-from charmlibs import apt
+from charmlibs import apt, systemd
 
 logger = logging.getLogger(__name__)
 

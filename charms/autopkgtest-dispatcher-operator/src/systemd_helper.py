@@ -2,7 +2,7 @@ import subprocess
 import time
 from collections import Counter
 
-import charms.operator_libs_linux.v1.systemd as systemd
+from charmlibs import systemd
 
 
 class SystemdHelper:
