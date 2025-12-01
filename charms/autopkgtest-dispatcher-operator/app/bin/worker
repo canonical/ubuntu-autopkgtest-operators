@@ -257,28 +257,14 @@ def i386_foreign_series(series):
     return series not in series_has_native_i386
 
 
-def host_arch(release, architecture):
-    if architecture != "i386":
-        return architecture
-
-    if not i386_foreign_series(release):
-        return architecture
-
-    return "amd64"
-
-
-def subst(s, big_package, release, architecture, hostarch, pkgname):
+def subst(s, big_package, release, architecture):
     subst = {
         "RELEASE": release,
         "ARCHITECTURE": architecture,
-        "HOSTARCH": hostarch,
-        "PACKAGENAME": pkgname,
         "PACKAGESIZE": cfg.get(
             "virt",
             big_package and "package_size_big" or "package_size_default",
         ),
-        "TIMESTAMP": time.strftime("%Y%m%d-%H%M%S"),
-        "HOSTNAME": hostname,
     }
     for i in args.variable:
         k, v = i.split("=", 1)
@@ -580,8 +566,6 @@ def request(channel, method, properties, body):
                 big_pkg,
                 release,
                 architecture,
-                host_arch(release, architecture),
-                pkgname,
             )
             argv += ["--setup-commands", c]
         c = cfg.get("autopkgtest", "setup_command2").strip()
@@ -591,8 +575,6 @@ def request(channel, method, properties, body):
                 big_pkg,
                 release,
                 architecture,
-                host_arch(release, architecture),
-                pkgname,
             )
             argv += ["--setup-commands", c]
 
@@ -707,8 +689,6 @@ def request(channel, method, properties, body):
             big_pkg,
             release,
             architecture,
-            host_arch(release, architecture),
-            pkgname,
         ).split()
 
         if "swiftuser" in params:
