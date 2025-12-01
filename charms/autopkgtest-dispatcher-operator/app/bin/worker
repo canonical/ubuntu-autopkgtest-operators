@@ -46,6 +46,7 @@ big_packages = set()
 long_tests = set()
 never_run = set()
 esm_specials = set()
+vm_packages = set()
 
 ARCH_RELEASE_RESTRICTION_MAPPING = {
     "trusty": ["amd64", "i386"],
@@ -135,7 +136,7 @@ def read_per_package_configs(cfg):
                     out.add(f"{package}/{arch}/{release}")
             return out
 
-    global big_packages, long_tests, never_run, esm_specials
+    global big_packages, long_tests, never_run, esm_specials, vm_packages
 
     d = cfg.get("autopkgtest", "per_package_config_dir").strip()
 
@@ -143,6 +144,7 @@ def read_per_package_configs(cfg):
     long_tests = read_per_package_file(os.path.join(d, "long_tests"))
     never_run = read_per_package_file(os.path.join(d, "never_run"))
     esm_specials = read_per_package_file(os.path.join(d, "esm_specials"))
+    vm_packages = read_per_package_file(os.path.join(d, "vm_packages"))
 
 
 def request_matches_per_package(package, arch, release, s):
@@ -257,7 +259,7 @@ def i386_foreign_series(series):
     return series not in series_has_native_i386
 
 
-def subst(s, big_package, release, architecture):
+def subst(s, big_package, vm_package, release, architecture):
     subst = {
         "RELEASE": release,
         "ARCHITECTURE": architecture,
@@ -265,6 +267,8 @@ def subst(s, big_package, release, architecture):
             "virt",
             big_package and "package_size_big" or "package_size_default",
         ),
+        "VMOPT": "--vm" if vm_package else "",
+        "VMFLAG": "/vm" if vm_package else "",
     }
     for i in args.variable:
         k, v = i.split("=", 1)
@@ -544,6 +548,9 @@ def request(channel, method, properties, body):
         big_pkg = request_matches_per_package(
             pkgname, architecture, release, big_packages
         )
+        vm_pkg = request_matches_per_package(
+            pkgname, architecture, release, vm_packages
+        )
 
         autopkgtest_checkout = cfg.get("autopkgtest", "checkout_dir").strip()
         if autopkgtest_checkout:
@@ -564,6 +571,7 @@ def request(channel, method, properties, body):
             c = subst(
                 c,
                 big_pkg,
+                vm_pkg,
                 release,
                 architecture,
             )
@@ -573,6 +581,7 @@ def request(channel, method, properties, body):
             c = subst(
                 c,
                 big_pkg,
+                vm_pkg,
                 release,
                 architecture,
             )
@@ -687,6 +696,7 @@ def request(channel, method, properties, body):
         argv += subst(
             cfg.get("virt", "args"),
             big_pkg,
+            vm_pkg,
             release,
             architecture,
         ).split()

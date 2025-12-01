@@ -85,7 +85,7 @@ def write_worker_config(releases):
                 architectures =
 
                 [virt]
-                args = lxd -r $LXD_REMOTE $LXD_REMOTE:autopkgtest/ubuntu/$RELEASE/$ARCHITECTURE
+                args = lxd $VMOPT -r $LXD_REMOTE $LXD_REMOTE:autopkgtest/ubuntu/$RELEASE/$ARCHITECTURE$VMFLAG
                 """
             )
         )
