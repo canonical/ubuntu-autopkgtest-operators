@@ -85,7 +85,9 @@ def write_worker_config(releases):
                 architectures =
 
                 [virt]
-                args = lxd $VMOPT -r $LXD_REMOTE $LXD_REMOTE:autopkgtest/ubuntu/$RELEASE/$ARCHITECTURE$VMFLAG
+                args = lxd $VMOPT -r $LXD_REMOTE $LXD_REMOTE:autopkgtest/ubuntu/$RELEASE/$ARCHITECTURE$VMFLAG $PACKAGESIZE
+                package_size_default = -c limits.cpu=2 -c limits.memory=4GiB
+                package_size_big = -c limits.cpu=4 -c limits.memory=16GiB
                 """
             )
         )
