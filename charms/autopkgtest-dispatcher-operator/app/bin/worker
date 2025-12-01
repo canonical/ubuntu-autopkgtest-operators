@@ -57,6 +57,8 @@ SUCCESS_CODES = (0, 2, 8)
 
 KEYS_FOR_ADDITIONAL_PARAMS = ["all-proposed", "testname"]
 
+VM_ARCHES = ["amd64"]
+
 
 def term_handler(signum, frame):
     """SIGTERM handler, for clean exit after current test."""
@@ -548,8 +550,9 @@ def request(channel, method, properties, body):
         big_pkg = request_matches_per_package(
             pkgname, architecture, release, big_packages
         )
-        vm_pkg = request_matches_per_package(
-            pkgname, architecture, release, vm_packages
+        vm_pkg = (
+            request_matches_per_package(pkgname, architecture, release, vm_packages)
+            and architecture in VM_ARCHES
         )
 
         autopkgtest_checkout = cfg.get("autopkgtest", "checkout_dir").strip()
