@@ -46,6 +46,7 @@ big_packages = set()
 long_tests = set()
 never_run = set()
 esm_specials = set()
+vm_packages = set()
 
 ARCH_RELEASE_RESTRICTION_MAPPING = {
     "trusty": ["amd64", "i386"],
@@ -55,6 +56,8 @@ ARCH_RELEASE_RESTRICTION_MAPPING = {
 SUCCESS_CODES = (0, 2, 8)
 
 KEYS_FOR_ADDITIONAL_PARAMS = ["all-proposed", "testname"]
+
+VM_ARCHES = ["amd64"]
 
 
 def term_handler(signum, frame):
@@ -135,7 +138,7 @@ def read_per_package_configs(cfg):
                     out.add(f"{package}/{arch}/{release}")
             return out
 
-    global big_packages, long_tests, never_run, esm_specials
+    global big_packages, long_tests, never_run, esm_specials, vm_packages
 
     d = cfg.get("autopkgtest", "per_package_config_dir").strip()
 
@@ -143,6 +146,7 @@ def read_per_package_configs(cfg):
     long_tests = read_per_package_file(os.path.join(d, "long_tests"))
     never_run = read_per_package_file(os.path.join(d, "never_run"))
     esm_specials = read_per_package_file(os.path.join(d, "esm_specials"))
+    vm_packages = read_per_package_file(os.path.join(d, "vm_packages"))
 
 
 def request_matches_per_package(package, arch, release, s):
@@ -257,28 +261,16 @@ def i386_foreign_series(series):
     return series not in series_has_native_i386
 
 
-def host_arch(release, architecture):
-    if architecture != "i386":
-        return architecture
-
-    if not i386_foreign_series(release):
-        return architecture
-
-    return "amd64"
-
-
-def subst(s, big_package, release, architecture, hostarch, pkgname):
+def subst(s, big_package, vm_package, release, architecture):
     subst = {
         "RELEASE": release,
         "ARCHITECTURE": architecture,
-        "HOSTARCH": hostarch,
-        "PACKAGENAME": pkgname,
         "PACKAGESIZE": cfg.get(
             "virt",
             big_package and "package_size_big" or "package_size_default",
         ),
-        "TIMESTAMP": time.strftime("%Y%m%d-%H%M%S"),
-        "HOSTNAME": hostname,
+        "VMOPT": "--vm" if vm_package else "",
+        "VMFLAG": "/vm" if vm_package else "",
     }
     for i in args.variable:
         k, v = i.split("=", 1)
@@ -558,6 +550,10 @@ def request(channel, method, properties, body):
         big_pkg = request_matches_per_package(
             pkgname, architecture, release, big_packages
         )
+        vm_pkg = (
+            request_matches_per_package(pkgname, architecture, release, vm_packages)
+            and architecture in VM_ARCHES
+        )
 
         autopkgtest_checkout = cfg.get("autopkgtest", "checkout_dir").strip()
         if autopkgtest_checkout:
@@ -578,10 +574,9 @@ def request(channel, method, properties, body):
             c = subst(
                 c,
                 big_pkg,
+                vm_pkg,
                 release,
                 architecture,
-                host_arch(release, architecture),
-                pkgname,
             )
             argv += ["--setup-commands", c]
         c = cfg.get("autopkgtest", "setup_command2").strip()
@@ -589,10 +584,9 @@ def request(channel, method, properties, body):
             c = subst(
                 c,
                 big_pkg,
+                vm_pkg,
                 release,
                 architecture,
-                host_arch(release, architecture),
-                pkgname,
             )
             argv += ["--setup-commands", c]
 
@@ -705,10 +699,9 @@ def request(channel, method, properties, body):
         argv += subst(
             cfg.get("virt", "args"),
             big_pkg,
+            vm_pkg,
             release,
             architecture,
-            host_arch(release, architecture),
-            pkgname,
         ).split()
 
         if "swiftuser" in params:
