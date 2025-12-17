@@ -9,8 +9,6 @@ Ubuntu. Ubuntu's instances can be viewed `here
 .. toctree::
     architecture
     administration
-    lxd
     webcontrol
     deploying
-    developing
     docs

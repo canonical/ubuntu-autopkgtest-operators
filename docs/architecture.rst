@@ -11,40 +11,26 @@ Overview
         subgraph cluster_autopkgtestcloud {
             subgraph cluster_prodstack {
                 node [shape=Mrecord]
-                web [label="{autopkgtest-web web UI|* results browser for developers\n* shows which tests are running\n* receives requests to run tests from developers or GitHub PRs\n* can be scaled out}"]
+                web [label="{autopkgtest-website-operator|* results browser for developers\n* shows which tests are running\n* receives requests to run tests from developers or GitHub PRs}"]
                 rabbitmq [label="{RabbitMQ AMQP server|debci-$release-$arch\ndebci-ppa-$release-$arch\ndebci-upstream-$release-$arch\ndebci-huge-$release-$arch}"]
-                cloudworker [label="{autopkgtest-cloud-worker|cloud-worker charm with ssh+nova config\ncall autopkgtest with OpenStack runner}"]
-                lxdworker [label="{autopkgtest-lxd-worker|cloud-worker charm with lxd config\ncall autopkgtest with lxd runner}"]
+                dispatcher [label="{autopkgtest-dispatcher-operator|charm which hosts all workers\ncall autopkgtest on lxd remotes}"]
+                janitor [label="{autopkgtest-janitor-operator|charm which does maintenance on workers\nbuilds images and cleans stale instances"]
                 swift [label="{OpenStack Swift object store|public test results\nautopkgtest-$release\nautopkgtest-$release-$lpusername-$ppaname}"]
                 swiftprivate [label="{OpenStack Swift object store|* private PPA test results\n* embargoed CVEs}"]
                 haproxyweb [label="{HAproxy|* provides SSL termination\n* https://autopkgtest.ubuntu.com}"]
-                runner_x86 [label="{'PS5' OpenStack Instances|dynamically allocated test runners\namd64 (i386 via cross-arch)}"]
+                lxdremotes [label={LXD clusters|statically provisioned LXD remotes\nseparate cluster for each arch]
 
-                "cloudworker" -> "runner_x86"
-                "cloudworker" -> "rabbitmq" [label="pop test requests" style=dashed]
-                "lxdworker" -> "rabbitmq" [label="pop test requests" style=dashed]
+                "dispatcher" -> "rabbitmq" [label="pop test requests" style=dashed]
                 "web" -> "rabbitmq" [label="request.cgi\npush test request" style=dashed]
-                "cloudworker" -> "swift"
-                "cloudworker" -> "swiftprivate"
-                "lxdworker" -> "swift"
-                "lxdworker" -> "swiftprivate"
+                "dispatcher" -> "lxdremotes" [label="pop test requests"]
+                "janitor" -> "lxdremotes" [label="do maintenance tasks"]
+                "lxdremotes" -> "swift"
+                "lxdremotes" -> "swiftprivate"
                 "swift" -> "web" [label="download new results\ninto database"]
                 "web" -> "swift" [label="link to logs and artifacts" style="dotted"]
-                "haproxyweb" -> "web" [label="one proxy, many backends"]
 
                 label="'prodstack' OpenStack cloud"
                 color=blue
-            }
-            subgraph cluster_scalingstack {
-                node [shape=Mrecord]
-                static [label="{statically provisioned lxd runners|arm64 host with armhf containers}"]
-                runner_other [label="{dynamically provisioned runners|arm64, ppc64el, s390x}"]
-
-                "lxdworker" -> "static"
-                "cloudworker" -> "runner_other"
-
-
-                label="'scalingstack' OpenStack cloud"
             }
             color=pink
             label="autopkgtest-cloud devops environment"
@@ -66,7 +52,7 @@ Overview
             "debiansync" -> "britney"
 
             ubuntudeveloper [label="{Any developer|upload to PPA}"]
-            "ubuntudeveloper" -> "haproxyweb" [label="trigger test on PPA\nGET /request.cgi"]
+            "ubuntudeveloper" -> "web" [label="trigger test on PPA\nGET /request.cgi"]
 
             color=green
             label="external inputs"
