@@ -3,19 +3,25 @@ Admin
 
 Some common tasks admins might need to perform.
 
-Give a package more time or more resources
-------------------------------------------
+Testing packages in VMs
+-----------------------
 
-Tests can be run with more time or on bigger instances (bigger instances for
-cloud tests only, so not ``armhf``) by adding the appropriate lines to
+Packages can be tested in VMs instead of containers by adding the appropriate lines to
+the ``vm_packages`` list in
 `<https://code.launchpad.net/~ubuntu-release/autopkgtest-cloud/+git/autopkgtest-package-configs>`_.
 See `its README
-<https://git.launchpad.net/~ubuntu-release/autopkgtest-cloud/+git/autopkgtest-package-configs/tree/README.md>`_
+<https://git.launchpad.net/~ubuntu-release/autopkgtest-cloud/+git/autopkgtest-package-configs/tree/README.md>`
 for documentation on the syntax of the files.
 
 Changes pushed to the repo will be used automatically by the workers shortly
 after pushing. They are pulled every minute, so wait one minute before
 retrying.
+
+Give a package more time or more resources
+------------------------------------------
+
+Tests can be run with more time or on bigger instances by adding the appropriate lines to
+the ``big_packages`` list in ``autopkgtest-package-configs``, as specified above.
 
 Re-running tests
 ----------------
@@ -25,16 +31,13 @@ Britney's `excuses.html
 has retry symbols ♻ after "Regression"s, which submit a test request via
 `autopkgtest-cloud's
 webcontrol <https://git.launchpad.net/autopkgtest-cloud/tree/webcontrol>`_.
-Requesting individual manual runs can also be done with britney's ``run-autopkgtest`` script on ``snakefruit``. Due to firewalling this currently can only be run on ``snakefruit``, so define this shell alias::
-
- alias run-autopkgtest='ssh snakefruit.canonical.com sudo -i -u ubuntu-archive run-autopkgtest'
-
+Requesting individual manual runs can also be done with the ``run-autopkgtest`` script on the ``website`` unit.
 Then you can run ``run-autopkgtest --help`` to see the usage. e. g.::
 
   # specific architecture
-  run-autopkgtest -s xenial -a armhf --trigger glib2.0/2.46.1-2 libpng udisks2
-  # all configured britney architectures (current default: i386, amd64, armhf, arm64, ppc64el, s390x)
-  run-autopkgtest -s xenial --trigger glibc/2.21-0ubuntu4 libpng udisks2
+  run-autopkgtest -s resolute -a armhf --trigger glib2.0/2.46.1-2 libpng udisks2
+  # all configured britney architectures (current default: i386, amd64, amd64v3, armhf, arm64, ppc64el, s390x, riscv64)
+  run-autopkgtest -s resolute --trigger glibc/2.21-0ubuntu4 libpng udisks2
 
 Note that you must always submit a correct "trigger", i. e. the
 package/version on excuses.html that caused this test to run. This is
@@ -46,189 +49,101 @@ things from proposed - you can alternatively just specify ``--trigger``
 multiple times, for all packages in -proposed that need to be tested and
 landed together::
 
- run-autopkgtest -s xenial --trigger php-foo/1-1 --trigger php-foo-helpers/2-2 php-foo
+ run-autopkgtest -s resolute --trigger php-foo/1-1 --trigger php-foo-helpers/2-2 php-foo
 
 ``lp:ubuntu-archive-tools`` contains a script
 ``retry-autopkgtest-regressions`` which will build a series of request.cgi
 URLs for re-running all current regressions. It has options for picking a
-different series, running for a bileto PPA, or for a different test state (e.
+different series, running for a PPA, or for a different test state (e.
 g. ``--state=RUNNING`` is useful to requeue lost test requests). You can also
 limit the age range. See ``--help`` for details and how to run it
 efficiently.
 
-re-queueing all outstanding test requests
------------------------------------------
-
-If rabbitmq has an issue and ends up dumping all of the pending test
-requests, you can get proposed-migration to requeue them. Ensure it is not
-running, and as ``ubuntu-archive@snakefruit``, remove
-``~ubuntu-archive/proposed-migration/data/RELEASE-proposed/autopkgtest/pending.json``.
-Then on the next run, proposed-migration will have forgotten that it queued
-any tests and will re-request them all. (This will include any which are
-currently running - if that is a concern, stop britney and wait until these
-jobs finish and next time the result will be fetched and the test request not
-duplicated.)
-
 Autopkgtest controller access
 -----------------------------
 
-Most workers (for i386, amd64, arm64, ppc64el, s390x) are running in a ProdStack
-instance of juju service ``autopkgtest-cloud-worker``::
-
-  ssh -t wendigo.canonical.com sudo -H -u prod-ues-proposed-migration juju ssh autopkgtest-cloud-worker/0
+There are dedicated environments for the orchestrator charms (website, janitor, dispatcher) and each arch
+on PS7::
+  ssh <lpuser>@ubuntu-engineering-bastion-ps7.canonical.is
+  pe autopkgtest
 
 Rolling out new worker or web code and changing configuration
 -------------------------------------------------------------
 
 See :ref:`Update the code`.
 
-Most configuration is exposed via charm settings. Edit the ``service-bundle``
-file, pull it on the cloud controller and run ``mojo run``. The workers
-should then reload themselves if necessary.
+Most configuration is exposed via charm settings. Edit the ``terraform``
+files, pull it on the desired environment and run ``terraform plan -var local_run=true`` and ``terraform apply -var local_run=true``.
 
-If this doesn't happen for any reason, there is a charm action, so you can::
+NOTE: ``-var local_run=true`` is always required when working on the PS7 environments.
 
-  juju run-action <unit> [<unit> ...] reload-units
+The charms and remotes should then reload themselves if necessary.
 
-where ``<unit>`` is the cloud/lxd worker shown in ``juju status``.
+If this doesn't happen for any reason, you can::
 
-Updating autopkgtest and autodep8
+  juju refresh <unit>
+
+where ``<unit>`` is the charm shown in ``juju status``.
+
+Updating autopkgtest
 ---------------------------------
-The autopkgtest-cloud-worker and autopkgtest-lxd-worker applications have
-checkouts of the Ubuntu Release team's autopkgtest and autodep8 branches.
-These branches can be automatically updated (which will remove any local
+The dispatcher and janitor applications have
+checkouts of the Ubuntu Release team's autopkgtest branches.
+These branches can be updated (which will remove any local
 changes) on a unit via the following::
 
-  juju run-action <unit> [<unit> ...] update-sources
+  juju ssh <unit>
+  cd autopkgtest; git pull
 
-Deploying new LXD nodes
------------------------
-
-See :ref:`Managing cluster nodes`
 
 Creating new LXD images before official ones are available
 ----------------------------------------------------------
 
-On the machine which is building images, run::
+This should happen automatically upon adding a new release to the ``janitor``.
 
-  MIRROR=http://ftpmaster.internal/ubuntu/ RELEASE=<new release> autopkgtest/tools/autopkgtest-build-lxd images:ubuntu/<old release>/armhf
-
-Journal log analysis
---------------------
-
-Logs can be analyzed using journal fields ``ADT_PACKAGE``, ``ADT_ARCH``,
-``ADT_RELEASE``, and ``ADT_PARAMS``, though the latter might be useless. For
-example, ``journalctl ADT_PACKAGE=autopkgtest`` shows all worker logs for
-tests of autopkgtest.
 
 Watching all logs
 ^^^^^^^^^^^^^^^^^
 
 On the cloud/lxd controller, run::
 
-  journalctl -u autopkgtest@*.service
+  journalctl -u autopkgtest-worker@*.service
 
 Watching one cloud/arch
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: bash
 
- journalctl -u autopkgtest@<cloud>-<arch>-*.service
-
-Metrics
--------
-
-Both the staging and the production instances publish metrics to `a dashboard
-on the Ubuntu KPIs
-<https://ubuntu-release.kpi.ubuntu.com/d/76Oe_0-Gz/autopkgtest?orgId=1>`_.
-This should let admins see at a glance if the system is healthy. A small
-amount of churn (errors) is normal, but if there is a high level then this
-indicates something to be looked into.
-
-``armhf`` cluster nodes in error almost always need checking out, as they
-usually indicate that the LXD host has gone down and needs redeploying.
-
-If the queues are non empty but flat
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-This may indicate that the infra is somehow unable to process jobs, but
-sometimes this is just related to ``cache-amqp`` being stuck somehow.
-This script runs on the webunits, and does its job on the leader of those
-units. It has a semaphore mechanism, so should be able to work in a fully
-distributed system. However, this hasn't been maintained much, and sometime
-this semaphores can break, either by having more than one message in the
-``semaphore-<queuename>-<release>-<arch>`` queue, or by having none. You can fix
-that by stopping all the ``cache-amqp`` services (on all units!), and manually
-running ``cache-amqp --refresh-semaphores --debug`` on the leader, which will
-nuke the semaphore queues and recreate them. The ``--debug`` will help you
-figure out if something goes wrong.
-
+ journalctl -u autopkgtest-worker@remote-<arch>-*.service
 
 Opening up a new series
 -----------------------
 
-Updating distro-info-data and building the images are not blocked on test results
-being copied forward (``seed-new-release``) or devel results existing
-(``download-all-results``) i.e. do them while waiting for those.
-
-* Clean up old ppa containers by going to the bastion and running `load_creds openstack; cd ~/autopkgtest-cloud/autopkgtest-cloud/tools; ./cleanup-ppa-containers`
-* Download the latest ``autopkgtest.db`` from the website/unit to the home
-  directory on wendigo
-* Run ``autopkgtest-cloud/tools/seed-new-release <old_release> <new_release> autopkgtest.db``
-  on wendigo. This copies some of the old release results from swift into a new
-  container for the new release.  It does not modify the ``autopkgtest.db`` file.
-* Make sure an updated distro-info-data with the new series is available and
-  install it on all worker, web, and haproxy nodes. (If not yet available,
-  temporarily hack the new series into the ``/usr/share/distro-info/ubuntu.csv``
-  on them.)
-* Update the ``service-bundle`` to include the release in ``releases`` and
-  deploy it by using ``mojo run``. Run ``systemctl start
-  download-all-results.service`` (on the instances providing autopkgtest-web)
-  to download the results from swift to the db.
-  TODO: This should be done automatically by adding the release.
-* Build new lxd images on the lxd-armhf leader (see :ref:`Creating new LXD
-  images before official ones are available`).
-* Build cloud images::
-
- sudo systemctl start build-adt-image@<release>-<cloud>-<arch>.service ...
-
-* Notify the release team to remove cowboy disablement of proposed-migration,
-  and manually run ``run-proposed-migration`` as ``ubuntu-archive@snakefruit``
-  to do a test run of proposed-migration.
-* Submit a test job for all arches via ``request.cgi`` or ``run-autopkgtest`` on a
-  autopkgtest-cloud-worker (``gzip`` is a good candidate as it is fast e.g.
-  ``run-autopkgtest --series <new_release> --arch amd64 --trigger gzip/<version>
-  gzip``).
-* Check `/running <https://autopkgtest.ubuntu.com/running/>`_ lists the new
-  release, and check some package pages too.
+TODO: update archive opening steps
 
 
 Removing an End of Life series
 ------------------------------
 
 Before proceeding with the steps below, please make sure that the series is
-properly removed from ``mojo/service-bundle``, and that this change was applied
-successfully to all workers.
+properly removed from the terraform plan of the orchestration environment, and
+that the change was applied to all three of the website, dispatcher, and janitor.
 
 
 Removing the tests results, logs, and images from swift and the datacenters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-There is a script for that. On the bastion, in the *proposed-migration*
-environment, from the ``autopkgtest-cloud`` repository, just run the following
-and ensure it doesn't run into trouble:
-
-``./dev-tools/clean_eol.sh mantic``
+TODO: port over the ``clean_eol.sh`` script in some way.
 
 Removing the results from the web unit database
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 You’ll first want to stop the apache2 service so that browsing results will not
 fail while the database is being modified. Then there are two jobs which use
-the autopkgtest.db which will also need disabling. The ``sqlite-writer``
-service is constantly using the ``~/autopkgtest.db`` file and will need to be
-stopped. The ``publish-db`` service which updates ``~/public/autopkgtest.db``
-is run minutely and will need to be disabled with ``systemctl disable publish-db``.
+the autopkgtest.db which will also need disabling. The ``autopkgtest-db-writer``
+service is constantly using the ``/srv/autopkgtest/data/autopkgtest.db`` file and will need to be
+stopped. The ``autopkgtest-db-publisher`` service which updates ``/srv/autopkgtest/data/public/autopkgtest.db``
+is run minutely and will need to be disabled with ``systemctl disable autopkgtest-db-{writer,publisher}``.
 Please re-enable it once you're finished. *NOTE* it is not enough to simply
 ``systemctl stop`` the service since it gets restarted by a timer,
 so it must be disabled.
@@ -242,6 +157,8 @@ Once those steps are done then the rows can be deleted from the database.
 
 Creating a new API key
 ----------------------
+
+TODO: make sure API keys are ported over, or replace with LP calls
 
 API keys exist on the web workers with the following format:
 
@@ -273,19 +190,7 @@ what's detailed above. Other implementations may waver from this.
 
 Once the ``uuid`` for the api key has been created, add it to:
 
-.. code-block:: bash
-
-  /home/$STAGE-proposed-migration-environment/.local/share/mojo/LOCAL/mojo-$STAGE-proposed-migration/production/external-web-requests-api-keys.json
-
-Where ``$STAGE`` is either ``prod`` or ``stg``.
-
-After this, do a ``mojo run`` to deploy the altered file.
-
-Alternatively, if a ``mojo run`` is for some reason, undesirable at the time, one can also directly add the new api key to the following file on the web units:
-
-``/home/ubuntu/external-web-requests-api-keys.json``
-
-The api keys are loaded for each request, so there's no need to restart ``apache2``.
+TODO: new deployment instructions for API keys
 
 
 Using API Keys
@@ -303,8 +208,10 @@ Where the user and api-key fields are provided by the Ubuntu Release Management 
 Integration with GitHub and GitLab pull/merge requests
 ------------------------------------------------------
 
-autopkgtest-cloud can be used as a GitHub or GitLab web hook for triggering
+GitHub or GitLab web hooks can be used for triggering
 tests on PR/MR creation/changes.
+
+TODO: port over upstream test functionality
 
 Preparing the test
 ^^^^^^^^^^^^^^^^^^
@@ -456,112 +363,6 @@ when you have lots of obsoleted packages, would be like so:
 
 This way you can remove all the packages in one command on every architecture.
 
-Resizing /tmp partitions
-------------------------
-
-When running an instance of autopkgtest-cloud, you may find that the `/tmp` partitions for the
-autopkgtest-cloud-worker units can get quite full.
-
-This can happen when you have very long running tests, which have a large `tests-tree` folder,
-which is produced by autopkgtest itself. These long running tests can disproportionately use up
-the disk space on `/tmp`, and this can end up introducing a "meta-quota", where your cloud
-resources aren't restricted, but you hit bottlenecks due to the `/tmp` partition running out of
-space. This typically will surface as `No space left on device` errors in the test logs,
-covering a variety of tests.
-
-In an occasion like this, consider increasing the size of the `/tmp` partitions.
-
-You can somewhat estimate the partition size you'll need, like so:
-- Take the total number of workers on a given unit - `juju config autopkgtest-cloud-worker n-workers` on the bastion, and add up the numbers
-- Multiply this number by the average `/tmp` usage per test - you can do this by `stat`-ing the directories under `/tmp`
-- This should give you an estimate of how large you require the `/tmp` volume to be.
-
-For instance, at one point there were packages in production taking between
-1.5 and 4.5GB - this was averaged to roughly 2GB, and multiplying by the number
-of workers at the time gave:
-`(110+22+22+22+29+22+22+28 = 277) * 2 = 554`
-
-Indicating 554GB would be required. At the time, there was only 200GB.
-
-The situation was remedied by increasing the `/tmp` volume size to 350GB, and
-decreasing the number of workers. This stopped the amount of `No space left on device`
-errors occurring in the logs.
-
-The steps to increase the `/tmp` volume size are detailed below.
-
-Before doing any of the steps detailed in this section, it's important to make sure no tests
-are currently running on the cloud worker with the partition you want to resize.
-
-.. code-block:: bash
-
-  # on the worker machine with the volume you intend to resize
-  chmod -x autopkgtest-cloud/worker/worker
-  sudo systemctl stop autopkgtest.target # ensure that you WAIT for all running jobs to finish, i.e. for the stop command to exit
-  while true; do ps aux | grep runner; sleep 3; clear; done # wait until there are no runner processes
-
-First check that this specific version of openstack is available via:
-
-.. code-block:: bash
-
-  openstack --os-volume-api-version 3.42 volume list
-
-The command should not fail.
-
-To resize a volume:
-
-.. code-block:: bash
-
-  # get the 'openstack' volume id
-  juju storage --volume # the volume id is in the "Provider ID" column
-  # from the above command, get the id, and set it to a variable: VOLUME_ID
-  openstack --os-volume-api-version 3.42 volume set ${VOLUME_ID} --size ${NEW_SIZE}
-  # this will begin the process of resizing the volume
-  # whilst this is happening, consider running this:
-  while true; do openstack volume show ${VOLUME_ID}; sleep 5; clear; done
-  # If the volume in question has been retyped (__DEFAULT__ <-> Ceph_NVMe), run the following (not necessary for volumes that haven't been retyped):
-  nova reboot ${server_name}
-  # where $server_name is the name of the server associated with the volume
-  # to check this:
-  juju storage # make note of the juju unit name associated with the storage you've resized
-  # then
-  openstack server list
-  # and get the server name of the server running the unit mentioned in juju storage
-  # after rebooting, run the following ON THE SERVER you've rebooted
-  lsblk # check that the disk size has increased
-  sudo growpart /dev/vdb 1
-  sudo resize2fs /dev/vdb1
-  lsblk # check that the disk size and partition sizes match
-
-There are no conclusions as to why the reboot is required if the volume has already
-been retyped. None of the typical methods for rescanning disks work, in this case.
-
-When the volume hasn't been retyped prior, it is immediately acknowledged by the
-openstack server. Keep this in mind if you're using the __DEFAULT__ volume type
-(see `openstack volume show ${VOLUME_ID}` to check).
-
-
-Killing running tests
----------------------
-
-In order to kill a currently running test, grab the test uuid. This can be seen in
-`running.json` or on the `/running` page.
-
-`ssh` to a worker unit, and run:
-
-.. code-block:: bash
-
-  ps aux | grep runner | grep $uuid
-  # grab the PID from the process - this approach will also remove the test request from the queue
-  kill -9 $pid
-  # if you want to stop or restart the test but preserve the test request, run the following to get the service name:
-  service_name=$(ps aux | grep runner | grep $uuid | grep -oP '(?<=--security-groups).*?(?=--name)' | cut -d'@' -f2 | sed -e "s/.secgroup//g")
-  # and then simply stop or restart as you please:
-  sudo systemctl restart/stop autopkgtest@"${service_name}".service
-
-This will kill the autopkgtest process, and then the worker will `ack` the test request
-message, causing the test to not be re-queued, and then the worker will also ensure
-that the openstack server used for the test is deleted.
-
 
 Access the RabbitMQ web UI
 --------------------------
@@ -585,78 +386,3 @@ access to the UI. Grab the credentials by asking a team member.
 
 **NOTE**: Don't forget to close the tunnels when you're done, especially if you
 usually have a `tmux`/`byobu` session running wrapping the second tunnel!
-
-
-Access a testbed spice console
-------------------------------
-
-The `spice <https://spice-space.org/>`_ console is the "physical" console
-attached to an OpenStack VM, that can be helpful to debug issues where the
-network is broken and you don't have access to the machine through SSH.
-
-.. code-block:: bash
-
-  # First SSH to the bastion with a SOCKS proxy port open
-  ssh ubuntu-qa-bastion-ps5.internal -D 1080
-
-Then setup your browser to go through that proxy (plenty of online doc for this).
-
-.. code-block:: bash
-
-  # Now, on the bastion in the right environment:
-  # Source the credentials for the cloud your VM is in
-  $ source path/to/cloud.rc
-  # And finally print the spice console address
-  $ openstack console url show --spice <instance_id>
-  +----------+------------------------------------------------------------------------------------------------+
-  | Field    | Value                                                                                          |
-  +----------+------------------------------------------------------------------------------------------------+
-  | protocol | spice                                                                                          |
-  | type     | spice-html5                                                                                    |
-  | url      | https://nova.ps5.canonical.com:6082/spice_auto.html?token=12345678-1234-4012-7890-0123456789ab |
-  +----------+------------------------------------------------------------------------------------------------+
-
-**NOTE**: the access is only authorized from the corresponding bastion in each
-cloud. That means that for a VM in PS5, you need to setup your SOCKS proxy to a
-PS5 bastion, and for a VM in PS6, you need a proxy to a PS6 bastion.
-
-
-Blackhole harmful IP ranges
----------------------------
-
-As with everything exposed to the Internet, the infra might be subject to
-probing by some bots.
-They can raise the load pretty high, leading to some DoS, but this is easily
-prevented by looking at the HAProxy logs and blackholing the harmful IP address
-range.
-
-Example of harmful requests:
-
-.. code-block::
-
-  GET /packages/a/ableton-link/oracular/armhf/portal/attachment_getAttList.action?bean.RecId=1')+AND+EXTRACTVALUE(534543,CONCAT(0x5c,md5(999999999),0x5c))+AND+('n72Yk'='n72Yk&bean.TabName=1
-  GET /index.php?lang=../../../../../../../../usr/local/lib/php/pearcmd&+config-create+/&/<?echo(md5(#22hi#22));?>+/tmp/index1.php
-  GET /<IMG%20SRC=#22javascript:alert(cross_site_scripting.nasl);#22>.jsp
-  GET /packages/a/abseil/oracular/amd64/seeyon/webmail.do?method=doDownloadAtt&filename=index.jsp&filePath=../conf/datasourceCtp.properties
-
-The situation can be handled quickly with the following:
-
-.. code-block:: bash
-
-  # On the HAProxy unit
-  cd /var/log
-  # Change `CONCAT` here by other pattern, like `\.php` or `\.jsp`
-  zgrep 'CONCAT' haproxy.log*.gz > /tmp/harmful.log
-  # Manually inspect the harmful logs if you want
-  less /tmp/harmful.log
-  # Get the list of IP addresses sorted with the most harmful at the bottom
-  grep -o '[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*' /tmp/harmful.log | sort | uniq -c  | sort -n
-  # Get the network range of that IP, very useful if you see a lot of similar but different IPs in the list
-  # Run this on another machine, don't install the tools on the unit
-  whois <ip address> | grep NetRange
-  ipcalc-ng -d <first IP>-<last IP>
-  # Back on the HAProxy unit
-  # Blackhole the whole range
-  sudo ip route add blackhole 123.123.123.123/12
-  # Show the currently blackholed ranges
-  sudo ip route show type blackhole
