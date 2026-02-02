@@ -69,7 +69,23 @@ def run_as_user(command: str):
     )
 
 
+def is_proxy_defined():
+    """Check if Juju defined proxy environment variables."""
+    return (
+        "JUJU_CHARM_HTTP_PROXY" in os.environ
+        or "JUJU_CHARM_HTTPS_PROXY" in os.environ
+        or "JUJU_CHARM_NO_PROXY" in os.environ
+    )
+
+
 def write_worker_config(releases):
+    extra_args = []
+    if is_proxy_defined():
+        extra_args = [
+            f"--env http_proxy={os.getenv('JUJU_CHARM_HTTP_PROXY')}",
+            f"--env https_proxy={os.getenv('JUJU_CHARM_HTTPS_PROXY')}",
+            f"--env no_proxy={os.getenv('JUJU_CHARM_NO_PROXY')}",
+        ]
     with open(WORKER_CONFIG_PATH, "w") as file:
         file.write(
             dedent(
@@ -78,6 +94,7 @@ def write_worker_config(releases):
                 checkout_dir = {AUTOPKGTEST_LOCATION}
                 per_package_config_dir = {AUTOPKGTEST_PACKAGE_CONFIG_LOCATION}
                 releases = {" ".join(releases)}
+                extra_args = {" ".join(extra_args)}
                 setup_command =
                 setup_command2 =
                 retry_delay = 300
@@ -115,7 +132,7 @@ def write_rabbitmq_creds(hostname, username, password):
 
 def install(autopkgtest_branch, releases):
     """Install dispatcher."""
-    if "JUJU_CHARM_HTTPS_PROXY" in os.environ or "JUJU_CHARM_HTTP_PROXY" in os.environ:
+    if is_proxy_defined():
         logger.info("installing proxy environment file")
         Path("/etc/environment.d").mkdir(exist_ok=True)
         with open("/etc/environment.d/proxy.conf", "w") as file:
