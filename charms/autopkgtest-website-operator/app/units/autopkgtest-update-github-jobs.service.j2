@@ -1,0 +1,12 @@
+[Unit]
+Description=Update GitHub job status
+
+[Service]
+User={{ user }}
+EnvironmentFile=-/etc/environment.d/proxy.conf
+Type=one-shot
+TimeoutStartSec=10m
+ExecStart={{ webcontrol }}/autopkgtest-update-github-jobs
+
+[Install]
+WantedBy=multi-user.target

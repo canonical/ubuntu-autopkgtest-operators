@@ -1,0 +1,326 @@
+#!/usr/bin/python3
+
+import gzip
+import io
+import json
+import logging
+import os
+import sys
+import tarfile
+from datetime import datetime, timedelta
+from pathlib import Path
+
+from helpers.utils import (
+    get_autopkgtest_cloud_conf,
+    get_github_context,
+    swift_connect,
+)
+from request.submit import Submit
+
+PENDING_DIR = Path("/run/autopkgtest_webcontrol/github-pending")
+MAX_DAY_DIFF = 30
+
+swift_container_cache = None
+result_cache = {}
+
+
+def logfile_confirms_job(swift_conn, container, logfile_obj, params):
+    _, contents = swift_conn.get_object(container, logfile_obj)
+    logfile = gzip.decompress(contents)
+    command_line = None
+    for line in logfile.splitlines():
+        decoded_line = line.decode("utf-8")
+        if "command line: " in decoded_line:
+            command_line = decoded_line
+            break
+    if command_line is None:
+        return False
+    logging.debug(f"Command line is:\n{command_line}")
+
+    env = params["env"]
+    for key_equals_value in env:
+        if key_equals_value not in command_line:
+            logging.info(f"{logfile_obj} does not match {env}")
+            return False
+    logging.info(f"{logfile_obj} DOES match {env}")
+    return True
+
+
+def result_matches_job(swift_conn, container, result_obj, params):
+    global result_cache
+
+    # before we check the environment variables, let's first check that the
+    # arch, release and package are correct
+    obj_split = result_obj.split("/")
+    if not (
+        params["release"] == obj_split[0]
+        and params["arch"] == obj_split[1]
+        and params["package"] == obj_split[3]
+    ):
+        logging.debug(
+            "arch release and package don't match this swift object for this job, ignoring"
+        )
+        return
+
+    if result_obj not in result_cache:
+        tar_bytes = io.BytesIO(swift_conn.get_object(container, result_obj)[1])
+        try:
+            with tarfile.open(None, "r", tar_bytes) as tar:
+                exitcode = int(tar.extractfile("exitcode").read().strip())
+                info = json.loads(
+                    tar.extractfile("testinfo.json").read().decode()
+                )
+            result_cache[result_obj] = (exitcode, info)
+        except (KeyError, ValueError, tarfile.TarError) as e:
+            logging.error("broken result %s: %s", result_obj, e)
+            logging.warning(
+                "Proceeding to check job via logfile rather than result.tar..."
+            )
+            return (
+                1
+                if logfile_confirms_job(
+                    swift_conn,
+                    container,
+                    result_obj.replace("result.tar", "log.gz"),
+                    params,
+                )
+                else None
+            )
+    else:
+        exitcode, info = result_cache[result_obj]
+
+    try:
+        result_env = info["custom_environment"]
+    except KeyError:
+        logging.debug("result has no custom_environment, ignoring")
+        return
+
+    # verify that the test result has the same commit hash as the request
+    test_status_url = next((s for s in params["env"] if s.startswith("GITHUB_STATUSES_URL=")), "")
+    request_status_url = next((s for s in result_env if s.startswith("GITHUB_STATUSES_URL=")), "")
+
+    if not test_status_url or not request_status_url or test_status_url != request_status_url:
+        logging.debug(
+            "exit code: %i, ignoring due to different test env: %s != %s",
+            exitcode,
+            test_status_url,
+            request_status_url,
+        )
+        return
+
+    if params.get("testname") != info.get("testname"):
+        logging.debug(
+            "exit code: %i, ignoring due to different testnames: %s != %s",
+            exitcode,
+            params.get("testname"),
+            info.get("testname"),
+        )
+        return
+
+    logging.debug(
+        "exit code: %i, test env matches job: %s", exitcode, result_env
+    )
+    return exitcode
+
+
+def finish_job(jobfile: Path, params, code, log_url):
+    """Tell GitHub that job is complete and delete the job file"""
+
+    if code in (0, 2):
+        state = "success"
+    elif code in (4, 6, 12):
+        state = "failure"
+    else:
+        state = "error"
+
+    data = {
+        "state": state,
+        "context": get_github_context(params),
+        "description": "autopkgtest finished (%s)" % state,
+        "target_url": log_url,
+    }
+
+    statuses_url = None
+    # find status URL
+    for e in params["env"]:
+        if e.startswith("GITHUB_STATUSES_URL="):
+            statuses_url = e.split("=", 1)[1]
+
+    # if we didn't find `statuses_url`, we'll want to delete the file anyway
+    if statuses_url is not None:
+        # tell GitHub about the result
+        Submit.post_json(
+            statuses_url,
+            data,
+            get_autopkgtest_cloud_conf()["github"]["status_credentials"],
+            params["package"],
+        )
+    else:
+        logging.warning(
+            "did not find GITHUB_STATUSES_URL for %s", jobfile.name
+        )
+
+    logging.debug("removing job file %s" % jobfile)
+    try:
+        jobfile.unlink()
+    except FileNotFoundError:
+        logging.debug(
+            "jobfile %s not found, maybe it was already deleted?" % jobfile
+        )
+        return
+    logging.info("%s processed, payload was %s", jobfile.name, data)
+
+
+def get_upstream_pr_from_env(env):
+    upstream_pr = None
+    for env_var in env:
+        if env_var.startswith("UPSTREAM_PULL_REQUEST="):
+            upstream_pr = env_var
+    if upstream_pr is None:
+        raise KeyError(f"No upstream PR in env! env: {env}")
+    return upstream_pr
+
+
+def is_job_running(params):
+    job_match_me = (
+        params["arch"],
+        params["release"],
+        params["build-git"],
+        params["ppas"],
+        params.get("testname", ""),
+        get_upstream_pr_from_env(params["env"]),
+    )
+
+    running_json_location = get_autopkgtest_cloud_conf()["web"]["running_cache"]
+    running_json = json.loads(Path(running_json_location).read_text())
+    packages = running_json.keys()
+    if params["package"] not in packages:
+        return False
+    running_jobs = running_json[params["package"]]
+    for _, vals in running_jobs.items():
+        for release, vars in vals.items():
+            for arch, tests in vars.items():
+                test_params = tests[0]
+                this_test = (
+                    arch,
+                    release,
+                    test_params["build-git"],
+                    test_params["ppas"],
+                    test_params.get("testname", ""),
+                    get_upstream_pr_from_env(test_params["env"]),
+                )
+                if this_test == job_match_me:
+                    return True
+    return False
+
+
+def process_job(jobfile: Path, swift_conn, ext_url):
+    global swift_container_cache
+    try:
+        params = json.loads(jobfile.read_text())
+        mtime = jobfile.stat().st_mtime
+    except Exception as e:
+        logging.error("couldn't read %s, skipping: %s", jobfile, e)
+        return
+    # if the job is currently running, it indicates a re-trigger has occurred!
+    if is_job_running(params):
+        logging.debug("job %s is currently running, skipping.")
+        return
+
+    logging.info(
+        "\n\n--------------------\nprocessing job %s:\n   %s",
+        jobfile.name,
+        params,
+    )
+
+    job_timestamp = datetime.fromtimestamp(mtime)
+
+    # fetch Swift results for this request
+    container = "autopkgtest-" + params["release"]
+    try:
+        container += "-" + params["ppas"][-1].replace("/", "-")
+    except (KeyError, IndexError):
+        pass
+
+    if swift_container_cache is None:
+        _, swift_container_cache = swift_conn.get_container(
+            container, full_listing=True
+        )
+
+    object_list = swift_container_cache
+
+    result_for_finishing_job = {}
+    for obj in object_list:
+        if "result.tar" in obj["name"]:
+            last_modified = obj["last_modified"].split(".")[0]
+            obj_time_fmt = datetime.strptime(
+                last_modified, "%Y-%m-%dT%H:%M:%S"
+            )
+            if abs(obj_time_fmt - job_timestamp) > timedelta(
+                days=MAX_DAY_DIFF
+            ):
+                continue
+            code = result_matches_job(
+                swift_conn, container, obj["name"], params
+            )
+            if code is not None:
+                log_url = "/".join([ext_url, container, obj["name"]]).replace(
+                    "result.tar", "log.gz"
+                )
+                if not result_for_finishing_job:
+                    result_for_finishing_job = {
+                        "jobfile": jobfile,
+                        "params": params,
+                        "code": code,
+                        "log_url": log_url,
+                        "last_modified": obj_time_fmt.timestamp(),
+                    }
+                else:
+                    # this result is more recent, indicating a manual re-trigger
+                    if (
+                        obj_time_fmt.timestamp()
+                        > result_for_finishing_job["last_modified"]
+                    ):
+                        result_for_finishing_job = {
+                            "jobfile": jobfile,
+                            "params": params,
+                            "code": code,
+                            "log_url": log_url,
+                            "last_modified": obj_time_fmt.timestamp(),
+                        }
+    if result_for_finishing_job:
+        del result_for_finishing_job["last_modified"]
+        finish_job(**result_for_finishing_job)
+
+
+if __name__ == "__main__":
+    if "DEBUG" in os.environ:
+        logging.basicConfig(level="DEBUG")
+    else:
+        logging.basicConfig(level="INFO")
+    # We don't want that much details
+    requests_log = logging.getLogger("urllib3").setLevel(logging.INFO)
+    swift_log = logging.getLogger("swiftclient").setLevel(logging.INFO)
+
+    if not PENDING_DIR.is_dir():
+        logging.info("%s does not exist, nothing to do", PENDING_DIR)
+        sys.exit(0)
+
+    config = get_autopkgtest_cloud_conf()
+    external_url = config["web"]["external_swift_url"]
+
+    swift_conn = swift_connect()
+
+    jobs = sys.argv[1:]
+
+    if not jobs:
+        jobs = PENDING_DIR.iterdir()
+    else:
+        jobs = [Path(job) for job in jobs]
+
+    logging.info("start processing jobs")
+
+    for job in jobs:
+        process_job(job, swift_conn, external_url)
+
+    logging.info("done processing jobs")
