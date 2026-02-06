@@ -27,6 +27,7 @@ CHARM_TOOLS_DEST = Path("/usr/local/bin")
 
 CONF_DIRECTORY = Path("/etc/autopkgtest-janitor")
 RABBITMQ_CREDS_PATH = CONF_DIRECTORY / "rabbitmq.cred"
+TARGETS_PATH = CONF_DIRECTORY / "targets.conf"
 
 AUTOPKGTEST_REPO = "https://salsa.debian.org/ubuntu-ci-team/autopkgtest.git"
 AUTOPKGTEST_LOCATION = Path(f"~{USER}/autopkgtest").expanduser()
@@ -173,6 +174,19 @@ def update_autopkgtest(autopkgtest_branch):
     run_as_user(f"git -C {AUTOPKGTEST_LOCATION} checkout {autopkgtest_branch}")
 
 
+def write_available_release_arch(arches, releases):
+    logger.info("writing available arches and releases")
+    with open(TARGETS_PATH, "w") as file:
+        file.write(
+            dedent(
+                f"""\
+                ARCHES={" ".join(arches)}
+                RELEASES={" ".join(releases)}
+                """
+            )
+        )
+
+
 def write_rabbitmq_creds(hostname, username, password):
     logger.info("writing rabbitmq creds")
     with open(RABBITMQ_CREDS_PATH, "w") as file:
@@ -202,6 +216,7 @@ def install_systemd_units(mirror):
     j2context = {
         "user": USER,
         "autopkgtest_location": AUTOPKGTEST_LOCATION,
+        "config": CONF_DIRECTORY,
         "mirror": mirror,
     }
     for unit in units_to_install:
@@ -302,6 +317,7 @@ def configure(
     ensure_proxy()
     update_distro_info_data()
     update_autopkgtest(autopkgtest_branch)
+    write_available_release_arch(arches, target_releases)
     write_rabbitmq_creds(amqp_hostname, amqp_username, amqp_password)
     install_systemd_units(mirror)
     configure_builder_units(arches, stored_releases, target_releases)

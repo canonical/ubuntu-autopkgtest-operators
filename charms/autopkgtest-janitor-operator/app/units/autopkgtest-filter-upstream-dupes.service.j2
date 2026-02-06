@@ -1,0 +1,10 @@
+[Unit]
+Description=Cancel duplicate upstream test requests
+
+[Service]
+Type=oneshot
+User={{ user }}
+TimeoutStartSec=5min
+EnvironmentFile={{ config }}/rabbitmq.cred
+EnvironmentFile={{ config }}/targets.conf
+ExecStart=filter-amqp-dupes-upstream
