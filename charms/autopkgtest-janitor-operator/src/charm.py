@@ -8,6 +8,8 @@ import config_types
 import ops
 from ops.framework import StoredState
 
+RABBITMQ_USERNAME = "janitor"
+
 
 class AutopkgtestJanitorCharm(ops.CharmBase):
     """Autopkgtest janitor charm class."""
@@ -24,6 +26,9 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         self._stored.set_default(
             remotes=set(),
             releases=[],
+            got_amqp_creds=False,
+            amqp_hostname=None,
+            amqp_password=None,
         )
 
         framework.observe(self.on.install, self._on_install)
@@ -82,6 +87,10 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
     # config helpers
 
     def _on_config_changed(self, event: ops.ConfigChangedEvent):
+        if not self._stored.got_amqp_creds:
+            self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
+            return
+
         autopkgtest_janitor.configure(
             arches=self._stored.remotes,
             autopkgtest_branch=self.typed_config.autopkgtest_git_branch,
@@ -90,9 +99,49 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             target_releases=self.typed_config.releases,
             max_containers=self.typed_config.max_containers,
             max_vms=self.typed_config.max_virtual_machines,
+            amqp_hostname=self._stored.amqp_hostname,
+            amqp_username=RABBITMQ_USERNAME,
+            amqp_password=self._stored.amqp_password,
         )
         self._stored.releases = self.typed_config.releases
         self.on.start.emit()
+
+    # relation hooks
+
+    def _on_amqp_relation_joined(self, event: ops.RelationJoinedEvent):
+        self.unit.status = ops.MaintenanceStatus(
+            f"Setting up {event.relation.name} connection"
+        )
+
+        event.relation.data[self.unit].update(
+            {"username": RABBITMQ_USERNAME, "vhost": "/"}
+        )
+
+    def _on_amqp_relation_changed(self, event: ops.RelationChangedEvent):
+        unit_data = event.relation.data[event.unit]
+
+        if "password" not in unit_data:
+            return
+
+        self.unit.status = ops.MaintenanceStatus(
+            f"Updating up {event.relation.name} connection"
+        )
+
+        hostname = unit_data["hostname"]
+        password = unit_data["password"]
+
+        self._stored.got_amqp_creds = True
+        self._stored.amqp_hostname = hostname
+        self._stored.amqp_password = password
+
+        self._on_config_changed.emit()
+
+    def _on_amqp_relation_broken(self, event: ops.RelationBrokenEvent):
+        self._stored.got_amqp_creds = False
+        self._stored.amqp_hostname = None
+        self._stored.amqp_password = None
+
+        self._on_config_changed.emit()
 
 
 if __name__ == "__main__":  # pragma: nocover

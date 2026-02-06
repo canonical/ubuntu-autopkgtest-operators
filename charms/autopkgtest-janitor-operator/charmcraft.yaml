@@ -67,3 +67,8 @@ config:
       type: int
       description: Max number of virtual machines per remote
       default: 20
+
+requires:
+  amqp:
+    interface: rabbitmq
+    limit: 1

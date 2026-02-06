@@ -2,46 +2,31 @@
 # Filter out all but the latest request for a given upstream PR
 
 import argparse
-import configparser
 import json
 import logging
 import os
 from collections import defaultdict
 
-import amqp
 import dateutil.parser
-import distro_info
-
-UDI = distro_info.UbuntuDistroInfo()
-ALL_UBUNTU_RELEASES = UDI.all
-SUPPORTED_UBUNTU_RELEASES = sorted(
-    set(UDI.supported() + UDI.supported_esm()), key=ALL_UBUNTU_RELEASES.index
-)
+import pika
 
 
 def filter_amqp(options):
-    try:
-        cp = configparser.ConfigParser()
-        with open("/home/ubuntu/rabbitmq.cred") as f:
-            cp.read_string("[rabbit]\n" + f.read().replace('"', ""))
-        amqp_con = amqp.Connection(
-            cp["rabbit"]["RABBIT_HOST"],
-            cp["rabbit"]["RABBIT_USER"],
-            cp["rabbit"]["RABBIT_PASSWORD"],
-        )
-    except FileNotFoundError:
-        amqp_con = amqp.Connection(
-            os.environ["RABBIT_HOST"],
-            userid=os.environ["RABBIT_USER"],
-            password=os.environ["RABBIT_PASSWORD"],
-        )
-    amqp_con.connect()
+    amqp_con = pika.BlockingConnection(
+        parameters=pika.ConnectionParameters(
+            host=os.environ["RABBIT_HOST"],
+            credentials=pika.PlainCredentials(
+                username=os.environ["RABBIT_USER"],
+                password=os.environ["RABBIT_PASSWORD"],
+            ),
+        ),
+    )
     dry_run = "[dry-run] " if options.dry_run else ""
 
     queues = (
         f"debci-upstream-{release}-{arch}"
-        for release in SUPPORTED_UBUNTU_RELEASES
-        for arch in ("amd64", "arm64", "armhf", "i386", "ppc64el", "s390x")
+        for release in os.environ["RELEASES"].split(" ")
+        for arch in os.environ["ARCHES"].split(" ")
     )
     for queue_name in queues:
         ch = amqp_con.channel()
@@ -49,13 +34,12 @@ def filter_amqp(options):
         seen = defaultdict(dict)
         while True:
             try:
-                r = ch.basic_get(queue_name)
-            except amqp.NotFound:
+                method, _, body = ch.basic_get(queue_name)
+            except pika.exceptions.ChannelClosedByBroker:
                 logging.debug(f"No such queue {queue_name}")
                 break
-            if r is None:
+            if body is None:
                 break
-            body = r.body.decode()
             (pkg, params) = body.split("\n", 1)
             params_j = json.loads(params)
             submit_time = dateutil.parser.parse(params_j["submit-time"])
@@ -80,7 +64,7 @@ def filter_amqp(options):
                 pass
             finally:
                 logging.debug(f"Recording {pkg}/{pr} for {queue_name}")
-                seen[pkg][pr] = (r.delivery_tag, submit_time)
+                seen[pkg][pr] = (method.delivery_tag, submit_time)
 
 
 def main():
@@ -91,8 +75,8 @@ The upstream integration is different than regular jobs pushed by Britney.
 If a developer pushes two times in a row on a pull request, then two test
 requests get queued. This script is here to remove any duplicate requests.
 
-If ~/rabbitmq.cred is not present, this script will load credentials from
-$RABBIT_HOST, $RABBIT_USER, and $RABBIT_PASSWORD environment variables.
+The script expects rabbitmq credentials as well as target releases and arches
+to be loaded via environment variables.
 """,
         formatter_class=argparse.RawTextHelpFormatter,
     )

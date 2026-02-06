@@ -1,0 +1,8 @@
+[Unit]
+Description=Update GitHub job status (timer)
+
+[Timer]
+OnCalendar=minutely
+
+[Install]
+WantedBy=timers.target

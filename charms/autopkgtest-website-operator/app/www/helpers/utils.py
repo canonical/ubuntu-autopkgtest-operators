@@ -45,7 +45,9 @@ def read_config_file(filepath: str | pathlib.Path, cfg_key: str = None):
 
 def get_autopkgtest_cloud_conf():
     try:
-        return read_config_file(pathlib.Path("/etc/autopkgtest-cloud.conf"))
+        return read_config_file(
+            pathlib.Path("/etc/autopkgtest-website/autopkgtest-cloud.conf")
+        )
     except (FileNotFoundError, RuntimeError, PermissionError):
         try:
             return read_config_file(

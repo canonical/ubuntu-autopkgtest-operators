@@ -33,6 +33,7 @@ PUBLIC_DATA_DIR = DATA_DIR / "public"
 WWW_DIR = APP_DIR / "www"
 
 # Config files create by the charm
+CONFIG_DIR = Path("/etc/autopkgtest-website")
 SITES_AVAILABLE_PATH = Path("/etc/apache2/sites-available/")
 
 # Packages to install
@@ -90,6 +91,8 @@ def install() -> None:
     shutil.chown(PUBLIC_DATA_DIR, user=USER, group=GROUP)
     # tools
     shutil.copytree(CHARM_APP_DATA / "bin", "/usr/local/bin", dirs_exist_ok=True)
+    # config
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
     logger.info("Installing website")
     shutil.rmtree(WWW_DIR, ignore_errors=True)
@@ -166,6 +169,7 @@ def configure(
     j2template = j2env.get_template("autopkgtest-cloud.conf.j2")
     j2context = {
         "hostname": hostname,
+        "config": CONFIG_DIR,
         "data": DATA_DIR,
         "database": DATA_DIR / "autopkgtest.db",
         "database_ro": PUBLIC_DATA_DIR / "autopkgtest.db",
@@ -173,7 +177,7 @@ def configure(
         **amqp_creds,
         **swift_creds,
     }
-    conf_file = Path("/etc/autopkgtest-cloud.conf")
+    conf_file = Path(CONFIG_DIR / "autopkgtest-cloud.conf")
     with open(conf_file, "w") as f:
         f.write(j2template.render(j2context))
 
