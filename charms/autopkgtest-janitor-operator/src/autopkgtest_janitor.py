@@ -25,6 +25,9 @@ CHARM_APP_DATA = CHARM_SOURCE_PATH / "app"
 USER = "ubuntu"
 CHARM_TOOLS_DEST = Path("/usr/local/bin")
 
+CONF_DIRECTORY = Path("/etc/autopkgtest-janitor")
+RABBITMQ_CREDS_PATH = CONF_DIRECTORY / "rabbitmq.cred"
+
 AUTOPKGTEST_REPO = "https://salsa.debian.org/ubuntu-ci-team/autopkgtest.git"
 AUTOPKGTEST_LOCATION = Path(f"~{USER}/autopkgtest").expanduser()
 
@@ -147,6 +150,97 @@ def ensure_proxy():
     os.environ["no_proxy"] = os.getenv("JUJU_CHARM_NO_PROXY", "")
 
 
+def update_distro_info_data():
+    logger.info("updating distro-info-data")
+    apt.update()
+    # Note apt.add_package() does not upgrade an already installed package.
+    subprocess.run(
+        [
+            "apt-get",
+            "-o=APT::Get::Always-Include-Phased-Updates=true",
+            "install",
+            "distro-info-data",
+        ],
+        check=True,
+    )
+
+
+def update_autopkgtest(autopkgtest_branch):
+    logger.info("updating autopkgtest")
+    run_as_user(
+        f"git -C '{AUTOPKGTEST_LOCATION}' fetch --depth 1 origin '{autopkgtest_branch}'"
+    )
+    run_as_user(f"git -C {AUTOPKGTEST_LOCATION} checkout {autopkgtest_branch}")
+
+
+def write_rabbitmq_creds(hostname, username, password):
+    logger.info("writing rabbitmq creds")
+    with open(RABBITMQ_CREDS_PATH, "w") as file:
+        file.write(
+            dedent(
+                f"""\
+                RABBIT_HOST={hostname}
+                RABBIT_USER={username}
+                RABBIT_PASSWORD={password}
+                """
+            )
+        )
+
+
+def install_systemd_units(mirror):
+    logger.info("installing systemd units")
+    units_path = CHARM_APP_DATA / "units"
+    units_to_install = [u.name for u in units_path.glob("*")]
+    # enable all non-template timers
+    units_to_enable = [u.name for u in units_path.glob("*.timer") if "@" not in u.name]
+
+    system_units_dir = Path("/etc/systemd/system/")
+    j2env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(units_path),
+        autoescape=jinja2.select_autoescape(),
+    )
+    j2context = {
+        "user": USER,
+        "autopkgtest_location": AUTOPKGTEST_LOCATION,
+        "mirror": mirror,
+    }
+    for unit in units_to_install:
+        if unit.endswith(".j2"):
+            unit_basename = unit.removesuffix(".j2")
+            j2template = j2env.get_template(unit)
+            with open(system_units_dir / unit_basename, "w") as f:
+                f.write(j2template.render(j2context))
+        else:
+            shutil.copy(units_path / unit, system_units_dir)
+
+    systemd.daemon_reload()
+    if units_to_enable:
+        systemd.service_enable("--now", *units_to_enable)
+
+
+def configure_builder_units(arches, stored_releases, target_releases):
+    logger.info("enabling/disabling builder units")
+    logger.info(f"target releases: {' '.join(target_releases)}")
+
+    old_releases = [r for r in stored_releases if r not in target_releases]
+    if old_releases:
+        logger.info(f"releases to sunset: {' '.join(old_releases)}")
+        for arch in arches:
+            disable_image_builders(arch, old_releases)
+
+    new_releases = [r for r in target_releases if r not in stored_releases]
+    if new_releases:
+        logger.info(f"new releases to activate {' '.join(new_releases)}")
+        for arch in arches:
+            enable_image_builders(arch, new_releases)
+
+
+def set_instance_limits(arches, max_containers, max_vms):
+    logger.info("setting instance limits")
+    for arch in arches:
+        set_limits(arch, max_containers, max_vms)
+
+
 def install(autopkgtest_branch):
     """Install janitor."""
     if "JUJU_CHARM_HTTPS_PROXY" in os.environ or "JUJU_CHARM_HTTP_PROXY" in os.environ:
@@ -201,74 +295,17 @@ def configure(
     target_releases,
     max_containers,
     max_vms,
+    amqp_hostname,
+    amqp_username,
+    amqp_password,
 ):
     ensure_proxy()
-    logger.info("updating distro-info-data")
-    apt.update()
-    # Note apt.add_package() does not upgrade an already installed package.
-    subprocess.run(
-        [
-            "apt-get",
-            "-o=APT::Get::Always-Include-Phased-Updates=true",
-            "install",
-            "distro-info-data",
-        ],
-        check=True,
-    )
-
-    logger.info("updating autopkgtest")
-    run_as_user(
-        f"git -C '{AUTOPKGTEST_LOCATION}' fetch --depth 1 origin '{autopkgtest_branch}'"
-    )
-    run_as_user(f"git -C {AUTOPKGTEST_LOCATION} checkout {autopkgtest_branch}")
-
-    logger.info("installing systemd units")
-    units_path = CHARM_APP_DATA / "units"
-    units_to_install = [u.name for u in units_path.glob("*")]
-    # enable all non-template timers
-    units_to_enable = [u.name for u in units_path.glob("*.timer") if "@" not in u.name]
-
-    system_units_dir = Path("/etc/systemd/system/")
-    j2env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader(units_path),
-        autoescape=jinja2.select_autoescape(),
-    )
-    j2context = {
-        "user": USER,
-        "autopkgtest_location": AUTOPKGTEST_LOCATION,
-        "mirror": mirror,
-    }
-    for unit in units_to_install:
-        if unit.endswith(".j2"):
-            unit_basename = unit.removesuffix(".j2")
-            j2template = j2env.get_template(unit)
-            with open(system_units_dir / unit_basename, "w") as f:
-                f.write(j2template.render(j2context))
-        else:
-            shutil.copy(units_path / unit, system_units_dir)
-
-    systemd.daemon_reload()
-    if units_to_enable:
-        systemd.service_enable("--now", *units_to_enable)
-
-    logger.info("enabling/disabling builder units")
-    logger.info(f"target releases: {' '.join(target_releases)}")
-
-    old_releases = [r for r in stored_releases if r not in target_releases]
-    if old_releases:
-        logger.info(f"releases to sunset: {' '.join(old_releases)}")
-        for arch in arches:
-            disable_image_builders(arch, old_releases)
-
-    new_releases = [r for r in target_releases if r not in stored_releases]
-    if new_releases:
-        logger.info(f"new releases to activate {' '.join(new_releases)}")
-        for arch in arches:
-            enable_image_builders(arch, new_releases)
-
-    logger.info("setting instance limits")
-    for arch in arches:
-        set_limits(arch, max_containers, max_vms)
+    update_distro_info_data()
+    update_autopkgtest(autopkgtest_branch)
+    write_rabbitmq_creds(amqp_hostname, amqp_username, amqp_password)
+    install_systemd_units(mirror)
+    configure_builder_units(arches, stored_releases, target_releases)
+    set_instance_limits(arches, max_containers, max_vms)
 
 
 def get_remotes():
