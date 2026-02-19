@@ -62,11 +62,11 @@ config:
     max-containers:
       type: int
       description: Max number of containers per remote
-      default: 50
+      default: 10
     max-virtual-machines:
       type: int
       description: Max number of virtual machines per remote
-      default: 20
+      default: 2
 
 requires:
   amqp:
