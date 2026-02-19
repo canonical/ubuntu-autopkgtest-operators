@@ -185,7 +185,6 @@ def install(autopkgtest_branch, releases):
     logger.info("installing worker and tools")
     src_path = CHARM_APP_DATA / "bin"
     shutil.copy(src_path / "worker", WORKER_TOOLS_DEST)
-    shutil.copy(src_path / "filter-amqp-dupes-upstream", WORKER_TOOLS_DEST)
 
     logger.info("writing worker config")
     write_worker_config(releases)

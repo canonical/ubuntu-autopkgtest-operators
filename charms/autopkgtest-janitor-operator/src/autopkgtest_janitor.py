@@ -290,6 +290,7 @@ def install(autopkgtest_branch):
     src_dir = CHARM_APP_DATA / "bin"
     shutil.copy(src_dir / "cleanup-lxd", CHARM_TOOLS_DEST)
     shutil.copy(src_dir / "build-image-on-remote", CHARM_TOOLS_DEST)
+    shutil.copy(src_dir / "filter-amqp-dupes-upstream", CHARM_TOOLS_DEST)
 
     logger.info("cloning autopkgtest repository")
     shutil.rmtree(AUTOPKGTEST_LOCATION, ignore_errors=True)
