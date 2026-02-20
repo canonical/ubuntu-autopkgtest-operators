@@ -48,6 +48,10 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         autopkgtest_janitor.install(self.typed_config.autopkgtest_git_branch)
 
     def _on_start(self, event: ops.StartEvent):
+        """Handle start event."""
+        if isinstance(self.unit.status, ops.BlockedStatus):
+            return
+
         autopkgtest_janitor.start()
         self.unit.status = ops.ActiveStatus()
 
