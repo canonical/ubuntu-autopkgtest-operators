@@ -286,6 +286,9 @@ def install(autopkgtest_branch):
     for dep in SNAP_DEPENDENCIES:
         snap.add(dep["name"], channel=dep["channel"])
 
+    logger.info("creating directories")
+    CONF_DIRECTORY.mkdir(exist_ok=True)
+
     logger.info("installing charm tools")
     src_dir = CHARM_APP_DATA / "bin"
     shutil.copy(src_dir / "cleanup-lxd", CHARM_TOOLS_DEST)
