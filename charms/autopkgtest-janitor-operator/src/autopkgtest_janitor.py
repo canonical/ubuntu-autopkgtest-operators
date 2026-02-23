@@ -48,6 +48,7 @@ RELEASE_ARCH_RESTRICTIONS = {
 VM_ARCHITECTURES = ["amd64"]
 
 DEB_DEPENDENCIES = [
+    "python3-pika",
     "distro-info",
     "retry",
 ]
