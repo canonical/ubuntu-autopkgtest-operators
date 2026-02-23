@@ -31,17 +31,23 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             amqp_password=None,
         )
 
+        # basic hooks
         framework.observe(self.on.install, self._on_install)
+        framework.observe(self.on.config_changed, self._on_config_changed)
         framework.observe(self.on.start, self._on_start)
         framework.observe(self.on.upgrade_charm, self._on_install)
 
+        # action hooks
         framework.observe(self.on.add_remote_action, self._on_add_remote)
         framework.observe(self.on.remove_remote_action, self._on_remove_remote)
         framework.observe(
             self.on.rebuild_all_images_action, self._on_rebuild_all_images
         )
 
-        framework.observe(self.on.config_changed, self._on_config_changed)
+        # relation hooks
+        framework.observe(self.on.amqp_relation_joined, self._on_amqp_relation_joined)
+        framework.observe(self.on.amqp_relation_changed, self._on_amqp_relation_changed)
+        framework.observe(self.on.amqp_relation_broken, self._on_amqp_relation_broken)
 
     def _on_install(self, event: ops.InstallEvent):
         self.unit.status = ops.MaintenanceStatus("installing janitor charm")
@@ -138,14 +144,14 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         self._stored.amqp_hostname = hostname
         self._stored.amqp_password = password
 
-        self._on_config_changed.emit()
+        self.on.config_changed.emit()
 
     def _on_amqp_relation_broken(self, event: ops.RelationBrokenEvent):
         self._stored.got_amqp_creds = False
         self._stored.amqp_hostname = None
         self._stored.amqp_password = None
 
-        self._on_config_changed.emit()
+        self.on.config_changed.emit()
 
 
 if __name__ == "__main__":  # pragma: nocover
