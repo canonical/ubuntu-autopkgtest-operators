@@ -144,14 +144,14 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         self._stored.amqp_hostname = hostname
         self._stored.amqp_password = password
 
-        self._on_config_changed.emit()
+        self.on.config_changed.emit()
 
     def _on_amqp_relation_broken(self, event: ops.RelationBrokenEvent):
         self._stored.got_amqp_creds = False
         self._stored.amqp_hostname = None
         self._stored.amqp_password = None
 
-        self._on_config_changed.emit()
+        self.on.config_changed.emit()
 
 
 if __name__ == "__main__":  # pragma: nocover
