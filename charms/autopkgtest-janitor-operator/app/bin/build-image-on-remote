@@ -13,9 +13,10 @@ remote="remote-$arch"
 imgremote="ubuntu-daily"
 base=$RELEASE
 
-basearch=$arch
-if [ "$basearch" = amd64v3 ]; then
-    basearch=amd64
+# Fallback to building amd64 images, to be manually made into
+# amd64v3 images for now.
+if [ "$arch" = amd64v3 ]; then
+    arch=amd64
 fi
 
 if [ -z "${MIRROR-}" ]; then
@@ -38,9 +39,9 @@ if
     # stable is young, i.e. we are early in the $RELEASE cycle
     [ "$stable_release_age" -ge "-$max_stable_age_days" ] &&
     # there are no images for $RELEASE
-    "$@" "$imgremote:$base/$basearch" 2>&1 | grep -q "couldn't be found" &&
+    "$@" "$imgremote:$base/$arch" 2>&1 | grep -q "couldn't be found" &&
     # there are image for stable
-    "$@" "$imgremote:$stable/$basearch" >/dev/null 2>&1
+    "$@" "$imgremote:$stable/$arch" >/dev/null 2>&1
 then
     echo "No $base image appears to be available, falling back to $stable"
     base=$stable
