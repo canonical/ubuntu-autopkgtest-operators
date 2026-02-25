@@ -288,6 +288,15 @@ def install(autopkgtest_branch):
     logger.info("installing packages")
     apt.add_package(DEB_DEPENDENCIES)
 
+    # Remove fwupd and reset state of its refresh service, so it won't
+    # make the system degraded.
+    logger.info("removing fwupd")
+    apt.remove_package("fwupd")
+    subprocess.run(
+        ["systemctl", "reset-failed", "fwupd-refresh.service"],
+        stderr=subprocess.DEVNULL,
+    )
+
     logger.info("installing snaps")
     for dep in SNAP_DEPENDENCIES:
         snap.add(dep["name"], channel=dep["channel"])
