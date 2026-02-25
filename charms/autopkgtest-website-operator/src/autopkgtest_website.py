@@ -82,6 +82,15 @@ def install() -> None:
     logger.info("Installing packages")
     apt.add_package(PACKAGES)
 
+    # Remove fwupd and reset state of its refresh service, so it won't
+    # make the system degraded.
+    logger.info("removing fwupd")
+    apt.remove_package("fwupd")
+    subprocess.run(
+        ["systemctl", "reset-failed", "fwupd-refresh.service"],
+        stderr=subprocess.DEVNULL,
+    )
+
     logger.info("Creating directories")
     # data
     DATA_DIR.mkdir(parents=True, exist_ok=True)

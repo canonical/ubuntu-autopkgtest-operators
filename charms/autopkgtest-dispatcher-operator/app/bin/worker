@@ -57,7 +57,7 @@ SUCCESS_CODES = (0, 2, 8)
 
 KEYS_FOR_ADDITIONAL_PARAMS = ["all-proposed", "testname"]
 
-VM_ARCHES = ["amd64", "amd64v3"]
+VM_ARCHES = ["amd64", "amd64v3", "s390x"]
 
 
 def term_handler(signum, frame):
@@ -561,6 +561,7 @@ def request(channel, method, properties, body):
         else:
             argv = ["autopkgtest"]
         argv += ["--output-dir", out_dir, "--timeout-copy=6000"]
+        argv += ["--needs-internet=try"]
 
         if i386_foreign_series(release) and architecture == "i386":
             argv += ["-a", "i386"]
@@ -945,8 +946,12 @@ def amqp_queues_channel():
     """Create channel for consuming the queues."""
     channel = amqp_con.channel()
     channel.confirm_delivery()
+
     # avoids greedy grabbing of the entire queue while being too busy
-    channel.basic_qos(0, 1, True)
+    channel.basic_qos(
+        prefetch_count=1,
+        global_qos=True,
+    )
 
     arch = args.architecture
 

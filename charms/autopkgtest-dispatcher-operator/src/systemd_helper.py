@@ -67,4 +67,7 @@ class SystemdHelper:
                 )
                 # TODO: graceful shutdown of worker units
                 systemd.service_disable("--now", *unit_names)
-                systemd._systemctl("reset-failed", *unit_names)
+                subprocess.run(
+                    ["systemctl", "reset-failed", *unit_names],
+                    stdout=subprocess.DEVNULL,
+                )

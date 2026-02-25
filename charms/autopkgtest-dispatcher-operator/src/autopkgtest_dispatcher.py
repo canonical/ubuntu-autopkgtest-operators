@@ -160,6 +160,15 @@ def install(autopkgtest_branch, releases):
     for needed_snap in SNAP_DEPENDENCIES:
         snap.add(needed_snap["name"], channel=needed_snap["channel"])
 
+    # Remove fwupd and reset state of its refresh service, so it won't
+    # make the system degraded.
+    logger.info("removing fwupd")
+    apt.remove_package("fwupd")
+    subprocess.run(
+        ["systemctl", "reset-failed", "fwupd-refresh.service"],
+        stderr=subprocess.DEVNULL,
+    )
+
     logger.info("creating directories")
     CONF_DIRECTORY.mkdir(exist_ok=True)
 

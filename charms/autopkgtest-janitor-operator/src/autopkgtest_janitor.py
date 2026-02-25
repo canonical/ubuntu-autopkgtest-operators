@@ -45,7 +45,7 @@ RELEASE_ARCH_RESTRICTIONS = {
 }
 
 # List of architecture for which the charm should create VM images.
-VM_ARCHITECTURES = ["amd64"]
+VM_ARCHITECTURES = ["amd64", "amd64v3", "s390x"]
 
 DEB_DEPENDENCIES = [
     "python3-pika",
@@ -115,8 +115,13 @@ def disable_image_builders(arch, releases):
             systemd.service_disable(*services)
 
         # reset failed state
-        systemd._systemctl(
-            "reset-failed", f"autopkgtest-build-image@{arch}-{release}-*.*"
+        subprocess.run(
+            [
+                "systemctl",
+                "reset-failed",
+                f"autopkgtest-build-image@{arch}-{release}-*.*",
+            ],
+            stderr=subprocess.DEVNULL,
         )
 
 
@@ -282,6 +287,15 @@ def install(autopkgtest_branch):
 
     logger.info("installing packages")
     apt.add_package(DEB_DEPENDENCIES)
+
+    # Remove fwupd and reset state of its refresh service, so it won't
+    # make the system degraded.
+    logger.info("removing fwupd")
+    apt.remove_package("fwupd")
+    subprocess.run(
+        ["systemctl", "reset-failed", "fwupd-refresh.service"],
+        stderr=subprocess.DEVNULL,
+    )
 
     logger.info("installing snaps")
     for dep in SNAP_DEPENDENCIES:
