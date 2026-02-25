@@ -57,7 +57,7 @@ SUCCESS_CODES = (0, 2, 8)
 
 KEYS_FOR_ADDITIONAL_PARAMS = ["all-proposed", "testname"]
 
-VM_ARCHES = ["amd64", "amd64v3"]
+VM_ARCHES = ["amd64", "amd64v3", "s390x"]
 
 
 def term_handler(signum, frame):
