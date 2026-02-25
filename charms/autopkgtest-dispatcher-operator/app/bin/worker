@@ -969,7 +969,16 @@ def amqp_queues_channel():
 
     for queue_name in queues:
         logging.info("Setting up and listening to AMQP queue %s", queue_name)
-        channel.queue_declare(queue=queue_name, durable=True, auto_delete=False)
+        channel.queue_declare(
+            queue=queue_name,
+            durable=True,
+            auto_delete=False,
+            arguments={
+                # Avoid https://www.rabbitmq.com/docs/consumers#acknowledgement-timeout
+                # on long running tests.
+                "x-consumer-timeout": 86400000,
+            },
+        )
         channel.basic_consume(queue=queue_name, on_message_callback=request)
 
     return channel
