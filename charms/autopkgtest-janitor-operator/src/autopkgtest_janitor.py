@@ -45,7 +45,7 @@ RELEASE_ARCH_RESTRICTIONS = {
 }
 
 # List of architecture for which the charm should create VM images.
-VM_ARCHITECTURES = ["amd64"]
+VM_ARCHITECTURES = ["amd64", "amd64v3", "s390x"]
 
 DEB_DEPENDENCIES = [
     "python3-pika",
