@@ -115,8 +115,13 @@ def disable_image_builders(arch, releases):
             systemd.service_disable(*services)
 
         # reset failed state
-        systemd._systemctl(
-            "reset-failed", f"autopkgtest-build-image@{arch}-{release}-*.*"
+        subprocess.run(
+            [
+                "systemctl",
+                "reset-failed",
+                f"autopkgtest-build-image@{arch}-{release}-*.*",
+            ],
+            stderr=subprocess.DEVNULL,
         )
 
 
