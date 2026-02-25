@@ -946,8 +946,12 @@ def amqp_queues_channel():
     """Create channel for consuming the queues."""
     channel = amqp_con.channel()
     channel.confirm_delivery()
+
     # avoids greedy grabbing of the entire queue while being too busy
-    channel.basic_qos(0, 1, True)
+    channel.basic_qos(
+        prefetch_count=1,
+        global_qos=True,
+    )
 
     arch = args.architecture
 
