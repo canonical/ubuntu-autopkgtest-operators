@@ -5,7 +5,7 @@ import json
 import logging
 
 from helpers.utils import (
-    db_connect_readonly,
+    db_connect_public_readonly,
     get_release_arches,
     get_source_versions,
     get_stats_cache,
@@ -74,7 +74,7 @@ def success_count_for_release_and_arch(db, release, arch, src_versions):
 
 def calc_stats():
     logger.debug("Connecting to autopkgtest.db")
-    db_con = db_connect_readonly()
+    db_con = db_connect_public_readonly()
     if not db_con:
         logger.debug("Unable to get DB con")
         exit(1)
