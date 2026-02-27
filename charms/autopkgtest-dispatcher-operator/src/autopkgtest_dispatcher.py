@@ -242,5 +242,11 @@ def add_remote(arch: str, token: str):
     run_as_user(f"lxc remote add remote-{arch} {token}")
 
 
+def remove_remote(arch: str):
+    run_as_user(
+        f"lxc remote list --format=csv | ! grep -q '^remote-{arch},' || lxc remote remove remote-{arch}"
+    )
+
+
 def reconcile_worker_units(worker_config: dict[str, int]):
     systemd_helper.reconcile_systemd_worker_units(worker_config)
