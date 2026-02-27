@@ -69,5 +69,5 @@ class SystemdHelper:
                 systemd.service_disable("--now", *unit_names)
                 subprocess.run(
                     ["systemctl", "reset-failed", *unit_names],
-                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
                 )
