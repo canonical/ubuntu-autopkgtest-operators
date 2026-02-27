@@ -59,14 +59,14 @@ config:
       type: string
       description: Ubuntu mirror to use
       default: http://archive.ubuntu.com/ubuntu/
-    max-containers:
+    max-instances:
       type: int
-      description: Max number of containers per remote
-      default: 10
-    max-virtual-machines:
-      type: int
-      description: Max number of virtual machines per remote
-      default: 2
+      description: Max number of instances per remote
+      # A sensible default is a bit higher than the dispatcher's
+      # default-worker-count, to allow all workers for a remote
+      # to get a testbed, plus some headroom for image building
+      # and occasional stray instances.
+      default: 15
 
 requires:
   amqp:

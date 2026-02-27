@@ -75,12 +75,11 @@ def run_as_user(command: str, *, capture_output=False, check=True):
     )
 
 
-def set_limits(arch: str, max_containers, max_vms) -> None:
+def set_limits(arch: str, max_instances) -> None:
     """Set instance limits."""
     remote = f"remote-{arch}"
 
-    run_as_user(f"lxc project set {remote}:default limits.containers {max_containers}")
-    run_as_user(f"lxc project set {remote}:default limits.virtual-machines {max_vms}")
+    run_as_user(f"lxc project set {remote}:default limits.instances {max_instances}")
 
 
 def disable_image_builders(arch, releases):
@@ -256,10 +255,10 @@ def configure_builder_units(arches, stored_releases, target_releases):
             enable_image_builders(arch, new_releases)
 
 
-def set_instance_limits(arches, max_containers, max_vms):
+def set_instance_limits(arches, max_instances):
     logger.info("setting instance limits")
     for arch in arches:
-        set_limits(arch, max_containers, max_vms)
+        set_limits(arch, max_instances)
 
 
 def install(autopkgtest_branch):
@@ -327,8 +326,7 @@ def configure(
     mirror,
     stored_releases,
     target_releases,
-    max_containers,
-    max_vms,
+    max_instances,
     amqp_hostname,
     amqp_username,
     amqp_password,
@@ -340,7 +338,7 @@ def configure(
     write_rabbitmq_creds(amqp_hostname, amqp_username, amqp_password)
     install_systemd_units(mirror)
     configure_builder_units(arches, stored_releases, target_releases)
-    set_instance_limits(arches, max_containers, max_vms)
+    set_instance_limits(arches, max_instances)
 
 
 def get_remotes():
@@ -349,7 +347,7 @@ def get_remotes():
     )
 
 
-def add_remote(arch: str, token: str, all_releases: list[str], max_containers, max_vms):
+def add_remote(arch: str, token: str, all_releases: list[str], max_instances):
     """Handle adding a new remote."""
     remote = f"remote-{arch}"
 
@@ -361,7 +359,7 @@ def add_remote(arch: str, token: str, all_releases: list[str], max_containers, m
     if remote not in get_remotes():
         raise Exception(f"LXD not reporting remote for {arch} as expected")
 
-    set_limits(arch, max_containers, max_vms)
+    set_limits(arch, max_instances)
 
     enable_image_builders(arch, all_releases)
 
