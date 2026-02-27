@@ -54,7 +54,7 @@ def init_config():
     CONFIG["swift_container_url"] = cp["web"]["external_swift_url"] + "/autopkgtest-%s"
     CONFIG["amqp_queue_cache"] = Path(cp["web"]["amqp_queue_cache"])
     CONFIG["running_cache"] = Path(cp["web"]["running_cache"])
-    CONFIG["database"] = Path(cp["web"]["database_ro"])
+    CONFIG["database"] = Path(cp["web"]["database_public"])
 
 
 def get_test_id(release, arch, src):

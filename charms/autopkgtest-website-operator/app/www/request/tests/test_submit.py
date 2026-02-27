@@ -30,7 +30,7 @@ class SubmitTestBase(TestCase):
                 "amqp": {"uri": "amqp://user:s3kr1t@1.2.3.4"},
                 "web": {
                     "database": "/ignored",
-                    "database_ro": "/ignored",
+                    "database_public": "/ignored",
                     "running_cache": "/ignored",
                     "amqp_queue_cache": "/ignored",
                     "allowed_requestors": "list,of,groups,but,ignored",

@@ -181,7 +181,7 @@ def configure(
         "config": CONFIG_DIR,
         "data": DATA_DIR,
         "database": DATA_DIR / "autopkgtest.db",
-        "database_ro": PUBLIC_DATA_DIR / "autopkgtest.db",
+        "database_public": PUBLIC_DATA_DIR / "autopkgtest.db",
         "releases": releases,
         **amqp_creds,
         **swift_creds,
