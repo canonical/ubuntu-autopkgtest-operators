@@ -180,7 +180,7 @@ if __name__ == "__main__":
 
     config = get_autopkgtest_cloud_conf()
 
-    target = config["web"]["database_ro"]
+    target = config["web"]["database_public"]
     target_new = f"{target}.new"
     target_checksum = f"{target}.sha256"
     target_checksum_new = f"{target_checksum}.new"

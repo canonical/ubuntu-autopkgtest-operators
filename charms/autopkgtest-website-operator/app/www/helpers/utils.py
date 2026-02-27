@@ -196,6 +196,18 @@ def db_connect_readonly():
     )
 
 
+def db_connect_public_readonly():
+    """Get connection to public autopkgtest db from config.
+
+    :return conn: ``sqlite3.Connection``
+    """
+    cp = get_autopkgtest_cloud_conf()
+    return sqlite3.connect(
+        "file:{}?mode=ro".format(cp["web"]["database_public"]),
+        uri=True,
+    )
+
+
 def swift_connect() -> swiftclient.Connection:
     """Establish connection to swift storage."""
     try:

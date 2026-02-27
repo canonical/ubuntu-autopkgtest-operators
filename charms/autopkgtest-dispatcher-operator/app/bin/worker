@@ -9,6 +9,7 @@ import argparse
 import configparser
 import fnmatch
 import hashlib
+import itertools
 import json
 import logging
 import os
@@ -970,9 +971,8 @@ def amqp_queues_channel():
     for queue_name in queues:
         logging.info("Setting up and listening to AMQP queue %s", queue_name)
         channel.queue_declare(queue=queue_name, durable=True, auto_delete=False)
-        channel.basic_consume(queue=queue_name, on_message_callback=request)
 
-    return channel
+    return channel, queues
 
 
 def main():
@@ -1043,13 +1043,17 @@ def main():
 
     # connect to AMQP queues
     amqp_connect(cfg)
-    channel = amqp_queues_channel()
+    channel, queues = amqp_queues_channel()
 
     # process queues forever
+    logging.info("Waiting for and processing AMQP requests")
     try:
-        while exit_requested is None:
-            logging.info("Waiting for and processing AMQP requests")
-            channel.start_consuming()
+        for q in itertools.cycle(queues):
+            method, properties, body = channel.basic_get(q)
+            request(channel, method, properties, body)
+            if exit_requested:
+                break
+            time.sleep(2)
     except OSError:
         if exit_requested is None:
             raise

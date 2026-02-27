@@ -35,6 +35,13 @@ actions:
       token:
         type: string
         description: LXD client token to connect to a remote.
+  remove-remote:
+    description: Remove a remote from the dispatcher.
+    params:
+      arch:
+        type: string
+        description: Architecture of the remote.
+        enum: [amd64, amd64v3, i386, arm64, armhf, s390x, ppc64el, riscv64]
   set-worker-count:
     description: Set number of workers for a given architecture.
     params:

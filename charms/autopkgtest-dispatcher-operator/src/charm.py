@@ -39,6 +39,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
         # action hooks
         framework.observe(self.on.add_remote_action, self._on_add_remote)
+        framework.observe(self.on.remove_remote_action, self._on_remove_remote)
         framework.observe(self.on.set_worker_count_action, self._on_set_worker_count)
         framework.observe(
             self.on.show_target_config_action, self._on_show_target_config
@@ -86,6 +87,14 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         )
         self._stored.workers[remote_arch] = self.typed_config.default_worker_count
         event.set_results({"result": f"Added remote for {remote_arch}"})
+
+    def _on_remove_remote(self, event: ops.ActionEvent):
+        """Handle removing a remote."""
+        params = event.load_params(action_types.RemoveRemoteAction, errors="fail")
+        remote_arch = params.arch.value
+        autopkgtest_dispatcher.remove_remote(remote_arch)
+        self._stored.workers[remote_arch] = 0
+        autopkgtest_dispatcher.reconcile_worker_units(self._stored.workers)
 
     def _on_set_worker_count(self, event: ops.ActionEvent):
         params = event.load_params(action_types.SetWorkerCountAction, errors="fail")

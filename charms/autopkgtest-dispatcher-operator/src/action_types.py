@@ -21,6 +21,10 @@ class AddRemoteAction(pydantic.BaseModel):
     )
 
 
+class RemoveRemoteAction(pydantic.BaseModel):
+    arch: SupportedArches = pydantic.Field(description="Architecture of the remote.")
+
+
 class SetWorkerCountAction(pydantic.BaseModel):
     arch: SupportedArches = pydantic.Field(description="Architecture to configure.")
     count: int = pydantic.Field(10)
