@@ -244,7 +244,7 @@ def add_remote(arch: str, token: str):
 
 def remove_remote(arch: str):
     run_as_user(
-        f"lxc remote list --format=csv | ! grep -q '^remote-{arch},' || lxc remote remove remote-{arch}"
+        f"lxc remote list --format=csv | {{ ! grep -q '^remote-{arch},'; }} || lxc remote remove remote-{arch}"
     )
 
 
