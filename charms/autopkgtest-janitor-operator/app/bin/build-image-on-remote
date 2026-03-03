@@ -13,12 +13,6 @@ remote="remote-$arch"
 imgremote="ubuntu-daily"
 base=$RELEASE
 
-# Fallback to building amd64 images, to be manually made into
-# amd64v3 images for now.
-if [ "$arch" = amd64v3 ]; then
-    arch=amd64
-fi
-
 if [ -z "${MIRROR-}" ]; then
     echo 'MIRROR environment variable is not set, the image default will be used'
 fi
