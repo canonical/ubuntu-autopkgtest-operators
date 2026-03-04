@@ -152,6 +152,15 @@ def install(autopkgtest_branch, releases):
         os.environ["https_proxy"] = os.getenv("JUJU_CHARM_HTTPS_PROXY", "")
         os.environ["no_proxy"] = os.getenv("JUJU_CHARM_NO_PROXY", "")
 
+    logger.info(f"configuring unprivileged user {USER!r}")
+
+    # enable-linger so that systemd does not clean the user session
+    # after the last logout of USER, e.g. at the end of a `su` session.
+    subprocess.run(
+        ["loginctl", "enable-linger", USER],
+        check=True,
+    )
+
     logger.info("updating package index")
     apt.update()
 
