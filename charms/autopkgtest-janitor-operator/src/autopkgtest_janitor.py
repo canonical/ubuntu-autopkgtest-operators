@@ -42,6 +42,7 @@ RELEASE_ARCH_RESTRICTIONS = {
     "jammy": ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"],
     "noble": ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"],
     "oracular": ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"],
+    "questing": ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"],
 }
 
 # List of architecture for which the charm should create VM images.
