@@ -1050,7 +1050,8 @@ def main():
     try:
         for q in itertools.cycle(queues):
             method, properties, body = channel.basic_get(q)
-            request(channel, method, properties, body)
+            if method:
+                request(channel, method, properties, body)
             if exit_requested:
                 break
             time.sleep(2)
