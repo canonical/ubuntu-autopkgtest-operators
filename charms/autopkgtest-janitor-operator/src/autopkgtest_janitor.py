@@ -156,6 +156,17 @@ def ensure_proxy():
     os.environ["no_proxy"] = os.getenv("JUJU_CHARM_NO_PROXY", "")
 
 
+def configure_unprivileged_user():
+    logger.info(f"configuring unprivileged user {USER!r}")
+
+    # enable-linger so that systemd does not clean the user session
+    # after the last logout of USER, e.g. at the end of a `su` session.
+    subprocess.run(
+        ["loginctl", "enable-linger", USER],
+        check=True,
+    )
+
+
 def update_distro_info_data():
     logger.info("updating distro-info-data")
     apt.update()
@@ -332,6 +343,7 @@ def configure(
     amqp_password,
 ):
     ensure_proxy()
+    configure_unprivileged_user()
     update_distro_info_data()
     update_autopkgtest(autopkgtest_branch)
     write_available_release_arch(arches, target_releases)
