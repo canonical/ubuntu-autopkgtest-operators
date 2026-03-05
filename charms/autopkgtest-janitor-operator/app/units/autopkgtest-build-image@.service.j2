@@ -10,6 +10,7 @@ TimeoutStartSec=18h
 EnvironmentFile=-/etc/environment.d/proxy.conf
 Environment="PATH={{ autopkgtest_location }}/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/snap/bin"
 Environment="MIRROR={{ mirror }}"
+Environment="AUTOPKGTEST_TEMP_INSTANCE=autopkgtest-prepare-%i"
 RuntimeDirectory=%p
 RuntimeDirectoryPreserve=yes
 ExecStart=build-image-on-remote %i
