@@ -8,10 +8,6 @@ import sys
 MAX_AGE_HOURS = 12
 
 
-def parse_lxd_time(s):
-    return datetime.datetime.fromisoformat(s.split(".")[0] + "+00:00")
-
-
 def main():
     """Clean stale LXD instances."""
     print(f"Deleting instances older than {MAX_AGE_HOURS} hours")
@@ -35,9 +31,8 @@ def main():
             continue
 
         for instance in instances:
-            if now - parse_lxd_time(instance["created_at"]) >= datetime.timedelta(
-                hours=MAX_AGE_HOURS
-            ):
+            created_at = datetime.datetime.fromisoformat(instance["created_at"])
+            if now - created_at >= datetime.timedelta(hours=MAX_AGE_HOURS):
                 print(f"Instance {remote}:{instance['name']} is old - deleting")
                 try:
                     subprocess.check_call(
