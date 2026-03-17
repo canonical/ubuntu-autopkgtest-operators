@@ -185,10 +185,10 @@ def update_distro_info_data():
 
 def update_autopkgtest(autopkgtest_branch):
     logger.info("updating autopkgtest")
+    run_as_user(f"git -C '{AUTOPKGTEST_LOCATION}' fetch origin '{autopkgtest_branch}'")
     run_as_user(
-        f"git -C '{AUTOPKGTEST_LOCATION}' fetch --depth 1 origin '{autopkgtest_branch}'"
+        f"git -C {AUTOPKGTEST_LOCATION} reset --hard origin/{autopkgtest_branch}"
     )
-    run_as_user(f"git -C {AUTOPKGTEST_LOCATION} checkout {autopkgtest_branch}")
 
 
 def write_available_release_arch(arches, releases):
@@ -324,7 +324,7 @@ def install(autopkgtest_branch):
     logger.info("cloning autopkgtest repository")
     shutil.rmtree(AUTOPKGTEST_LOCATION, ignore_errors=True)
     run_as_user(
-        f"git clone --depth 1 --branch '{autopkgtest_branch}' '{AUTOPKGTEST_REPO}' '{AUTOPKGTEST_LOCATION}'"
+        f"git clone --branch '{autopkgtest_branch}' '{AUTOPKGTEST_REPO}' '{AUTOPKGTEST_LOCATION}'"
     )
 
 

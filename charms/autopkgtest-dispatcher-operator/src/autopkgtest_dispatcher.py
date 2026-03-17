@@ -130,6 +130,14 @@ def write_rabbitmq_creds(hostname, username, password):
         )
 
 
+def update_autopkgtest(autopkgtest_branch):
+    logger.info("updating autopkgtest")
+    run_as_user(f"git -C '{AUTOPKGTEST_LOCATION}' fetch origin '{autopkgtest_branch}'")
+    run_as_user(
+        f"git -C {AUTOPKGTEST_LOCATION} reset --hard origin/{autopkgtest_branch}"
+    )
+
+
 def install(autopkgtest_branch, releases):
     """Install dispatcher."""
     if is_proxy_defined():
@@ -198,7 +206,7 @@ def install(autopkgtest_branch, releases):
         # TODO: the currently packaged version of pygit2 does not support cloning through
         # a proxy. the next release should hopefully include this feature.
         # pygit2.clone_repository(repo, location, checkout_branch=branch)
-        run_as_user(f"git clone --depth 1 --branch '{branch}' '{repo}' '{location}'")
+        run_as_user(f"git clone --branch '{branch}' '{repo}' '{location}'")
 
     logger.info("installing worker and tools")
     src_path = CHARM_APP_DATA / "bin"
@@ -241,10 +249,18 @@ def start():
     pass
 
 
-def configure(releases, swift_creds, amqp_hostname, amqp_username, amqp_password):
+def configure(
+    autopkgtest_branch,
+    releases,
+    swift_creds,
+    amqp_hostname,
+    amqp_username,
+    amqp_password,
+):
     write_worker_config(releases)
     write_swift_config(swift_creds)
     write_rabbitmq_creds(amqp_hostname, amqp_username, amqp_password)
+    update_autopkgtest(autopkgtest_branch)
 
 
 def add_remote(arch: str, token: str):
