@@ -151,12 +151,6 @@ def enable_image_builders(arch, releases):
         systemd.service_start(*services)
 
 
-def ensure_proxy():
-    os.environ["http_proxy"] = os.getenv("JUJU_CHARM_HTTP_PROXY", "")
-    os.environ["https_proxy"] = os.getenv("JUJU_CHARM_HTTPS_PROXY", "")
-    os.environ["no_proxy"] = os.getenv("JUJU_CHARM_NO_PROXY", "")
-
-
 def configure_unprivileged_user():
     logger.info(f"configuring unprivileged user {USER!r}")
 
@@ -289,10 +283,6 @@ def install(autopkgtest_branch):
                 )
             )
 
-        # changed environment variables don't get picked up by this file
-        # so set them explicitly
-        ensure_proxy()
-
     logger.info("updating package index")
     apt.update()
 
@@ -343,7 +333,6 @@ def configure(
     amqp_username,
     amqp_password,
 ):
-    ensure_proxy()
     configure_unprivileged_user()
     update_distro_info_data()
     update_autopkgtest(autopkgtest_branch)

@@ -2,6 +2,8 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import os
+
 import action_types
 import autopkgtest_dispatcher
 import config_types
@@ -196,4 +198,9 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
 
 if __name__ == "__main__":  # pragma: nocover
+    # Inject proxy variables into the environment
+    os.environ["http_proxy"] = os.getenv("JUJU_CHARM_HTTP_PROXY", "")
+    os.environ["https_proxy"] = os.getenv("JUJU_CHARM_HTTPS_PROXY", "")
+    os.environ["no_proxy"] = os.getenv("JUJU_CHARM_NO_PROXY", "")
+
     ops.main(AutopkgtestDispatcherCharm)
