@@ -16,10 +16,8 @@ ExecStart=/bin/sh -ec '\
     exec /usr/local/bin/worker --config $$CONF -v LXD_ARCH=$$LXD_ARCH -v LXD_REMOTE=$$REMOTE -a $$LXD_ARCH'
 ExecReload=/bin/kill -HUP $MAINPID
 SuccessExitStatus=0 99 SIGTERM SIGHUP
-# RestartSec=5min
-# Restart=on-failure
-# StartLimitInterval=10m
-# StartLimitBurst=3
+RestartSec=2min
+Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
