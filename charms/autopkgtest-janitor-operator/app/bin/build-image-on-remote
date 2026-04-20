@@ -18,20 +18,13 @@ if [ -z "${MIRROR-}" ]; then
 fi
 
 # If $RELEASE is the devel release (or is unknown), and there are no images for
-# it, fallback to stable up to $max_stable_age_days days after stable has been
-# released (i.e. in a limited time window early in the $RELEASE development
-# cycle). We want to be careful and avoid falling back to stable in corner
-# cases like very outdated distro-info-data, network hiccups or similar.
-max_stable_age_days=60
+# it, fallback to stable.
 stable=$(ubuntu-distro-info --stable) || exit 1
-stable_release_age=$(ubuntu-distro-info --days=release --stable)
 devel=$(ubuntu-distro-info --devel) || devel=UNKNOWN
 set -- lxc image info
 if
     # $RELEASE is devel release or unknown
     ([ "$RELEASE" = "$devel" ] || ubuntu-distro-info --all | { ! grep -q "$RELEASE"; }) &&
-    # stable is young, i.e. we are early in the $RELEASE cycle
-    [ "$stable_release_age" -ge "-$max_stable_age_days" ] &&
     # there are no images for $RELEASE
     "$@" "$imgremote:$base/$arch" 2>&1 | grep -q "couldn't be found" &&
     # there are image for stable
