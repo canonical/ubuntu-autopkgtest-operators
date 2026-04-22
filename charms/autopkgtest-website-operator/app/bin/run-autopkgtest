@@ -167,7 +167,7 @@ if __name__ == "__main__":
         except KeyError:
             pass
     params["submit-time"] = datetime.strftime(
-        datetime.now().astimezone(UTC), "%Y-%m-%d %H:%M:%S%z"
+        datetime.now().astimezone(UTC), "%Y-%m-%d %H:%M:%S.%f%z"
     )
     params = "\n" + json.dumps(params)
 
