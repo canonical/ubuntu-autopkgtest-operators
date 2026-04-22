@@ -1,0 +1,188 @@
+#!/usr/bin/python3
+# Seed a new release of Ubuntu by copying over
+# the last test and the last migration-reference
+# test of all packages in the previous release
+
+import argparse
+import configparser
+import json
+import sqlite3
+import urllib.parse
+from time import sleep
+
+import pika
+
+TESTCOMPLETE_FANOUT = "testcomplete.fanout"
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("old_release")
+    parser.add_argument("new_release")
+    parser.add_argument("results_db", default="/srv/autopkgtest/data/autopkgtest.db")
+    parser.add_argument("--dry-run", action="store_true")
+
+    return parser.parse_args()
+
+
+def publish_run_results(
+    channel,
+    architecture,
+    container,
+    duration,
+    exitcode,
+    package,
+    release,
+    requester,
+    testpkg_version,
+    run_id,
+    triggers,
+    env,
+):
+    # insert "seeded-run" into the env to prevent
+    # dead swift links from being printed on the website
+    env = " ".join(env.split() + ["seeded-run"])
+
+    # create a dummy swift directory
+    # autopkgtest-db-writer only cares about the run_id at the end
+    # so the rest of the string is unimportant
+    swift_dir = f"dummy/seed/new/release/{run_id}"
+
+    run_results = {
+        "architecture": architecture,
+        "container": container,
+        "duration": duration,
+        "exitcode": exitcode,
+        "package": package,
+        "release": release,
+        "requester": requester,
+        "testpkg_version": testpkg_version,
+        "swift_dir": swift_dir,
+        "triggers": triggers,
+        "env": env,
+    }
+
+    if channel is None:
+        print(f"would publish to {TESTCOMPLETE_FANOUT}: {run_results}")
+    else:
+        # avoid overwhelming rabbitmq
+        sleep(0.1)
+        print(f"copying over {package}/{architecture}/{triggers}")
+        channel.basic_publish(
+            exchange=TESTCOMPLETE_FANOUT,
+            routing_key="",
+            body=json.dumps(run_results),
+            properties=pika.BasicProperties(
+                delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
+            ),
+        )
+    return
+
+
+def main():
+    args = parse_args()
+
+    if not args.dry_run:
+        config = configparser.ConfigParser()
+        with open("/etc/autopkgtest-website/autopkgtest-cloud.conf") as f:
+            config.read_file(f)
+        creds = urllib.parse.urlsplit(config["amqp"]["uri"], allow_fragments=True)
+        assert creds.scheme == "amqp"
+
+        amqp_con = pika.BlockingConnection(
+            parameters=pika.ConnectionParameters(
+                host=creds.hostname,
+                credentials=pika.PlainCredentials(
+                    username=creds.username,
+                    password=creds.password,
+                ),
+            ),
+        )
+        channel = amqp_con.channel()
+        channel.exchange_declare(
+            exchange=TESTCOMPLETE_FANOUT,
+            exchange_type="fanout",
+            durable=True,
+        )
+    else:
+        channel = None
+
+    db_con = sqlite3.connect(f"file:{args.results_db}?mode=ro", uri=True)
+
+    # manufacture a swift container
+    # to mimic a real test result without having to write to swift
+    container = f"autopkgtest-{args.new_release}"
+
+    for (
+        arch,
+        duration,
+        exitcode,
+        package,
+        requester,
+        version,
+        triggers,
+        env,
+        run_id,
+    ) in db_con.execute(
+        f"""
+        SELECT arch, duration, exitcode, package, requester, version, triggers, env, MAX(run_id)
+        FROM test, result
+        WHERE test.id = result.test_id AND release = '{args.old_release}'
+            AND (exitcode = 0 OR exitcode = 2 OR exitcode = 8)
+            AND triggers != 'migration-reference/0'
+        GROUP BY package, arch
+        """
+    ):
+        publish_run_results(
+            channel,
+            arch,
+            container,
+            duration,
+            exitcode,
+            package,
+            args.new_release,
+            requester,
+            version,
+            run_id,
+            triggers,
+            env,
+        )
+
+    for (
+        arch,
+        duration,
+        exitcode,
+        package,
+        requester,
+        version,
+        triggers,
+        env,
+        run_id,
+    ) in db_con.execute(
+        f"""
+        SELECT arch, duration, exitcode, package, requester, version, triggers, env, MAX(run_id)
+        FROM test, result
+        WHERE test.id = result.test_id AND release = '{args.old_release}'
+            AND exitcode != 16
+            AND triggers = 'migration-reference/0'
+        GROUP BY package, arch
+        """
+    ):
+        publish_run_results(
+            channel,
+            arch,
+            container,
+            duration,
+            exitcode,
+            package,
+            args.new_release,
+            requester,
+            version,
+            run_id,
+            triggers,
+            env,
+        )
+
+
+if __name__ == "__main__":
+    main()
