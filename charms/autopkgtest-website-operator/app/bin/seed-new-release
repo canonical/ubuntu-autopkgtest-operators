@@ -39,10 +39,6 @@ def publish_run_results(
     triggers,
     env,
 ):
-    # insert "seeded-run" into the env to prevent
-    # dead swift links from being printed on the website
-    env = " ".join(env.split() + ["seeded-run"])
-
     # create a dummy swift directory
     # autopkgtest-db-writer only cares about the run_id at the end
     # so the rest of the string is unimportant
