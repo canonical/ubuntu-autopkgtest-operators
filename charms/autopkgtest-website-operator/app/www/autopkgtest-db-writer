@@ -37,7 +37,6 @@ def db_connect():
             "  exitcode INTEGER, "
             "  requester TEXT, "
             "  env TEXT, "
-            "  uuid TEXT UNIQUE,  "
             "  PRIMARY KEY(test_id, run_id), "
             "  FOREIGN KEY(test_id) REFERENCES test(id))"
         )
@@ -111,7 +110,7 @@ def process_message(channel, method, properties, body, db_con):
     try:
         c = db_con.cursor()
         c.execute(
-            "INSERT INTO result VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO result VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 test_id,
                 run_id,
@@ -121,7 +120,6 @@ def process_message(channel, method, properties, body, db_con):
                 exitcode,
                 requester,
                 info.get("env", ""),
-                None,
             ),
         )
         db_con.commit()
