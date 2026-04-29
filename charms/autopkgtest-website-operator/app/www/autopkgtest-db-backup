@@ -1,0 +1,76 @@
+#!/usr/bin/python3
+
+import datetime
+import hashlib
+import logging
+import subprocess
+from pathlib import Path
+
+import swiftclient
+from helpers.utils import db_connect_readonly, swift_connect
+
+BACKUP_CONTAINER_NAME = "db-backups"
+DB_BACKUP_PATH = Path("/tmp/autopkgtest.db.zst")
+MAX_BACKUP_AGE = 30
+
+
+def zstd_compress(data):
+    p = subprocess.run(
+        ["zstd", "--compress"], input=data, capture_output=True, check=True
+    )
+
+    return p.stdout
+
+
+def backup_db(db):
+    with open(DB_BACKUP_PATH, "wb") as f:
+        f.write(zstd_compress("\n".join(db.iterdump()).encode()))
+
+
+def get_backup_checksum():
+    with open(DB_BACKUP_PATH, "rb") as f:
+        return hashlib.md5(f.read()).hexdigest()
+
+
+def upload_to_swift(swift_con):
+    timestamp = datetime.datetime.now(datetime.UTC).strftime("%Y/%m/%d/%H_%M_%S")
+    checksum = get_backup_checksum()
+    object_path = f"{timestamp}/{checksum}/db.zst"
+    backup_contents = DB_BACKUP_PATH.read_bytes()
+
+    # create container if it doesn't exist
+    try:
+        swift_con.get_container(BACKUP_CONTAINER_NAME)
+    except swiftclient.exceptions.ClientException:
+        logging.info(f"creating swift bucket {BACKUP_CONTAINER_NAME}")
+        swift_con.put_container(BACKUP_CONTAINER_NAME)
+
+    swift_con.put_object(
+        container=BACKUP_CONTAINER_NAME, obj=object_path, contents=backup_contents
+    )
+
+
+def delete_old_backups(swift_con):
+    _, objects = swift_con.get_container(BACKUP_CONTAINER_NAME)
+    now = datetime.datetime.now(datetime.UTC)
+
+    for obj in objects:
+        last_modified = obj["last_modified"]
+        last_modified_time = datetime.datetime.fromisoformat(last_modified)
+        diff = now - last_modified_time
+        if diff > datetime.timedelta(days=MAX_BACKUP_AGE):
+            logging.info(f"deleting {obj['name']}")
+            swift_con.delete_object(BACKUP_CONTAINER_NAME, obj["name"])
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level="INFO")
+    logging.info("getting db and swift connections")
+    db_con = db_connect_readonly()
+    swift_con = swift_connect()
+    logging.info("creating db backup")
+    backup_db(db_con)
+    logging.info("uploading backup to swift")
+    upload_to_swift(swift_con)
+    logging.info(f"deleting backups older than {MAX_BACKUP_AGE} days")
+    delete_old_backups(swift_con)
