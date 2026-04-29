@@ -8,7 +8,6 @@ import configparser
 import json
 import sqlite3
 import urllib.parse
-from time import sleep
 
 import pika
 
@@ -61,9 +60,7 @@ def publish_run_results(
     if channel is None:
         print(f"would publish to {TESTCOMPLETE_FANOUT}: {run_results}")
     else:
-        # avoid overwhelming rabbitmq
-        sleep(0.1)
-        print(f"copying over {package}/{architecture}/{triggers}")
+        print(f"seeding {package}/{architecture}/{triggers}")
         channel.basic_publish(
             exchange=TESTCOMPLETE_FANOUT,
             routing_key="",
@@ -109,6 +106,8 @@ def main():
     # to mimic a real test result without having to write to swift
     container = f"autopkgtest-{args.new_release}"
 
+    total_results = 0
+
     for (
         arch,
         duration,
@@ -129,6 +128,7 @@ def main():
         GROUP BY package, arch
         """
     ):
+        total_results += 1
         publish_run_results(
             channel,
             arch,
@@ -164,6 +164,7 @@ def main():
         GROUP BY package, arch
         """
     ):
+        total_results += 1
         publish_run_results(
             channel,
             arch,
@@ -178,6 +179,8 @@ def main():
             triggers,
             env,
         )
+
+    print(f"seeded {total_results} total results")
 
 
 if __name__ == "__main__":
