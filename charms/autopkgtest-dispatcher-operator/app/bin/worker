@@ -703,7 +703,7 @@ def request(channel, method, properties, body):
             big_pkg,
             vm_pkg,
             release,
-            architecture,
+            architecture if architecture != "i386" else "amd64",
         ).split()
 
         if "swiftuser" in params:
