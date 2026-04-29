@@ -49,7 +49,7 @@
   # reverse proxy rules
   SSLProxyEngine on
   {% if swift_storage_url %}
-  ProxyPassMatch "^/results/(autopkgtest-[a-z]+/[a-z]+/[a-z0-9]+/[a-z0-9]+/[a-z0-9-]+/20(?:(?:[01][0-9]|2[0-5])[0-9]{4}|260[0-3][0-9]{2}|2604[01][0-9]|26042[0-8])_[0-9]+_[a-z0-9]+@/log.gz)" "https://objectstorage.prodstack5.canonical.com/swift/v1/AUTH_0f9aae918d5b4744bf7b827671c86842/$1"
+  ProxyPassMatch "^/results/(autopkgtest-[a-z0-9-]+/[a-z]+/[a-z0-9]+/[a-z0-9]+/[a-z0-9-]+/20(?:(?:[01][0-9]|2[0-5])[0-9]{4}|260[0-3][0-9]{2}|2604[01][0-9]|26042[0-8])_[0-9]+_[a-z0-9]+@/log.gz)" "https://objectstorage.prodstack5.canonical.com/swift/v1/AUTH_0f9aae918d5b4744bf7b827671c86842/$1"
   ProxyPass "/results/" "{{ swift_storage_url }}"
   {%- endif %}
   ProxyPass "/rabbitmq-management/" "http://{{ rabbithost }}:15672/"
