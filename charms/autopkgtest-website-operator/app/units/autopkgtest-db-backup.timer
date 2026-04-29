@@ -1,0 +1,8 @@
+[Unit]
+Description=backup autopkgtest.db (timer)
+
+[Timer]
+OnCalendar=daily
+
+[Install]
+WantedBy=timers.target
