@@ -122,8 +122,11 @@
   </td>
   <td class="nowrap">
     {% if run_id %}
+      <!-- Reinstantiate once all logs all logs are copied to new swift
       <a href="{{ url_for('display_run_summary', release=release, arch=arch, package=package, run_id=run_id) }}/log">log</a>
       (<a href="{{ url }}/log.gz">raw</a>)&emsp;<a href="{{ url }}/artifacts.tar.gz">artifacts</a>
+      -->
+      <a href="{{ url }}/log.gz">log</a>&emsp;<a href="{{ url }}/artifacts.tar.gz">artifacts</a>
     {% endif %}
   </td>
   <td class="nowrap">

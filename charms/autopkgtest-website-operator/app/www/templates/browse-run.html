@@ -65,8 +65,11 @@
       <th></th>
       <td>
         {% if test_results["result"] not in ["running", "queued"] %}
+          <!-- Reinstantiate once all logs all logs are copied to new swift
           <a href="{{ url_for('display_run_summary', release=release, arch=arch, package=package, run_id=test_results['run_id']) }}/log">log</a>
           (<a href="{{ test_results['url'] }}/log.gz">raw</a>) &emsp;
+          -->
+          <a href="{{ test_results['url'] }}/log.gz">log</a> &emsp;
           <a href="{{ test_results['url'] }}/artifacts.tar.gz">artifacts</a> &emsp;
 
         {% endif %}
