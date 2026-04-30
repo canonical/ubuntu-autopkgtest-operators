@@ -26,6 +26,16 @@ from helpers.utils import (
     swift_connect,
 )
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.routing import BaseConverter
+
+
+class RunIdConverter(BaseConverter):
+    regex = r".+@"
+
+
+class ArchConverter(BaseConverter):
+    regex = r"[^/@]+"
+
 
 # Initialize app
 PATH = os.path.join(
@@ -33,6 +43,11 @@ PATH = os.path.join(
 )
 os.makedirs(PATH, exist_ok=True)
 app = flask.Flask("browse")
+
+# routing converters
+app.url_map.converters["run_id"] = RunIdConverter
+app.url_map.converters["arch"] = ArchConverter
+
 # we don't want a long cache, as we only serve files that are regularly updated
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 60
 
@@ -354,7 +369,9 @@ def index_root():
     )
 
 
+# backwards-compatible path with debci that specifies the source hash
 @app.route("/packages/<package>")
+@app.route("/packages/<_>/<package>")
 def package_overview(package, _=None):
     results = {}
     arches = set()
@@ -634,7 +651,9 @@ def recent():
         )
 
 
+# backwards-compatible path with debci that specifies the source hash
 @app.route("/packages/<package>/<release>/<arch>")
+@app.route("/packages/<_>/<package>/<release>/<arch:arch>")
 def package_release_arch(package, release, arch, _=None):
     test_id = get_test_id(release, arch, package)
     if test_id is None:
@@ -796,7 +815,7 @@ def package_release_arch(package, release, arch, _=None):
     )
 
 
-@app.route("/packages/<package>/<release>/<arch>/<run_id>")
+@app.route("/packages/<package>/<release>/<arch>/<run_id:run_id>")
 def display_run_summary(release, arch, package, run_id):
     cursor = db_con.cursor()
     cursor.row_factory = sqlite3.Row
@@ -853,7 +872,7 @@ def display_run_summary(release, arch, package, run_id):
     )
 
 
-@app.route("/packages/<package>/<release>/<arch>/<run_id>/log")
+@app.route("/packages/<package>/<release>/<arch>/<run_id:run_id>/log")
 def display_run_logs(release, arch, package, run_id):
     if package.startswith("lib") and len(package) > 3:
         prefix = package[:4]
