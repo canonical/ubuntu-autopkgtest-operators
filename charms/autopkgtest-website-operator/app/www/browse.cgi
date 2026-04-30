@@ -945,6 +945,10 @@ def display_run_logs(release, arch, package, run_id):
             match = re.match(r"^\s*\d+s\s+\S+\s*(PASS|FAIL|SKIP)", line)
             sections[-1]["result"] = match.group(1).lower()
 
+        # Log does not follow standard structure?
+        if not sections:
+            break
+
         if line.strip() != "":
             sections[-1]["subsections"][-1]["lines"].append(line)
 
