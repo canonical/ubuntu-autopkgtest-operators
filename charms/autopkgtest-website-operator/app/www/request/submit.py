@@ -111,11 +111,6 @@ class Submit:
         for ppa in ppas:
             if not self.is_valid_ppa(ppa):
                 raise NotFound("ppa", ppa)
-        if not self.in_allowed_team(requester):
-            if not ppas and not self.is_valid_package_with_results(
-                release, arch, package
-            ):
-                raise NotFound("package", package, "does not have any test results")
 
         if "migration-reference/0" in triggers:
             if len(triggers) != 1:
@@ -357,25 +352,6 @@ class Submit:
             return None
         if response.get("name") == name:
             return True
-
-    def is_valid_package_with_results(self, release, arch, package):
-        """Check if package exists and has any results on that release+arch.
-
-        Use this for validating *tested* packages (not triggers, as they don't
-        necessarily have tests themselves).
-        """
-        c = self.db_con.cursor()
-        if release:
-            c.execute(
-                "SELECT count(arch) FROM test WHERE package=? AND arch=? AND release=?",
-                (package, arch, release),
-            )
-        else:
-            c.execute(
-                "SELECT count(arch) FROM test WHERE package=? AND arch=?",
-                (package, arch),
-            )
-        return c.fetchone()[0] > 0
 
     def is_valid_package_version(self, release, package, version, ppa=None):
         """Check if package/version exists in the given release.
