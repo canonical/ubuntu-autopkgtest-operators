@@ -83,12 +83,6 @@ class Submit:
         can_upload_any_trigger = False
 
         try:
-            if kwargs["delete"] != "1":
-                raise ValueError("Invalid delete value")
-            del kwargs["delete"]
-        except KeyError:
-            pass
-        try:
             if kwargs["all-proposed"] != "1":
                 raise ValueError("Invalid all-proposed value")
             del kwargs["all-proposed"]
@@ -235,31 +229,6 @@ class Submit:
             raise BadRequest(
                 "Unsupported arguments: {}".format(" ".join(unsupported_keys))
             )
-
-    def unsend_amqp_request(self, release, arch, package, context=None, **params):
-        """Remove an autopkgtest AMQP request."""
-        if context:
-            queue = f"debci-{context}-{release}-{arch}"
-        else:
-            queue = f"debci-{release}-{arch}"
-
-        count = 0
-
-        with amqp_connect() as amqp_con:
-            with amqp_con.channel() as ch:
-                while True:
-                    method, properties, body = ch.basic_get(queue)
-                    if body is None:
-                        break
-                    body = body.decode()
-                    this_package, this_params = body.split(None, 1)
-                    this_params = json.loads(this_params)
-                    del this_params["submit-time"]
-
-                    if this_package == package and this_params == params:
-                        ch.basic_ack(method.delivery_tag)
-                        count += 1
-        return count
 
     def send_amqp_request(self, release, arch, package, context=None, **params):
         """Send autopkgtest AMQP request."""
