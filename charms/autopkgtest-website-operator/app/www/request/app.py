@@ -277,17 +277,6 @@ def index_root():
         except WebControlException as e:
             return invalid(e, e.exit_code())
 
-        if params.get("delete"):
-            del params["delete"]
-            if params.get("ppas"):
-                count = s.unsend_amqp_request(context="ppa", **params)
-            else:
-                count = s.unsend_amqp_request(**params)
-
-            return HTML.format(LOGOUT + f"<p>Deleted {count} requests</p>").format(
-                **ChainMap(session, params)
-            )
-
         if params.get("ppas"):
             s.send_amqp_request(context="ppa", **params)
         else:
