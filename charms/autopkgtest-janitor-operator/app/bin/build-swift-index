@@ -1,0 +1,63 @@
+#!/usr/bin/python3
+
+import datetime
+import swiftclient
+import os
+
+INDEX_FILE = "swift-index"
+
+# set a date here instead of just using a year
+# for consistency
+CUTOFF_DATE = datetime.datetime.fromisoformat("2026-04-23T00:00:00Z")
+BUCKET_TIMESTAMP_FORMAT = "%a, %d %b %Y %H:%M:%S %Z"
+
+def get_bucket_contents(swift_con, bucket):
+    contents = set()
+    last = ""
+    while True:
+        meets_cutoff_from_batch = []
+        print((
+            f"getting results starting with {last} " if last else f"getting first batch ") + 
+            f"for {bucket}"
+        )
+        _, batch = swift_con.get_container(bucket, marker=last)
+        for i in batch:
+            last_modified = datetime.datetime.fromisoformat(i["last_modified"])
+            if last_modified > CUTOFF_DATE:
+                meets_cutoff_from_batch.append(i["name"])
+        print(f"{len(meets_cutoff_from_batch)}/{len(batch)} meet the date cutoff from last batch")
+        if not batch:
+            break
+        contents.update(meets_cutoff_from_batch)
+        last = batch[-1]["name"]
+
+    return contents
+
+
+if __name__ == "__main__":
+    swift_creds_5 = {
+        "authurl": os.environ["OS_AUTH_URL_5"],
+        "user": os.environ["OS_USERNAME_5"],
+        "key": os.environ["OS_PASSWORD_5"],
+        "os_options": {
+            "project_domain_name": os.environ["OS_PROJECT_DOMAIN_NAME_5"],
+            "project_name": os.environ["OS_PROJECT_NAME_5"],
+            "user_domain_name": os.environ["OS_USER_DOMAIN_NAME_5"],
+        },
+        "auth_version": "3",
+    }
+    swift_con = swiftclient.Connection(**swift_creds_5)
+
+    with open(INDEX_FILE, "w") as f:
+        print("getting all buckets")
+        _, buckets = swift_con.get_account()
+        for bucket in buckets:
+            bucket_name = bucket["name"]
+            if bucket["name"] == "db-backups":
+                print("skipping db-backups bucket")
+                continue
+            print(f"getting bucket {bucket_name}")
+            bucket_contents = get_bucket_contents(swift_con, bucket_name)
+            for obj_name in bucket_contents:
+                print(f"adding {bucket_name}:{obj_name} to index")
+                f.write(f"{bucket_name}:{obj_name}\n")

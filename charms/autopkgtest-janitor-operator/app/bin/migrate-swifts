@@ -1,0 +1,98 @@
+#!/usr/bin/python3
+
+import argparse
+import swiftclient
+import os
+
+INDEX_FILE = "swift-index"
+DONE_INDEX = "swift-index.done"
+
+seen_buckets = []
+
+def connect_swifts():
+    swift_creds = {
+            "authurl": os.environ["OS_AUTH_URL"],
+            "user": os.environ["OS_USERNAME"],
+            "key": os.environ["OS_PASSWORD"],
+            "os_options": {
+                "project_domain_name": os.environ["OS_PROJECT_DOMAIN_NAME"],
+                "project_name": os.environ["OS_PROJECT_NAME"],
+                "user_domain_name": os.environ["OS_USER_DOMAIN_NAME"],
+            },
+            "auth_version": "3",
+        }
+    swift_creds_5 = {
+            "authurl": os.environ["OS_AUTH_URL_5"],
+            "user": os.environ["OS_USERNAME_5"],
+            "key": os.environ["OS_PASSWORD_5"],
+            "os_options": {
+                "project_domain_name": os.environ["OS_PROJECT_DOMAIN_NAME_5"],
+                "project_name": os.environ["OS_PROJECT_NAME_5"],
+                "user_domain_name": os.environ["OS_USER_DOMAIN_NAME_5"],
+            },
+            "auth_version": "3",
+        }
+    swift_con = swiftclient.Connection(**swift_creds)
+    swift_con_5 = swiftclient.Connection(**swift_creds_5)
+
+    return (swift_con, swift_con_5)
+
+def create_bucket(swift_con, bucket):
+    global seen_buckets
+    if bucket in seen_buckets:
+        return
+    try:
+        print(f"trying to create bucket {bucket}")
+        swift_con.put_container(
+            bucket,
+            headers={"X-Container-Read": ".rlistings,.r:*"}
+        )
+    except swiftclient.exceptions.ClientException:
+        # container already exists
+        print(f"bucket {bucket} already exists")
+    seen_buckets.append(bucket)
+    
+def copy_item(item, swift_con, swift_con_5):
+    # items on the index file are in the format
+    # bucket_name:path/to/object
+    bucket, rel_path = item.split(":", 1)
+    create_bucket(swift_con, bucket)
+    print(f"getting object {rel_path} from bucket {bucket}")
+    headers, content = swift_con_5.get_object(bucket, rel_path)
+    print(f"putting object {rel_path} to bucket {bucket}")
+    swiftclient.put_object(
+        swift_con.url,
+        token=swift_con.token,
+        container=bucket,
+        name=rel_path,
+        contents=content,
+        content_length=headers["content-length"],
+        headers=headers
+    )
+
+def main():
+    swift_con, swift_con_5 = connect_swifts()
+    to_do_indices = open(INDEX_FILE, "r").readlines()
+    done_indices = open(DONE_INDEX, "r").readlines()
+
+    # clean strings and remove empties
+    to_do_indices = [t.strip() for t in to_do_indices if t.strip()]
+    done_indices = [t.strip() for t in done_indices if t.strip()]
+
+    # reverse the to_do_indices before starting
+    # to preserve alphabetical order (highly unnecessary)
+    to_do_indices.reverse()
+    try:
+        while to_do_indices:
+            item = to_do_indices.pop()
+            copy_item(item, swift_con, swift_con_5)
+            done_indices.append(item)
+    finally:
+        # unreverse the to_do_indices
+        to_do_indices.reverse()
+        open(INDEX_FILE, "w").write("\n".join(to_do_indices))
+        open(DONE_INDEX ,"w").write("\n".join(done_indices))
+
+
+if __name__ == "__main__":
+    main()
