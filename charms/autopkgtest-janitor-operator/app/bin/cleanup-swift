@@ -1,0 +1,71 @@
+#!/usr/bin/python3
+
+import datetime
+import logging
+import os
+
+import swiftclient
+
+
+def get_bucket_contents(swift_con, bucket):
+    contents = []
+    last = ""
+    while True:
+        logging.info(
+            (
+                f"getting results starting with {last} "
+                if last
+                else "getting first batch "
+            )
+            + f"for {bucket}"
+        )
+        _, batch = swift_con.get_container(bucket, marker=last)
+        contents += batch
+        if not batch:
+            break
+        last = batch[-1]["name"]
+
+    return contents
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level="INFO")
+    swift_creds = {
+        "authurl": os.environ["OS_AUTH_URL"],
+        "user": os.environ["OS_USERNAME"],
+        "key": os.environ["OS_PASSWORD"],
+        "os_options": {
+            "project_domain_name": os.environ["OS_PROJECT_DOMAIN_NAME"],
+            "project_name": os.environ["OS_PROJECT_NAME"],
+            "user_domain_name": os.environ["OS_USER_DOMAIN_NAME"],
+        },
+        "auth_version": "3",
+    }
+    swift_con = swiftclient.Connection(**swift_creds)
+
+    cutoff_date = datetime.date.today() - datetime.timedelta(days=365)
+
+    logging.info(f"beginning swift cleanup for objects before {cutoff_date}")
+    _, buckets = swift_con.get_account()
+    total_cleaned_objects = 0
+    total_cleaned_bytes = 0
+    for bucket in buckets:
+        bucket_name = bucket["name"]
+        logging.info(f"cleaning bucket {bucket_name}")
+        bucket_contents = get_bucket_contents(swift_con, bucket_name)
+        for obj in bucket_contents:
+            last_modified = datetime.datetime.fromisoformat(obj["last_modified"]).date()
+            if last_modified < cutoff_date:
+                logging.info(f"deleting {obj['name']}")
+                swiftclient.delete_object(
+                    swift_con.url,
+                    token=swift_con.token,
+                    container=bucket_name,
+                    name=obj["name"],
+                )
+                total_cleaned_objects += 1
+                total_cleaned_bytes += obj["bytes"]
+
+    logging.info(
+        f"done: cleaned {total_cleaned_objects} totaling {total_cleaned_bytes}"
+    )
