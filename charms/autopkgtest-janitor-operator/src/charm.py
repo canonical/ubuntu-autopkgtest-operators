@@ -102,6 +102,26 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
             return
 
+        if self.typed_config.swift_juju_secret:
+            try:
+                swift_password = self.typed_config.swift_juju_secret.get_content().get(
+                    "password"
+                )
+            except ops.model.ModelError:
+                self.unit.status = ops.BlockedStatus("swift secret not yet available")
+                return
+        else:
+            swift_password = ""
+
+        self.unit.status = ops.MaintenanceStatus("configuring service")
+
+        self.swift_creds = {
+            k: v
+            for k, v in self.typed_config.model_dump().items()
+            if k.startswith("swift_") and isinstance(v, str)
+        }
+        self.swift_creds["swift_password"] = swift_password
+
         autopkgtest_janitor.configure(
             arches=self._stored.remotes,
             autopkgtest_branch=self.typed_config.autopkgtest_git_branch,
@@ -109,6 +129,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             stored_releases=self._stored.releases,
             target_releases=self.typed_config.releases,
             max_instances=self.typed_config.max_instances,
+            swift_creds=self.swift_creds,
             amqp_hostname=self._stored.amqp_hostname,
             amqp_username=RABBITMQ_USERNAME,
             amqp_password=self._stored.amqp_password,

@@ -27,6 +27,7 @@ CHARM_TOOLS_DEST = Path("/usr/local/bin")
 
 CONF_DIRECTORY = Path("/etc/autopkgtest-janitor")
 RABBITMQ_CREDS_PATH = CONF_DIRECTORY / "rabbitmq.cred"
+SWIFT_CONFIG_PATH = CONF_DIRECTORY / "swift.cred"
 TARGETS_PATH = CONF_DIRECTORY / "targets.conf"
 
 AUTOPKGTEST_REPO = "https://salsa.debian.org/ubuntu-ci-team/autopkgtest.git"
@@ -50,14 +51,13 @@ VM_ARCHITECTURES = ["amd64", "amd64v3", "s390x"]
 
 DEB_DEPENDENCIES = [
     "python3-pika",
+    "python3-swiftclient",
     "distro-info",
     "retry",
 ]
 SNAP_DEPENDENCIES = [
     {"name": "lxd", "channel": "6/stable"},
 ]
-
-# utils
 
 
 def run_as_user(command: str, *, capture_output=False, check=True):
@@ -212,6 +212,12 @@ def write_rabbitmq_creds(hostname, username, password):
         )
 
 
+def write_swift_config(swift_creds):
+    with open(SWIFT_CONFIG_PATH, "w") as file:
+        for k, v in swift_creds.items():
+            file.write(f"{k.upper().replace('-', '_')}={v}\n")
+
+
 def install_systemd_units(mirror):
     logger.info("installing systemd units")
     units_path = CHARM_APP_DATA / "units"
@@ -329,6 +335,7 @@ def configure(
     stored_releases,
     target_releases,
     max_instances,
+    swift_creds,
     amqp_hostname,
     amqp_username,
     amqp_password,
@@ -338,6 +345,7 @@ def configure(
     update_autopkgtest(autopkgtest_branch)
     write_available_release_arch(arches, target_releases)
     write_rabbitmq_creds(amqp_hostname, amqp_username, amqp_password)
+    write_swift_config(swift_creds)
     install_systemd_units(mirror)
     configure_builder_units(arches, stored_releases, target_releases)
     set_instance_limits(arches, max_instances)
