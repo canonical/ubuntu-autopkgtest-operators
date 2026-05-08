@@ -54,6 +54,16 @@ PACKAGES = [
 ]
 
 
+def set_alert(level: str, message: str):
+    with open(DATA_DIR / "alert.txt", "w") as f:
+        f.write(f"{level.lower()}:{message}")
+    shutil.chown(DATA_DIR / "alert.txt", user=USER, group=USER)
+
+
+def remove_alert():
+    (DATA_DIR / "alert.txt").unlink(missing_ok=True)
+
+
 def install() -> None:
     """Install website."""
     if "JUJU_CHARM_HTTPS_PROXY" in os.environ or "JUJU_CHARM_HTTP_PROXY" in os.environ:

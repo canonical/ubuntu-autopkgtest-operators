@@ -4,6 +4,7 @@
 
 import os
 
+import action_types
 import autopkgtest_website
 import config_types
 import ops
@@ -115,6 +116,13 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         autopkgtest_website.start()
         self.unit.open_port("tcp", HTTP_PORT)
         self.unit.status = ops.ActiveStatus()
+
+    def _on_set_alert(self, event: ops.ActionEvent):
+        params = event.load_params(action_types.SetAlertAction, errors="fail")
+        autopkgtest_website.set_alert(params.level, params.message)
+
+    def _on_remove_alert(self, event: ops.ActionEvent):
+        autopkgtest_website.remove_alert()
 
     def _on_amqp_relation_joined(self, event: ops.RelationJoinedEvent):
         self.unit.status = ops.MaintenanceStatus(
