@@ -27,6 +27,20 @@ charm-libs:
   - lib: traefik_k8s.ingress
     version: "2"
 
+actions:
+  set-alert:
+    description: Display an alert on the autopkgtest homepage.
+    params:
+      level:
+        type: string
+        description: Level of the alert (info, warning, danger).
+        enum: [info, warning, danger]
+      message:
+        type: string
+        description: Alert message to display.
+  remove-alert:
+    description: Remove displayed alert.
+
 config:
   options:
     hostname:
