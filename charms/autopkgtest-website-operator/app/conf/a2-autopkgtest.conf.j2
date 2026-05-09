@@ -9,6 +9,10 @@
   # Return 204 for favicon.ico
   RewriteRule ^/favicon\.ico$ - [R=204,L]
 
+  # Block AI crawlers
+  RewriteCond %{HTTP_USER_AGENT} ".*(Macintosh|Windows).*" [NC]
+  RewriteRule ^ - [F,L]
+
   RemoteIPHeader X-Forwarded-For
   ErrorLog ${APACHE_LOG_DIR}/error.log
   CustomLog ${APACHE_LOG_DIR}/access.log combined
