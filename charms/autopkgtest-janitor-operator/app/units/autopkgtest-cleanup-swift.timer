@@ -1,0 +1,8 @@
+[Unit]
+Description=Timer to clean old swift objects
+
+[Timer]
+OnCalendar=daily
+
+[Install]
+WantedBy=timers.target

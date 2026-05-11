@@ -1,0 +1,11 @@
+[Unit]
+Description=Clean old swift objects
+
+[Service]
+Type=exec
+User={{ user }}
+EnvironmentFile=-/etc/environment.d/proxy.conf
+EnvironmentFile={{ config }}/swift.cred
+WorkingDirectory=~
+TimeoutStartSec=1h
+ExecStart=/usr/local/bin/cleanup-swift
