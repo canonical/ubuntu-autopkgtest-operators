@@ -13,4 +13,3 @@ class JanitorConfig(pydantic.BaseModel):
     autopkgtest_git_branch: str
     releases: list[str]
     mirror: str
-    max_instances: int

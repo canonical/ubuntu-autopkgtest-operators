@@ -73,7 +73,6 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
                 arch,
                 token,
                 self._stored.releases,
-                self.typed_config.max_instances,
             )
         except Exception as e:
             event.fail(f"failed to add remote: {e}")
@@ -108,7 +107,6 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             mirror=self.typed_config.mirror,
             stored_releases=self._stored.releases,
             target_releases=self.typed_config.releases,
-            max_instances=self.typed_config.max_instances,
             amqp_hostname=self._stored.amqp_hostname,
             amqp_username=RABBITMQ_USERNAME,
             amqp_password=self._stored.amqp_password,
