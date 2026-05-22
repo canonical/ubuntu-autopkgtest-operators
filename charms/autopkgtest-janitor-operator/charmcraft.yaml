@@ -32,6 +32,10 @@ actions:
         type: string
         description: Architecture of the remote.
         enum: [amd64, amd64v3, i386, arm64, armhf, s390x, ppc64el, riscv64]
+      index:
+        type: integer
+        description: Index of the new remote.
+        min: 1
       token:
         type: string
         description: LXD client token to connect to a remote.
@@ -42,6 +46,10 @@ actions:
         type: string
         description: Architecture of the remote.
         enum: [amd64, amd64v3, i386, arm64, armhf, s390x, ppc64el, riscv64]
+      index:
+        type: integer
+        description: Index of the remote to remove.
+        min: 1
   rebuild-all-images:
     description: Trigger rebuild of all the images
 

@@ -76,7 +76,7 @@ def run_as_user(command: str, *, capture_output=False, check=True):
     )
 
 
-def disable_image_builders(arch, releases):
+def disable_image_builders(arch, releases, index="*"):
     """Disable image builders."""
     # We don't try to be smart here hoping to have a good representation
     # of the state of the units. We just query for existing matching units
@@ -84,7 +84,7 @@ def disable_image_builders(arch, releases):
 
     for release in releases:
         # stop all matching units
-        systemd.service_stop(f"autopkgtest-build-image@{arch}-{release}-*.*")
+        systemd.service_stop(f"autopkgtest-build-image@{arch}-{index}-{release}-*.*")
 
         # disable all enabled matching units
 
@@ -97,7 +97,7 @@ def disable_image_builders(arch, releases):
                 "--no-legend",
                 "--no-pager",
                 "--state=enabled",
-                f"autopkgtest-build-image@{arch}-{release}-*.*",
+                f"autopkgtest-build-image@{arch}-{index}-{release}-*.*",
             ],
             text=True,
             capture_output=True,
@@ -112,13 +112,13 @@ def disable_image_builders(arch, releases):
             [
                 "systemctl",
                 "reset-failed",
-                f"autopkgtest-build-image@{arch}-{release}-*.*",
+                f"autopkgtest-build-image@{arch}-{index}-{release}-*.*",
             ],
             stderr=subprocess.DEVNULL,
         )
 
 
-def enable_image_builders(arch, releases):
+def enable_image_builders(arch, index, releases):
     for i, release in enumerate(releases):
         if (
             release in RELEASE_ARCH_RESTRICTIONS
@@ -131,16 +131,22 @@ def enable_image_builders(arch, releases):
         if i > 0:
             time.sleep(3)
 
-        timers = [f"autopkgtest-build-image@{arch}-{release}-container.timer"]
-        services = [f"autopkgtest-build-image@{arch}-{release}-container.service"]
+        timers = [f"autopkgtest-build-image@{arch}-{index}-{release}-container.timer"]
+        services = [
+            f"autopkgtest-build-image@{arch}-{index}-{release}-container.service"
+        ]
         if arch in VM_ARCHITECTURES:
-            timers.append(f"autopkgtest-build-image@{arch}-{release}-vm.timer")
-            services.append(f"autopkgtest-build-image@{arch}-{release}-vm.service")
+            timers.append(f"autopkgtest-build-image@{arch}-{index}-{release}-vm.timer")
+            services.append(
+                f"autopkgtest-build-image@{arch}-{index}-{release}-vm.service"
+            )
 
-        logger.info(f"Enabling periodic image builds for {arch}/{release}")
+        logger.info(
+            f"Enabling periodic image builds for {release} on remote {arch}-{index}"
+        )
         systemd.service_enable("--now", *timers)
 
-        logger.info(f"Starting image builds for {arch}/{release}")
+        logger.info(f"Starting image builds for {release} on remote {arch}-{index}")
         systemd.service_start(*services)
 
 
@@ -334,25 +340,22 @@ def get_remotes():
     )
 
 
-def add_remote(arch: str, token: str, all_releases: list[str], max_instances):
+def add_remote(arch: str, index: int, token: str, all_releases: list[str]):
     """Handle adding a new remote."""
-    remote = f"remote-{arch}"
-
-    if remote in get_remotes():
-        raise Exception(f"LXD remote already configured for {arch}")
+    remote = f"remote-{arch}-{index}"
 
     run_as_user(f"lxc remote add '{remote}' '{token}'")
 
     if remote not in get_remotes():
-        raise Exception(f"LXD not reporting remote for {arch} as expected")
+        raise Exception(f"LXD not reporting remote #{index} for {arch} as expected")
 
-    enable_image_builders(arch, all_releases)
+    enable_image_builders(arch, index, all_releases)
 
 
-def remove_remote(arch: str, all_releases):
+def remove_remote(arch: str, index: int, all_releases):
     """Remove an existing remote."""
-    disable_image_builders(arch, all_releases)
-    run_as_user(f"lxc remote remove 'remote-{arch}'", check=False)
+    disable_image_builders(arch, all_releases, index)
+    run_as_user(f"lxc remote remove 'remote-{arch}-{index}'", check=False)
 
 
 def rebuild_all_images():
