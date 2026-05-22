@@ -99,15 +99,13 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         autopkgtest_dispatcher.remove_remote(remote_arch)
         del self._stored.workers[remote_arch]
 
-    def _on_set_worker_count(self, event: ops.ActionEvent):
+    def _on_get_worker_count(self, event: ops.ActionEvent):
         params = event.load_params(action_types.SetWorkerCountAction, errors="fail")
-        worker_arch = params.arch.value
+        remote = f"remote-{params.remote.value}"
 
-        event.log(f"Setting worker count for arch {worker_arch}")
-        self._stored.workers[worker_arch] = params.count
-        event.set_results(
-            {"results": f"Set unit count for {worker_arch} to {params.count}"}
-        )
+        event.log(f"Setting worker count for remote {remote}")
+        self._stored.workers[remote] = params.count
+        event.set_results({"results": f"Set unit count for {remote} to {params.count}"})
 
     def _on_show_target_config(self, event: ops.ActionEvent):
         event.set_results({"results": f"{self._stored.workers}"})

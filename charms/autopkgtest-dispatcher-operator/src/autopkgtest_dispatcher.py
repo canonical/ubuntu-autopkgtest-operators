@@ -257,13 +257,13 @@ def configure(
     update_autopkgtest(autopkgtest_branch)
 
 
-def add_remote(arch: str, token: str):
-    run_as_user(f"lxc remote add remote-{arch} {token}")
+def add_remote(arch: str, remotenum: int, token: str):
+    run_as_user(f"lxc remote add remote-{arch}-{remotenum} {token}")
 
 
-def remove_remote(arch: str):
+def remove_remote(arch: str, remotenum: int):
     run_as_user(
-        f"lxc remote list --format=csv | {{ ! grep -q '^remote-{arch},'; }} || lxc remote remove remote-{arch}"
+        f"lxc remote list --format=csv | {{ ! grep -q '^remote-{arch}-{remotenum},'; }} || lxc remote remove remote-{arch}-{remotenum}"
     )
 
 

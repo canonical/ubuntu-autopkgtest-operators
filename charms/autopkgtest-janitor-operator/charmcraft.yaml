@@ -32,6 +32,9 @@ actions:
         type: string
         description: Architecture of the remote.
         enum: [amd64, amd64v3, i386, arm64, armhf, s390x, ppc64el, riscv64]
+      index:
+        type: int
+        description: Remote index for the specified architecture
       token:
         type: string
         description: LXD client token to connect to a remote.
