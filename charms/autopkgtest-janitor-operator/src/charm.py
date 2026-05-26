@@ -67,29 +67,36 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         """Handle adding a new remote."""
         params = event.load_params(action_types.AddRemoteAction, errors="fail")
         arch = params.arch
+        index = params.index
         token = params.token
+        new_remote = f"remote-{arch}-{index}"
+        if new_remote in self._stored.remotes:
+            event.fail(f"remote with index {index} already exists for {arch}")
+            return
         try:
             autopkgtest_janitor.add_remote(
                 arch,
+                index,
                 token,
                 self._stored.releases,
-                self.typed_config.max_instances,
             )
         except Exception as e:
             event.fail(f"failed to add remote: {e}")
             return
 
-        self._stored.remotes.add(arch)
+        self._stored.remotes.add(f"remote-{arch}-{index}")
 
-        event.set_results({"result": f"Added remote for {arch}"})
+        event.set_results({"result": f"Added remote #{index} for {arch}"})
 
     def _on_remove_remote(self, event: ops.ActionEvent):
         """Handle removing a remote."""
         params = event.load_params(action_types.RemoveRemoteAction, errors="fail")
         arch = params.arch
-        autopkgtest_janitor.remove_remote(arch, self._stored.releases)
-        if arch in self._stored.remotes:
-            self._stored.remotes.remove(arch)
+        index = params.index
+        remote = f"remote-{arch}-{index}"
+        autopkgtest_janitor.remove_remote(arch, index, self._stored.releases)
+
+        self._stored.remotes.remove(remote)
 
     def _on_rebuild_all_images(self, event: ops.ActionEvent):
         """Rebuild all images."""
@@ -108,7 +115,6 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             mirror=self.typed_config.mirror,
             stored_releases=self._stored.releases,
             target_releases=self.typed_config.releases,
-            max_instances=self.typed_config.max_instances,
             amqp_hostname=self._stored.amqp_hostname,
             amqp_username=RABBITMQ_USERNAME,
             amqp_password=self._stored.amqp_password,

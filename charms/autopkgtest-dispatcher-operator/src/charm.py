@@ -77,27 +77,35 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         """Handle adding a new remote."""
         params = event.load_params(action_types.AddRemoteAction, errors="fail")
         remote_arch = params.arch.value
+        index = params.index
+        remote_key = f"remote-{remote_arch}-{index}"
 
-        event.log(f"Adding remote for arch {remote_arch}")
+        if remote_key in self._stored.workers:
+            event.fail(f"remote with index {index} already exists for {remote_arch}")
+            return
+
+        event.log(f"Adding remote #{index} for arch {remote_arch}")
         try:
-            autopkgtest_dispatcher.add_remote(remote_arch, params.token)
+            autopkgtest_dispatcher.add_remote(remote_arch, index, params.token)
         except:
-            event.fail(f"Failed to add remote for arch {remote_arch}")
+            event.fail(f"Failed to add remote #{index} for arch {remote_arch}")
             return
         event.log(
             f"New remote defaults to {self.typed_config.default_worker_count} workers"
         )
-        self._stored.workers[remote_arch] = self.typed_config.default_worker_count
-        event.set_results({"result": f"Added remote for {remote_arch}"})
+        self._stored.workers[remote_key] = self.typed_config.default_worker_count
+        event.set_results({"result": f"Added remote #{index} for {remote_arch}"})
 
     def _on_remove_remote(self, event: ops.ActionEvent):
         """Handle removing a remote."""
         params = event.load_params(action_types.RemoveRemoteAction, errors="fail")
         remote_arch = params.arch.value
-        self._stored.workers[remote_arch] = 0
+        index = params.index
+        remote_key = f"remote-{remote_arch}-{index}"
+        self._stored.workers[remote_key] = 0
         autopkgtest_dispatcher.reconcile_worker_units(self._stored.workers)
-        autopkgtest_dispatcher.remove_remote(remote_arch)
-        del self._stored.workers[remote_arch]
+        autopkgtest_dispatcher.remove_remote(remote_arch, index)
+        del self._stored.workers[remote_key]
 
     def _on_set_worker_count(self, event: ops.ActionEvent):
         params = event.load_params(action_types.SetWorkerCountAction, errors="fail")
