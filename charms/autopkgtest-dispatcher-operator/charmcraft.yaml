@@ -76,7 +76,7 @@ config:
     default-worker-count:
       type: int
       description: Default number of workers to create for each remote.
-      default: 10
+      default: 3
     releases:
       type: string
       description: Space-separated of releases to run tests for
