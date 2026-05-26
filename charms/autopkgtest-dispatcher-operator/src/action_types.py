@@ -29,4 +29,5 @@ class RemoveRemoteAction(pydantic.BaseModel):
 
 class SetWorkerCountAction(pydantic.BaseModel):
     arch: SupportedArches = pydantic.Field(description="Architecture to configure.")
+    index: int = pydantic.Field(description="Index of the remote to configure.")
     count: int = pydantic.Field(10)
