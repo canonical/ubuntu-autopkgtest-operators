@@ -43,9 +43,9 @@ set -- "$@" --remote "$remote" "ubuntu-daily:$base/$arch"
 
 # If RUNTIME_DIRECTORY is set, which normally happens when this script
 # is started from the systemd service, then limit to one image build
-# per architecture (remote).
+# per remote.
 if [ -d "${RUNTIME_DIRECTORY-}" ]; then
-    set -- flock --verbose "$RUNTIME_DIRECTORY/$arch.lock" "$@"
+    set -- flock --verbose "$RUNTIME_DIRECTORY/$remote.lock" "$@"
 fi
 
 exec "$@"
