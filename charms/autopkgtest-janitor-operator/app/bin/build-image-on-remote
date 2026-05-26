@@ -26,7 +26,7 @@ if
     # $RELEASE is devel release or unknown
     ([ "$RELEASE" = "$devel" ] || ubuntu-distro-info --all | { ! grep -q "$RELEASE"; }) &&
     # there are no images for $RELEASE
-    "$@" "$imgremote:$base/$arch" 2>&1 | grep -q "couldn't be found" &&
+    "$@" "$imgremote:$base/$arch" 2>&1 | grep -iq "failed" &&
     # there are image for stable
     "$@" "$imgremote:$stable/$arch" >/dev/null 2>&1
 then
