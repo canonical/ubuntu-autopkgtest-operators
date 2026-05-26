@@ -3,13 +3,13 @@
 set -eu
 
 # $1 expected in form: arch-release-type, with type either "container" or "vm".
-IFS=- read -r arch RELEASE type <<EOF
+IFS=- read -r arch index RELEASE type <<EOF
 $1
 EOF
 
 export RELEASE
 
-remote="remote-$arch"
+remote="remote-$arch-$index"
 imgremote="ubuntu-daily"
 base=$RELEASE
 
