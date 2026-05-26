@@ -6,12 +6,12 @@ from charmlibs import systemd
 
 
 class SystemdHelper:
-    def generate_worker_unit_names(self, arch, ns):
-        """Return autopkgtest worker unit names for given arch and numbers."""
-        return [f"autopkgtest-worker@remote-{arch}-{n}.service" for n in ns]
+    def generate_worker_unit_names(self, remote_key, ns):
+        """Return autopkgtest worker unit names for given remote_key and numbers."""
+        return [f"autopkgtest-worker@{remote_key}-{n}.service" for n in ns]
 
     def count_worker_units(self):
-        """Count number of worker units per architecture."""
+        """Count number of worker units per remote_key."""
         proc = subprocess.run(
             [
                 "systemctl",
@@ -28,7 +28,12 @@ class SystemdHelper:
         )
 
         worker_count = Counter(
-            line.split()[0].split("@", 1)[1].removesuffix(".service").split("-")[1]
+            "-".join(
+                line.split()[0]
+                .split("@", 1)[1]
+                .removesuffix(".service")
+                .split("-")[1:3]
+            )
             for line in proc.stdout.splitlines()
         )
 
@@ -37,19 +42,21 @@ class SystemdHelper:
     def reconcile_systemd_worker_units(self, target_config):
         """Enable requested units and disable unneeded ones.
 
-        target_config is a dict which maps arches to number of workers.
+        target_config is a dict which maps remote keys to number of workers.
         """
         worker_count = self.count_worker_units()
 
-        for arch in target_config:
-            n_units = worker_count[arch]
-            target_units = target_config[arch]
+        for remote_key in target_config:
+            n_units = worker_count[remote_key]
+            target_units = target_config[remote_key]
 
-            print(f"Target {arch} units: {target_units}, already existing: {n_units}")
+            print(
+                f"Target {remote_key} units: {target_units}, already existing: {n_units}"
+            )
 
             if n_units < target_units:
                 unit_names = self.generate_worker_unit_names(
-                    arch, range(n_units + 1, target_units + 1)
+                    remote_key, range(n_units + 1, target_units + 1)
                 )
                 chunk = 10
                 for i in range(0, len(unit_names), chunk):
@@ -63,7 +70,7 @@ class SystemdHelper:
             elif target_units < n_units:
                 print("Deleting extra units")
                 unit_names = self.generate_worker_unit_names(
-                    arch, range(target_units + 1, n_units + 1)
+                    remote_key, range(target_units + 1, n_units + 1)
                 )
                 # TODO: graceful shutdown of worker units
                 systemd.service_disable("--now", *unit_names)

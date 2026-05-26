@@ -71,6 +71,9 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         autopkgtest_dispatcher.start()
         self.unit.status = ops.ActiveStatus()
 
+    def _get_remote_key(self, arch: str, index: int) -> str:
+        return f"remote-{arch}-{index}"
+
     # action hooks
 
     def _on_add_remote(self, event: ops.ActionEvent):
@@ -78,7 +81,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         params = event.load_params(action_types.AddRemoteAction, errors="fail")
         remote_arch = params.arch.value
         index = params.index
-        remote_key = f"remote-{remote_arch}-{index}"
+        remote_key = self._get_remote_key(remote_arch, index)
 
         if remote_key in self._stored.workers:
             event.fail(f"remote with index {index} already exists for {remote_arch}")
@@ -101,7 +104,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         params = event.load_params(action_types.RemoveRemoteAction, errors="fail")
         remote_arch = params.arch.value
         index = params.index
-        remote_key = f"remote-{remote_arch}-{index}"
+        remote_key = self._get_remote_key(remote_arch, index)
         self._stored.workers[remote_key] = 0
         autopkgtest_dispatcher.reconcile_worker_units(self._stored.workers)
         autopkgtest_dispatcher.remove_remote(remote_arch, index)
@@ -109,12 +112,14 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
     def _on_set_worker_count(self, event: ops.ActionEvent):
         params = event.load_params(action_types.SetWorkerCountAction, errors="fail")
-        worker_arch = params.arch.value
+        arch = params.arch.value
+        index = params.index
+        remote_key = self._get_remote_key(arch, index)
 
-        event.log(f"Setting worker count for arch {worker_arch}")
-        self._stored.workers[worker_arch] = params.count
+        event.log(f"Setting worker count for arch {remote_key}")
+        self._stored.workers[remote_key] = params.count
         event.set_results(
-            {"results": f"Set unit count for {worker_arch} to {params.count}"}
+            {"results": f"Set unit count for {remote_key} to {params.count}"}
         )
 
     def _on_show_target_config(self, event: ops.ActionEvent):
