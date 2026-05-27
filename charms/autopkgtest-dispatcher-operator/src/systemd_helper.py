@@ -28,12 +28,7 @@ class SystemdHelper:
         )
 
         worker_count = Counter(
-            "-".join(
-                line.split()[0]
-                .split("@", 1)[1]
-                .removesuffix(".service")
-                .split("-")[1:3]
-            )
+            line.split()[0].split("@", 1)[1].removesuffix(".service").rsplit("-", 1)[0]
             for line in proc.stdout.splitlines()
         )
 
