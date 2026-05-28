@@ -123,7 +123,10 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         )
 
     def _on_show_target_config(self, event: ops.ActionEvent):
-        event.set_results({"results": f"{self._stored.workers}"})
+        workers = self._stored.workers
+        event.set_results(
+            {"results": "\n".join(f"{k}: {workers[k]}" for k in sorted(workers))}
+        )
 
     def _on_reconcile_worker_units(self, event: ops.ActionEvent):
         autopkgtest_dispatcher.reconcile_worker_units(self._stored.workers)
