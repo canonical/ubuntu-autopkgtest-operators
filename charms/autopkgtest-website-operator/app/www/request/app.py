@@ -13,7 +13,7 @@ from html import escape as _escape
 from flask import Flask, redirect, request, session
 from flask_openid import OpenID
 from helpers.exceptions import WebControlException
-from helpers.utils import get_github_context, setup_key
+from helpers.utils import get_autopkgtest_cloud_conf, get_github_context, setup_key
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from request.submit import Submit
@@ -66,7 +66,7 @@ def check_github_sig(request):
     See https://developer.github.com/webhooks/securing/
     """
     # load key
-    keyfile = os.path.expanduser("~/github-secrets.json")
+    keyfile = get_autopkgtest_cloud_conf()["github"]["secrets"]
     package = request.args.get("package")
     try:
         with open(keyfile) as f:
@@ -253,10 +253,11 @@ def index_root():
                 request.host_url, "running#pkg-" + params["package"]
             ),
         }
+        status_creds = get_autopkgtest_cloud_conf()["github"]["status_credentials"]
         s.post_json(
             statuses_url,
             status,
-            os.path.expanduser("~/github-status-credentials.txt"),
+            status_creds,
             params["package"],
         )
 
