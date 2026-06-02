@@ -67,9 +67,7 @@ def result_matches_job(swift_conn, container, result_obj, params):
         try:
             with tarfile.open(None, "r", tar_bytes) as tar:
                 exitcode = int(tar.extractfile("exitcode").read().strip())
-                info = json.loads(
-                    tar.extractfile("testinfo.json").read().decode()
-                )
+                info = json.loads(tar.extractfile("testinfo.json").read().decode())
             result_cache[result_obj] = (exitcode, info)
         except (KeyError, ValueError, tarfile.TarError) as e:
             logging.error("broken result %s: %s", result_obj, e)
@@ -96,10 +94,18 @@ def result_matches_job(swift_conn, container, result_obj, params):
         return
 
     # verify that the test result has the same commit hash as the request
-    test_status_url = next((s for s in params["env"] if s.startswith("GITHUB_STATUSES_URL=")), "")
-    request_status_url = next((s for s in result_env if s.startswith("GITHUB_STATUSES_URL=")), "")
+    test_status_url = next(
+        (s for s in params["env"] if s.startswith("GITHUB_STATUSES_URL=")), ""
+    )
+    request_status_url = next(
+        (s for s in result_env if s.startswith("GITHUB_STATUSES_URL=")), ""
+    )
 
-    if not test_status_url or not request_status_url or test_status_url != request_status_url:
+    if (
+        not test_status_url
+        or not request_status_url
+        or test_status_url != request_status_url
+    ):
         logging.debug(
             "exit code: %i, ignoring due to different test env: %s != %s",
             exitcode,
@@ -117,15 +123,12 @@ def result_matches_job(swift_conn, container, result_obj, params):
         )
         return
 
-    logging.debug(
-        "exit code: %i, test env matches job: %s", exitcode, result_env
-    )
+    logging.debug("exit code: %i, test env matches job: %s", exitcode, result_env)
     return exitcode
 
 
 def finish_job(jobfile: Path, params, code, log_url):
-    """Tell GitHub that job is complete and delete the job file"""
-
+    """Tell GitHub that job is complete and delete the job file."""
     if code in (0, 2):
         state = "success"
     elif code in (4, 6, 12):
@@ -136,7 +139,7 @@ def finish_job(jobfile: Path, params, code, log_url):
     data = {
         "state": state,
         "context": get_github_context(params),
-        "description": "autopkgtest finished (%s)" % state,
+        "description": f"autopkgtest finished ({state})",
         "target_url": log_url,
     }
 
@@ -156,17 +159,13 @@ def finish_job(jobfile: Path, params, code, log_url):
             params["package"],
         )
     else:
-        logging.warning(
-            "did not find GITHUB_STATUSES_URL for %s", jobfile.name
-        )
+        logging.warning("did not find GITHUB_STATUSES_URL for %s", jobfile.name)
 
-    logging.debug("removing job file %s" % jobfile)
+    logging.debug("removing job file %s", jobfile)
     try:
         jobfile.unlink()
     except FileNotFoundError:
-        logging.debug(
-            "jobfile %s not found, maybe it was already deleted?" % jobfile
-        )
+        logging.debug("jobfile %s not found, maybe it was already deleted?", jobfile)
         return
     logging.info("%s processed, payload was %s", jobfile.name, data)
 
@@ -198,8 +197,8 @@ def is_job_running(params):
         return False
     running_jobs = running_json[params["package"]]
     for _, vals in running_jobs.items():
-        for release, vars in vals.items():
-            for arch, tests in vars.items():
+        for release, arches in vals.items():
+            for arch, tests in arches.items():
                 test_params = tests[0]
                 this_test = (
                     arch,
@@ -253,16 +252,10 @@ def process_job(jobfile: Path, swift_conn, ext_url):
     for obj in object_list:
         if "result.tar" in obj["name"]:
             last_modified = obj["last_modified"].split(".")[0]
-            obj_time_fmt = datetime.strptime(
-                last_modified, "%Y-%m-%dT%H:%M:%S"
-            )
-            if abs(obj_time_fmt - job_timestamp) > timedelta(
-                days=MAX_DAY_DIFF
-            ):
+            obj_time_fmt = datetime.strptime(last_modified, "%Y-%m-%dT%H:%M:%S")
+            if abs(obj_time_fmt - job_timestamp) > timedelta(days=MAX_DAY_DIFF):
                 continue
-            code = result_matches_job(
-                swift_conn, container, obj["name"], params
-            )
+            code = result_matches_job(swift_conn, container, obj["name"], params)
             if code is not None:
                 log_url = "/".join([ext_url, container, obj["name"]]).replace(
                     "result.tar", "log.gz"
@@ -298,7 +291,7 @@ if __name__ == "__main__":
         logging.basicConfig(level="DEBUG")
     else:
         logging.basicConfig(level="INFO")
-    # We don't want that much details
+    # We don't want that much detail
     requests_log = logging.getLogger("urllib3").setLevel(logging.INFO)
     swift_log = logging.getLogger("swiftclient").setLevel(logging.INFO)
 
