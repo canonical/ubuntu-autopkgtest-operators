@@ -158,6 +158,10 @@ def human_exitcode(code):
         return "otherfail"
 
 
+def should_show_retry(code):
+    return code not in ("pass", "denylisted", "neutral")
+
+
 def get_queues_info():
     """Return information about queued tests.
 
@@ -245,7 +249,7 @@ def get_results(limit: int, offset: int = 0, **kwargs) -> list:
                 package,
                 run_id,
             )
-            show_retry = code != "pass"
+            show_retry = should_show_retry(code)
             all_proposed = (
                 additional_params is not None and "all-proposed=1" in additional_params
             )
@@ -702,7 +706,7 @@ def package_release_arch(package, release, arch, _=None):
             version,
             triggers,
         )  # Version + triggers uniquely identifies this result
-        show_retry = code != "pass" and identifier not in seen
+        show_retry = should_show_retry(code) and identifier not in seen
         seen.add(identifier)
         url = os.path.join(
             CONFIG["swift_container_url"] % release,
@@ -851,7 +855,7 @@ def display_run_summary(release, arch, package, run_id):
     additional_params = result["env"]
     duration = result["duration"]
 
-    show_retry = code != "pass"
+    show_retry = should_show_retry(code)
     url = os.path.join(
         CONFIG["swift_container_url"] % release,
         release,
