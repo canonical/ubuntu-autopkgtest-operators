@@ -38,6 +38,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         framework.observe(self.on.config_changed, self._on_config_changed)
         framework.observe(self.on.start, self._on_start)
         framework.observe(self.on.upgrade_charm, self._on_install)
+        framework.observe(self.on.update_status, self._on_update_status)
 
         # action hooks
         framework.observe(self.on.add_remote_action, self._on_add_remote)
@@ -62,6 +63,18 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
 
         autopkgtest_janitor.start()
         self.unit.status = ops.ActiveStatus()
+
+    def _on_update_status(self, event: ops.UpdateStatusEvent):
+        """Handle update-status event."""
+        if not isinstance(self.unit.status, ops.ActiveStatus):
+            return
+
+        num_remotes = len(self._stored.remotes)
+        num_releases = len(self._stored.releases)
+        self.unit.status = ops.ActiveStatus(
+            f"connected to {num_remotes} remote{'s' if num_remotes != 1 else ''}, "
+            f"building for {num_releases} release{'s' if num_releases != 1 else ''}"
+        )
 
     def _on_add_remote(self, event: ops.ActionEvent):
         """Handle adding a new remote."""

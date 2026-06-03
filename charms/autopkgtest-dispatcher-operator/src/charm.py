@@ -38,6 +38,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         framework.observe(self.on.config_changed, self._on_config_changed)
         framework.observe(self.on.start, self._on_start)
         framework.observe(self.on.upgrade_charm, self._on_install)
+        framework.observe(self.on.update_status, self._on_update_status)
 
         # action hooks
         framework.observe(self.on.add_remote_action, self._on_add_remote)
@@ -70,6 +71,19 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
 
         autopkgtest_dispatcher.start()
         self.unit.status = ops.ActiveStatus()
+
+    def _on_update_status(self, event: ops.UpdateStatusEvent):
+        """Handle the update-status event."""
+        if not isinstance(self.unit.status, ops.ActiveStatus):
+            return
+
+        workers = self._stored.workers
+        num_workers = sum([workers[k] for k in workers.keys()])
+        num_remotes = len(workers.keys())
+        self.unit.status = ops.ActiveStatus(
+            f"running {num_workers} worker{'s' if num_workers != 1 else ''} on "
+            f"{num_remotes} remote{'s' if num_remotes != 1 else ''}"
+        )
 
     def _get_remote_key(self, arch: str, index: int) -> str:
         return f"remote-{arch}-{index}"
