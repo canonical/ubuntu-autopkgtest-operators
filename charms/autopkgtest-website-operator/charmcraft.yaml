@@ -93,3 +93,4 @@ requires:
   postgresql:
     interface: postgresql_client
     limit: 1
+    optional: false
