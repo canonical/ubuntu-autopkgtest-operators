@@ -8,11 +8,13 @@ import action_types
 import autopkgtest_website
 import config_types
 import ops
+from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
 from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer as IngressRequirer
 from ops.framework import StoredState
 
 RABBITMQ_USERNAME = "website"
 HTTP_PORT = 80
+POSTGRESQL_DATABASE_NAME = "autopkgtest"
 
 
 class AutopkgtestWebsiteCharm(ops.CharmBase):
@@ -29,11 +31,21 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             relation_name="ingress",
         )
 
+        self.postgresql = DatabaseRequires(
+            self,
+            relation_name="postgresql",
+            database_name=POSTGRESQL_DATABASE_NAME,
+        )
+
         self._stored.set_default(
             installed=False,
             got_amqp_creds=False,
             amqp_hostname=None,
             amqp_password=None,
+            got_postgresql_creds=False,
+            postgresql_hostname=None,
+            postgresql_username=None,
+            postgresql_password=None,
         )
 
         self.typed_config = self.load_config(
@@ -52,6 +64,18 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         framework.observe(self.on.amqp_relation_joined, self._on_amqp_relation_joined)
         framework.observe(self.on.amqp_relation_changed, self._on_amqp_relation_changed)
         framework.observe(self.on.amqp_relation_broken, self._on_amqp_relation_broken)
+        framework.observe(
+            self.on.postgresql_relation_joined, self._on_postgresql_relation_joined
+        )
+        framework.observe(
+            self.on.postgresql_relation_changed, self._on_postgresql_relation_changed
+        )
+        framework.observe(
+            self.on.postgresql_relation_broken, self._on_postgresql_relation_broken
+        )
+        framework.observe(
+            self.postgresql.on.database_created, self._on_postgresql_database_created
+        )
 
     def _on_install(self, event: ops.InstallEvent):
         """Install the workload on the machine."""
@@ -72,6 +96,10 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
 
         if not self._stored.got_amqp_creds:
             self.unit.status = ops.BlockedStatus("waiting for AMQP relation")
+            return
+
+        if not self._stored.got_postgresql_creds:
+            self.unit.status = ops.BlockedStatus("waiting for PostgreSQL relation")
             return
 
         if self.typed_config.swift_juju_secret:
@@ -100,6 +128,12 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             "rabbitpassword": self._stored.amqp_password,
         }
 
+        postgresql_creds = {
+            "postgresql_hostname": self._stored.postgresql_hostname,
+            "postgresql_username": self._stored.postgresql_username,
+            "postgresql_password": self._stored.postgresql_password,
+        }
+
         self.unit.status = ops.MaintenanceStatus("configuring website")
         autopkgtest_website.configure(
             hostname=self.typed_config.hostname,
@@ -107,6 +141,7 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             http_port=HTTP_PORT,
             amqp_creds=amqp_creds,
             swift_creds=swift_creds,
+            postgresql_creds=postgresql_creds,
         )
 
         self.on.start.emit()
@@ -161,6 +196,54 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         self.on.config_changed.emit()
 
     def _on_secret_changed(self, event: ops.SecretChangedEvent):
+        self.on.config_changed.emit()
+
+    def _on_postgresql_relation_joined(self, event: ops.RelationJoinedEvent):
+        """Handle PostgreSQL relation joined event."""
+        self.unit.status = ops.MaintenanceStatus(
+            f"Setting up {event.relation.name} connection"
+        )
+
+    def _on_postgresql_relation_changed(self, event: ops.RelationChangedEvent):
+        """Handle PostgreSQL relation changed event."""
+        relation = event.relation
+        if not relation or not relation.data:
+            return
+
+        relation_data = relation.data.get(relation.app)
+        if not relation_data:
+            return
+
+        if "username" in relation_data and "password" in relation_data:
+            username = relation_data.get("username")
+            password = relation_data.get("password")
+            # endpoints format: "hostname:port"
+            endpoints = relation_data.get("endpoints", "")
+
+            if username and password and endpoints:
+                hostname = endpoints.split(":")[0] if ":" in endpoints else endpoints
+                self._stored.postgresql_hostname = hostname
+                self._stored.postgresql_username = username
+                self._stored.postgresql_password = password
+                self._stored.got_postgresql_creds = True
+                self.on.config_changed.emit()
+
+    def _on_postgresql_relation_broken(self, event: ops.RelationBrokenEvent):
+        """Handle PostgreSQL relation broken event."""
+        self._stored.got_postgresql_creds = False
+        self._stored.postgresql_hostname = None
+        self._stored.postgresql_username = None
+        self._stored.postgresql_password = None
+        self.on.config_changed.emit()
+
+    def _on_postgresql_database_created(self, event):
+        """Handle PostgreSQL database created event from DatabaseRequires."""
+        self._stored.postgresql_hostname = (
+            event.endpoints.split(":")[0] if ":" in event.endpoints else event.endpoints
+        )
+        self._stored.postgresql_username = event.username
+        self._stored.postgresql_password = event.password
+        self._stored.got_postgresql_creds = True
         self.on.config_changed.emit()
 
 

@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 USER = "www-data"
 GROUP = "www-data"
 
+# Database configuration
+POSTGRESQL_DATABASE_NAME = "autopkgtest"
+
 # Charm source path
 CHARM_SOURCE_PATH = Path(__file__).parent.parent
 CHARM_APP_DATA = CHARM_SOURCE_PATH / "app"
@@ -50,6 +53,7 @@ PACKAGES = [
     "python3-flask",
     "python3-flask-openid",
     "python3-pika",
+    "python3-psycopg",
     "python3-pygit2",
     "python3-swiftclient",
     "python3-werkzeug",
@@ -135,6 +139,7 @@ def configure(
     http_port: int,
     amqp_creds: dict[str, str],
     swift_creds: dict[str, str],
+    postgresql_creds: dict[str, str],
 ) -> None:
     """Configure service."""
     logger.info("Stopping apache2")
@@ -184,6 +189,15 @@ def configure(
 
     logger.info("Generating autopkgtest config")
     j2template = j2env.get_template("autopkgtest-cloud.conf.j2")
+
+    # Build PostgreSQL connection URI from provided credentials
+    pg_user = postgresql_creds.get("postgresql_username", "")
+    pg_password = postgresql_creds.get("postgresql_password", "")
+    pg_host = postgresql_creds.get("postgresql_hostname", "")
+    postgresql_uri = (
+        f"postgresql://{pg_user}:{pg_password}@{pg_host}/{POSTGRESQL_DATABASE_NAME}"
+    )
+
     j2context = {
         "hostname": hostname,
         "config": CONFIG_DIR,
@@ -191,6 +205,7 @@ def configure(
         "database": DATA_DIR / "autopkgtest.db",
         "database_public": PUBLIC_DATA_DIR / "autopkgtest.db",
         "releases": releases,
+        "postgresql_uri": postgresql_uri,
         **amqp_creds,
         **swift_creds,
     }
