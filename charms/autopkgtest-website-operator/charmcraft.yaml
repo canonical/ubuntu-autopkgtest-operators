@@ -28,7 +28,7 @@ charm-libs:
     version: "2"
 
 actions:
-  set-alert:
+  add-alert:
     description: Display an alert on the autopkgtest homepage.
     params:
       level:
@@ -39,7 +39,15 @@ actions:
         type: string
         description: Alert message to display.
   remove-alert:
-    description: Remove displayed alert.
+    description: Remove the specified alert.
+    params:
+      id:
+        type: integer
+        description: ID of the alert to remove.
+  clear-alerts:
+    description: Remove all displayed alerts.
+  list-alerts:
+    description: List all active alerts.
 
 config:
   options:

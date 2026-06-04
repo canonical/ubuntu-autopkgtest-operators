@@ -2,7 +2,11 @@
 {% block content %}
   <div class="container">
     <div class="row">
-      {% if alert %}<div class="alert alert-{{ alert.level }}">{{ alert.message }}</div>{% endif %}
+      {% for alert in alerts %}
+        <div class="alert alert-{{ alert.level }}">
+          <strong>[{{ alert.date }}]</strong> {{ alert.message }}
+        </div>
+      {% endfor %}
       <div class="col-md-4">
         <div class="panel panel-default">
           <div class="panel-heading">Recent test runs</div>
