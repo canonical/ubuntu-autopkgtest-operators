@@ -124,7 +124,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             return
 
         autopkgtest_janitor.configure(
-            arches=self._stored.remotes,
+            remotes=self._stored.remotes,
             autopkgtest_branch=self.typed_config.autopkgtest_git_branch,
             mirror=self.typed_config.mirror,
             stored_releases=self._stored.releases,
