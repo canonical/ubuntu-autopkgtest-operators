@@ -340,22 +340,23 @@ def get_remotes():
     )
 
 
-def add_remote(arch: str, index: int, token: str, all_releases: list[str]):
+def add_remote(remote: str, token: str, all_releases: list[str]):
     """Handle adding a new remote."""
-    remote = f"remote-{arch}-{index}"
-
     run_as_user(f"lxc remote add '{remote}' '{token}'")
 
     if remote not in get_remotes():
-        raise Exception(f"LXD not reporting remote #{index} for {arch} as expected")
+        raise Exception(f"LXD not reporting remote {remote} as expected")
 
-    enable_image_builders(arch, index, all_releases)
+    enable_image_builders(remote, all_releases)
 
 
-def remove_remote(arch: str, index: int, all_releases):
+def remove_remote(remote: str, all_releases):
     """Remove an existing remote."""
-    disable_image_builders(arch, all_releases, index)
-    run_as_user(f"lxc remote remove 'remote-{arch}-{index}'", check=False)
+    disable_image_builders(remote, all_releases)
+    run_as_user(f"lxc remote remove '{remote}'", check=False)
+
+    if remote in get_remotes():
+        raise Exception(f"LXD still reporting remote {remote} after removal")
 
 
 def rebuild_all_images():

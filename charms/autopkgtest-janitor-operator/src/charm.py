@@ -88,8 +88,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             return
         try:
             autopkgtest_janitor.add_remote(
-                arch,
-                index,
+                new_remote,
                 token,
                 self._stored.releases,
             )
@@ -97,9 +96,9 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             event.fail(f"failed to add remote: {e}")
             return
 
-        self._stored.remotes.add(f"remote-{arch}-{index}")
+        self._stored.remotes.add(new_remote)
 
-        event.set_results({"result": f"Added remote #{index} for {arch}"})
+        event.set_results({"result": f"Added remote {new_remote}"})
 
     def _on_remove_remote(self, event: ops.ActionEvent):
         """Handle removing a remote."""
@@ -107,9 +106,11 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         arch = params.arch
         index = params.index
         remote = f"remote-{arch}-{index}"
-        autopkgtest_janitor.remove_remote(arch, index, self._stored.releases)
+        autopkgtest_janitor.remove_remote(remote, self._stored.releases)
 
         self._stored.remotes.remove(remote)
+
+        event.set_results({"result": f"Removed remote {remote}"})
 
     def _on_rebuild_all_images(self, event: ops.ActionEvent):
         """Rebuild all images."""
