@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Read all queues and write their contents to queues.json
+# Read all queues, drop duplicate/invalid messages, and write them to queues.json
 
 import json
 import logging
@@ -20,16 +20,48 @@ class AutopkgtestQueueContents:
 
         self.amqp_conn = amqp_conn
 
+    @staticmethod
+    def request_unique_key(body):
+        """Return a stable deduplication key for an AMQP request."""
+        package, params = body.split("\n", 1)
+        params = json.loads(params)
+        params.pop("submit-time", None)
+        return package, json.dumps(params, sort_keys=True)
+
     def get_queue_requests(self, queue_name):
         """Return list of pending requests in AMQP queue."""
         requests = []
-        channel = amqp_conn.channel()
+        seen = set()
+        channel = self.amqp_conn.channel()
 
-        # non-acking read of all requests to inspect the queue
+        # Read the queue without acking unique requests; closing the channel will
+        # put them back. Invalid and duplicate requests are acked, which drops them.
         while True:
             method, _, body = channel.basic_get(queue_name)
             if body is None:
                 break
+
+            try:
+                if isinstance(body, bytes):
+                    body = body.decode("UTF-8")
+                key = self.request_unique_key(body)
+            except (
+                UnicodeDecodeError,
+                ValueError,
+                IndexError,
+                TypeError,
+                AttributeError,
+            ) as e:
+                logging.warning(f"Received invalid request {body}: {repr(e)}")
+                channel.basic_ack(delivery_tag=method.delivery_tag)
+                continue
+            else:
+                if key in seen:
+                    logging.info(f"Dropping duplicate request from {queue_name}: {key}")
+                    channel.basic_ack(delivery_tag=method.delivery_tag)
+                    continue
+                seen.add(key)
+
             requests.append(body)
             logging.debug(f"{queue_name}: name {body}")
 
@@ -38,22 +70,11 @@ class AutopkgtestQueueContents:
 
         res = []
         for r in requests:
-            if isinstance(r, bytes):
-                r = r.decode("UTF-8")
-            try:
-                req = r.split("\n", 1)
-                if len(req) > 1:
-                    params = json.loads(req[1])
-                    if params.get("readable-by", False) or params.get(
-                        "swiftuser", False
-                    ):
-                        r = "private job"
-                else:
-                    logging.warning(f"Found malformed request {r}")
-                    r = "malformed request"
-                res.append(r)
-            except (ValueError, IndexError) as e:
-                logging.warning(f"Received invalid request {r}: {repr(e)}")
+            params = r.split("\n", 1)[1]
+            params = json.loads(params)
+            if params.get("readable-by", False) or params.get("swiftuser", False):
+                r = "private job"
+            res.append(r)
 
         return res
 
