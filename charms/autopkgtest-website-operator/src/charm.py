@@ -45,6 +45,10 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         framework.observe(self.on.start, self._on_start)
         framework.observe(self.on.config_changed, self._on_config_changed)
         framework.observe(self.on.secret_changed, self._on_secret_changed)
+
+        framework.observe(self.on.set_alert_action, self._on_set_alert)
+        framework.observe(self.on.remove_alert_action, self._on_remove_alert)
+
         framework.observe(self.on.amqp_relation_joined, self._on_amqp_relation_joined)
         framework.observe(self.on.amqp_relation_changed, self._on_amqp_relation_changed)
         framework.observe(self.on.amqp_relation_broken, self._on_amqp_relation_broken)
@@ -119,7 +123,7 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
 
     def _on_set_alert(self, event: ops.ActionEvent):
         params = event.load_params(action_types.SetAlertAction, errors="fail")
-        autopkgtest_website.set_alert(params.level, params.message)
+        autopkgtest_website.set_alert(params.level.value, params.message)
 
     def _on_remove_alert(self, event: ops.ActionEvent):
         autopkgtest_website.remove_alert()
