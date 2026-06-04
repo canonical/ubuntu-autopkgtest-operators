@@ -26,6 +26,7 @@ class AutopkgtestQueueContents:
         """Return a stable deduplication key for an AMQP request."""
         package, params = body.split("\n", 1)
         params = json.loads(params)
+        params.pop("requester", None)
         params.pop("submit-time", None)
         return package, json.dumps(params, sort_keys=True)
 
