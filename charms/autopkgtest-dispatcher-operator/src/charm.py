@@ -70,7 +70,7 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             return
 
         autopkgtest_dispatcher.start()
-        self.unit.status = ops.ActiveStatus()
+        self.on.update_status.emit()
 
     def _on_update_status(self, event: ops.UpdateStatusEvent):
         """Handle the update-status event."""
