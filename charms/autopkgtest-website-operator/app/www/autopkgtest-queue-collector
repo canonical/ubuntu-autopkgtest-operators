@@ -11,7 +11,8 @@ from pika.exceptions import AMQPError
 
 AMQP_CONTEXTS = ["ubuntu", "huge", "ppa", "upstream"]
 
-logger = logging.getLogger()
+logger = logging.getLogger("autopkgtest-queue-collector")
+logger.setLevel(logging.INFO)
 
 
 class AutopkgtestQueueContents:
@@ -52,18 +53,18 @@ class AutopkgtestQueueContents:
                 TypeError,
                 AttributeError,
             ) as e:
-                logging.warning(f"Received invalid request {body}: {repr(e)}")
+                logger.warning(f"Received invalid request {body}: {repr(e)}")
                 channel.basic_ack(delivery_tag=method.delivery_tag)
                 continue
             else:
                 if key in seen:
-                    logging.info(f"Dropping duplicate request from {queue_name}: {key}")
+                    logger.info(f"Dropping duplicate request from {queue_name}: {key}")
                     channel.basic_ack(delivery_tag=method.delivery_tag)
                     continue
                 seen.add(key)
 
             requests.append(body)
-            logging.debug(f"{queue_name}: name {body}")
+            logger.debug(f"{queue_name}: name {body}")
 
         # closing the channel will put all the messages back to the queue
         channel.close()
@@ -95,12 +96,12 @@ class AutopkgtestQueueContents:
                     try:
                         requests = self.get_queue_requests(queue_name)
                     except AMQPError:
-                        logging.warning(f"Failed reading data from queue {queue_name}")
+                        logger.warning(f"Failed reading data from queue {queue_name}")
                         continue
                     queue_size = 0
                     if requests:
                         queue_size = len(requests)
-                    logging.info(f"queue {queue_name} has {queue_size} items")
+                    logger.info(f"queue {queue_name} has {queue_size} items")
                     result.setdefault(context, {}).setdefault(release, {})[arch] = {
                         "size": queue_size,
                         "requests": requests,
