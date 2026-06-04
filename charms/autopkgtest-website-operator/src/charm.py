@@ -43,8 +43,15 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         framework.observe(self.on.install, self._on_install)
         framework.observe(self.on.upgrade_charm, self._on_install)
         framework.observe(self.on.start, self._on_start)
+
         framework.observe(self.on.config_changed, self._on_config_changed)
         framework.observe(self.on.secret_changed, self._on_secret_changed)
+
+        framework.observe(self.on.add_alert_action, self._on_add_alert)
+        framework.observe(self.on.remove_alert_action, self._on_remove_alert)
+        framework.observe(self.on.clear_alerts_action, self._on_clear_alerts)
+        framework.observe(self.on.list_alerts_action, self._on_list_alerts)
+
         framework.observe(self.on.amqp_relation_joined, self._on_amqp_relation_joined)
         framework.observe(self.on.amqp_relation_changed, self._on_amqp_relation_changed)
         framework.observe(self.on.amqp_relation_broken, self._on_amqp_relation_broken)
@@ -117,12 +124,24 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
         self.unit.open_port("tcp", HTTP_PORT)
         self.unit.status = ops.ActiveStatus()
 
-    def _on_set_alert(self, event: ops.ActionEvent):
-        params = event.load_params(action_types.SetAlertAction, errors="fail")
-        autopkgtest_website.set_alert(params.level, params.message)
+    def _on_add_alert(self, event: ops.ActionEvent):
+        params = event.load_params(action_types.AddAlertAction, errors="fail")
+        alert_id = autopkgtest_website.add_alert(params.level.value, params.message)
+        event.set_results({"message": f"Alert set with ID {alert_id}"})
 
     def _on_remove_alert(self, event: ops.ActionEvent):
-        autopkgtest_website.remove_alert()
+        params = event.load_params(action_types.RemoveAlertAction, errors="fail")
+        alert_id = params.alert_id
+        autopkgtest_website.remove_alert(alert_id)
+        event.set_results({"message": f"Alert with ID {alert_id} removed"})
+
+    def _on_clear_alerts(self, event: ops.ActionEvent):
+        autopkgtest_website.clear_alerts()
+        event.set_results({"message": "All alerts cleared"})
+
+    def _on_list_alerts(self, event: ops.ActionEvent):
+        alerts = autopkgtest_website._load_alerts()
+        event.set_results({"alerts": alerts})
 
     def _on_amqp_relation_joined(self, event: ops.RelationJoinedEvent):
         self.unit.status = ops.MaintenanceStatus(

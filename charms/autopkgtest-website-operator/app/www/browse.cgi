@@ -70,18 +70,16 @@ def init_config():
     CONFIG["amqp_queue_cache"] = Path(cp["web"]["amqp_queue_cache"])
     CONFIG["running_cache"] = Path(cp["web"]["running_cache"])
     CONFIG["database"] = Path(cp["web"]["database_public"])
-    CONFIG["alert"] = Path(cp["web"]["alert"])
+    CONFIG["alerts"] = Path(cp["web"]["alerts"])
 
 
-def get_alert():
+def get_alerts():
     try:
-        with open(CONFIG["alert"]) as f:
-            # alerts are in the format level:message
-            raw_alert = f.read()
-            level, message = raw_alert.split(":")
-            return {"level": level, "message": message}
-    except (FileNotFoundError, ValueError):
-        return None
+        with open(CONFIG["alerts"]) as f:
+            # alerts are stored as a JSON array
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
 
 
 def get_test_id(release, arch, src):
@@ -367,7 +365,7 @@ def get_running_for_user(user: str):
 def index_root():
     flask.session.permanent = True
 
-    alert = get_alert()
+    alerts = get_alerts()
 
     recent = []
     for row in db_con.execute(
@@ -384,7 +382,7 @@ def index_root():
     return render(
         "browse-home.html",
         recent_runs=recent,
-        alert=alert,
+        alerts=alerts,
     )
 
 

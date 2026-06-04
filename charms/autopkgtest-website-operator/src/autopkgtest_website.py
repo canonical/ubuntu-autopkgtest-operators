@@ -6,10 +6,12 @@
 The intention is that this module could be used outside the context of a charm.
 """
 
+import json
 import logging
 import os
 import shutil
 import subprocess
+from datetime import date
 from pathlib import Path
 from textwrap import dedent
 
@@ -36,6 +38,8 @@ WWW_DIR = APP_DIR / "www"
 CONFIG_DIR = Path("/etc/autopkgtest-website")
 SITES_AVAILABLE_PATH = Path("/etc/apache2/sites-available/")
 
+ALERTS_FILE = DATA_DIR / "alerts.json"
+
 # Packages to install
 PACKAGES = [
     "apache2",
@@ -54,14 +58,57 @@ PACKAGES = [
 ]
 
 
-def set_alert(level: str, message: str):
-    with open(DATA_DIR / "alert.txt", "w") as f:
-        f.write(f"{level.lower()}:{message}")
-    shutil.chown(DATA_DIR / "alert.txt", user=USER, group=USER)
+def _load_alerts() -> list:
+    """Load alerts from the alerts file."""
+    try:
+        with open(ALERTS_FILE) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
 
 
-def remove_alert():
-    (DATA_DIR / "alert.txt").unlink(missing_ok=True)
+def _save_alerts(alerts: list):
+    """Save alerts to the alerts file."""
+    with open(ALERTS_FILE, "w") as f:
+        json.dump(alerts, f, indent=2)
+    shutil.chown(ALERTS_FILE, user=USER, group=USER)
+
+
+def _get_next_alert_id() -> int:
+    """Get the next available alert ID."""
+    alerts = _load_alerts()
+    if not alerts:
+        return 1
+    return max(alert["id"] for alert in alerts) + 1
+
+
+def add_alert(level: str, message: str) -> int:
+    """Add an alert to be displayed on the website."""
+    alerts = _load_alerts()
+    alert_id = _get_next_alert_id()
+
+    new_alert = {
+        "id": alert_id,
+        "level": level.lower(),
+        "message": message,
+        "date": date.today().isoformat(),
+    }
+
+    alerts.append(new_alert)
+    _save_alerts(alerts)
+    return alert_id
+
+
+def remove_alert(alert_id: int):
+    """Remove an alert by its ID."""
+    alerts = _load_alerts()
+    alerts = [a for a in alerts if a["id"] != alert_id]
+    _save_alerts(alerts)
+
+
+def clear_alerts():
+    """Remove all alerts."""
+    ALERTS_FILE.unlink(missing_ok=True)
 
 
 def install() -> None:
