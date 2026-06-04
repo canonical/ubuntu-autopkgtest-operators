@@ -62,7 +62,7 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
             return
 
         autopkgtest_janitor.start()
-        self.unit.status = ops.ActiveStatus()
+        self.on.update_status.emit()
 
     def _on_update_status(self, event: ops.UpdateStatusEvent):
         """Handle update-status event."""
