@@ -30,10 +30,27 @@ class AutopkgtestQueueContents:
         params.pop("submit-time", None)
         return package, json.dumps(params, sort_keys=True)
 
-    def get_queue_requests(self, queue_name):
+    @staticmethod
+    def queue_release_arch(queue_name):
+        """Return the release and architecture encoded in an AMQP queue name."""
+        if not queue_name.startswith("debci-"):
+            raise ValueError(f"invalid queue name: {queue_name}")
+
+        queue = queue_name.removeprefix("debci-")
+        for context in AMQP_CONTEXTS:
+            if context == "ubuntu":
+                continue
+            context_prefix = f"{context}-"
+            if queue.startswith(context_prefix):
+                queue = queue.removeprefix(context_prefix)
+                break
+
+        return queue.rsplit("-", 1)
+
+    def get_queue_requests(self, queue_name, seen):
         """Return list of pending requests in AMQP queue."""
         requests = []
-        seen = set()
+        release, arch = self.queue_release_arch(queue_name)
         channel = self.amqp_conn.channel()
 
         # Read the queue without acking unique requests; closing the channel will
@@ -46,7 +63,7 @@ class AutopkgtestQueueContents:
             try:
                 if isinstance(body, bytes):
                     body = body.decode("UTF-8")
-                key = self.request_unique_key(body)
+                key = (release, arch, self.request_unique_key(body))
             except (
                 UnicodeDecodeError,
                 ValueError,
@@ -84,6 +101,7 @@ class AutopkgtestQueueContents:
         """Get queue contents from AMQP and cache them on disk."""
         release_arches = get_release_arches()
         all_arches = set()
+        seen = set()
 
         result = {}
         for context in AMQP_CONTEXTS:
@@ -95,7 +113,7 @@ class AutopkgtestQueueContents:
                         # ubuntu test requests use context-less name (backwards compatibility)
                         queue_name = f"debci-{release}-{arch}"
                     try:
-                        requests = self.get_queue_requests(queue_name)
+                        requests = self.get_queue_requests(queue_name, seen)
                     except AMQPError:
                         logger.warning(f"Failed reading data from queue {queue_name}")
                         continue
