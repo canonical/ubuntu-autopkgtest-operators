@@ -3,10 +3,10 @@
 {% block content %}
   {% if alert %}<div class="alert alert-{{ alert.level }}">{{ alert.message }}</div>{% endif %}
   <div class="row">
-    <div class="col-md-4">
+    <div class="col-md-6">
       <div class="card">
         <div class="card-header">Recent test runs</div>
-        <div class="list-group">
+        <div class="list-group list-group-flush">
           {% for (res, pkg, rel, arch, trigs, run_id) in recent_runs %}
             <a class="list-group-item"
                href="{{base_url}}packages/{{pkg}}/{{rel}}/{{arch}}/{{run_id}}">
@@ -19,14 +19,31 @@
         </div>
       </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-6">
       <div class="card">
-        <div class="card-header">Test Results</div>
+        <div class="card-header">Current activity</div>
         <div class="card-body">
-          <p>
-            You can navigate to {{base_url}}packages/<i>packagename</i> to get
-            results for a particular package.
-          </p>
+          Queued tests: {{ queued_per_arch.values() |sum }}
+          {% if queued_per_arch %}
+            <div class="row">
+              {% for arch, count in queued_per_arch|dictsort %}
+                <div class="col-sm-6">
+                  <small class="text-muted">{{ arch }}: {{ count }}</small>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+          <hr>
+          Running tests: {{ running_per_arch.values() |sum }}
+          {% if running_per_arch %}
+            <div class="row">
+              {% for arch, count in running_per_arch|dictsort %}
+                <div class="col-sm-6">
+                  <small class="text-muted">{{ arch }}: {{ count }}</small>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
         </div>
       </div>
 
