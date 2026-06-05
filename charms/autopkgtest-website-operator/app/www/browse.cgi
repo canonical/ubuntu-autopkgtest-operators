@@ -1030,7 +1030,9 @@ def running():
     packages = running_info.keys()
     running_count = 0
     for pkg in packages:
-        running_count += len(running_info[pkg].keys())
+        for runhash in running_info[pkg]:
+            for release in running_info[pkg][runhash]:
+                running_count += len(running_info[pkg][runhash][release])
 
     return render(
         "browse-running.html",
