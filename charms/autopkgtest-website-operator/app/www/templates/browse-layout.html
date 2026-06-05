@@ -8,68 +8,62 @@
     <link rel="stylesheet"
           type="text/css"
           href="{{static_url}}bootstrap/css/bootstrap.css" />
-    <link rel="stylesheet"
-          type="text/css"
-          href="{{static_url}}bootstrap/css/bootstrap-theme.css" />
     <link rel="stylesheet" type="text/css" href="{{static_url}}style.css" />
   </head>
   <body>
     <div id="wrap">
 
       <!-- Fixed navbar -->
-      <div class="navbar navbar-default">
+      <nav class="navbar navbar-expand-lg navbar-light bg-light">
         <div class="container">
-          <div class="navbar-header">
-            <button type="button"
-                    class="navbar-toggle"
-                    data-toggle="collapse"
-                    data-target=".navbar-collapse">
-              <span class="icon-bar"></span>
-              <span class="icon-bar"></span>
-              <span class="icon-bar"></span>
-            </button>
-            <a class="navbar-brand" href="{{base_url}}">Ubuntu Autopkgtest</a>
-          </div>
-          <div class="collapse navbar-collapse">
+          <a class="navbar-brand" href="{{base_url}}">Ubuntu Autopkgtest</a>
+          <button type="button"
+                  class="navbar-toggler"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#navbar-collapse">
+            <span class="navbar-toggler-icon"></span>
+          </button>
+          <div class="collapse navbar-collapse" id="navbar-collapse">
             <ul class="nav navbar-nav">
-              <li>
-                <a href="{{base_url}}">Home</a>
+              <li class="nav-item">
+                <a class="nav-link" href="{{base_url}}">Home</a>
               </li>
-              <li>
-                <a href="{{base_url}}running">Running</a>
+              <li class="nav-item">
+                <a class="nav-link" href="{{base_url}}running">Running</a>
               </li>
-              <li>
-                <a href="{{base_url}}recent">Recent</a>
+              <li class="nav-item">
+                <a class="nav-link" href="{{base_url}}recent">Recent</a>
               </li>
-              <li>
-                <a href="{{base_url}}statistics">Statistics</a>
+              <li class="nav-item">
+                <a class="nav-link" href="{{base_url}}statistics">Statistics</a>
               </li>
-              <li>
-                <a href="https://wiki.ubuntu.com/ProposedMigration#autopkgtests">Documentation</a>
+              <li class="nav-item">
+                <a class="nav-link"
+                   href="https://wiki.ubuntu.com/ProposedMigration#autopkgtests">Documentation</a>
               </li>
               {% if not session.get("nickname") %}
-                <li>
-                  <a href="{{base_url}}request.cgi?/login">Login</a>
+                <li class="nav-item">
+                  <a class="nav-link" href="{{base_url}}request.cgi?/login">Login</a>
                 </li>
               {% else %}
-                <li>
-                  <a href="{{ base_url }}user/{{ session.get("nickname") }}">{{ session.get("nickname") }}</a>
+                <li class="nav-item">
+                  <a class="nav-link"
+                     href="{{ base_url }}user/{{ session.get("nickname") }}">{{ session.get("nickname") }}</a>
                 </li>
               {% endif %}
             </ul>
           </div>
-          <!--/.nav-collapse -->
         </div>
-      </div>
+      </nav>
     </div>
 
-    <div class="container">
+    <div class="container mt-4">
       {% block content %}
       {% endblock content %}
     </div>
 
     <script type="text/javascript" src="{{static_url}}jquery/jquery.min.js"></script>
     <script type="text/javascript"
-            src="{{static_url}}bootstrap/js/bootstrap.min.js"></script>
+            src="{{static_url}}bootstrap/js/bootstrap.bundle.min.js"></script>
   </body>
 </html>
