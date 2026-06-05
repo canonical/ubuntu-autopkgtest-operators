@@ -2,7 +2,7 @@
 {% import "macros.html" as macros %}
 
 {% macro display_test_info(results) -%}
-  <table class="table">
+  <table class="table table-sm">
     <tr>
       <td>
         <b>Package</b>
@@ -30,7 +30,7 @@
 {%- endmacro %}
 
 {% block content %}
-  <h1 class="page-header" id="user-home">
+  <h1 id="user-home">
     Recent test results
     {% if arch or release %}
       for {{ release }}

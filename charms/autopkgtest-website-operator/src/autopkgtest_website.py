@@ -39,7 +39,7 @@ SITES_AVAILABLE_PATH = Path("/etc/apache2/sites-available/")
 # Packages to install
 PACKAGES = [
     "apache2",
-    "libjs-bootstrap",
+    "libjs-bootstrap5",
     "libjs-jquery",
     "amqp-tools",
     "git",
@@ -114,7 +114,7 @@ def install() -> None:
         WWW_DIR,
         ignore=shutil.ignore_patterns("tests", "tests.py"),
     )
-    os.symlink(Path("/usr/share/javascript/bootstrap"), WWW_DIR / "static/bootstrap")
+    os.symlink(Path("/usr/share/javascript/bootstrap5"), WWW_DIR / "static/bootstrap")
     os.symlink(Path("/usr/share/javascript/jquery"), WWW_DIR / "static/jquery")
     os.symlink(DATA_DIR / "running.json", WWW_DIR / "static/running.json")
     os.symlink(PUBLIC_DATA_DIR / "autopkgtest.db", WWW_DIR / "static/autopkgtest.db")

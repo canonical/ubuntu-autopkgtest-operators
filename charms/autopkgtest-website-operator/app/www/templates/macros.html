@@ -2,7 +2,7 @@
   {% for runhash, relinfo in info.items() %}
     {% for release, archinfo in relinfo.items() %}
       {% for arch, (params, duration, logtail) in archinfo.items() %}
-        <table class="table-condensed">
+        <table class="table table-sm">
           <tr>
             <th>Package:</th>
             <td>{{ package }}</td>
@@ -35,9 +35,7 @@
             <td>{{ duration//3600 }}h {{ duration % 3600//60 }}m {{ duration % 60 }}s ({{ duration }}s)</td>
           </tr>
         </table>
-        <pre>
-{{ logtail }}
-      </pre>
+        <pre class="bg-body-secondary p-2 border rounded"><code>{{ logtail }}</code></pre>
       {% endfor %}
     {% endfor %}
     <hr>
@@ -51,7 +49,7 @@
         {% if queues_info[queue_name][r][a] -%}
           {% set (nreqs, reqs) = queues_info[queue_name][r][a] %}
           {%- if nreqs > 0 %}
-            <table class="table-condensed table-striped"
+            <table class="table table-sm table-striped"
                    id="queue-{{ queue_name }}-{{ r }}-{{ a }}">
               <thead>
                 <tr>
