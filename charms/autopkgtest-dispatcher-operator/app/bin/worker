@@ -561,7 +561,7 @@ def request(channel, method, properties, body):
             argv = [os.path.join(autopkgtest_checkout, "runner", "autopkgtest")]
         else:
             argv = ["autopkgtest"]
-        argv += ["--output-dir", out_dir, "--timeout-copy=6000"]
+        argv += ["--output-dir", out_dir]
         argv += ["--needs-internet=try"]
 
         if i386_foreign_series(release) and architecture == "i386":
@@ -665,26 +665,27 @@ def request(channel, method, properties, body):
         if debug:
             argv.append("--debug")
 
-        timeout_short = 300
-        timeout_long = 20000
+        timeouts = {
+            "short": 300,
+            "install": 3000,
+            "test": 10000,
+            "copy": 900,
+            "build": 20000,
+        }
 
         if architecture == "riscv64":
             # xypron suggested a factor 4 for riscv64 when emulated
-            timeout_short = timeout_short * 4
-            timeout_long = timeout_long * 4
+            for t in timeouts:
+                timeouts[t] *= 4
 
-        argv.append(f"--timeout-short={timeout_short}")
         if request_matches_per_package(pkgname, architecture, release, long_tests):
-            argv.append(f"--timeout-copy={timeout_long * 2}")
-            argv.append(f"--timeout-test={timeout_long * 2}")
-            argv.append(f"--timeout-build={timeout_long * 2}")
+            timeouts["test"] *= 4
+            timeouts["build"] *= 2
         elif big_pkg:
-            argv.append(f"--timeout-copy={timeout_long}")
-            argv.append(f"--timeout-test={timeout_long}")
-            argv.append(f"--timeout-build={timeout_long}")
-        else:
-            argv.append(f"--timeout-copy={timeout_long}")
-            argv.append(f"--timeout-build={timeout_long}")
+            timeouts["test"] *= 2
+
+        for t, v in timeouts.items():
+            argv.append(f"--timeout-{t}={v}")
 
         for e in params.get("env", []):
             argv.append(f"--env={e}")
