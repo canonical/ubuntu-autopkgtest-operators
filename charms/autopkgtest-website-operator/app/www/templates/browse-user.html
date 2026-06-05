@@ -1,8 +1,30 @@
 {% extends "browse-layout.html" %}
 {% import "macros.html" as macros %}
 
+{% macro user_pagination(offset, limit, user) -%}
+  <ul class="pagination pagination-sm mb-0">
+    {% if offset != 0 %}
+      <li class="page-item">
+        <a class="page-link"
+           href="{{ base_url }}user/{{ user }}?offset={{ offset - limit }}&limit={{ limit }}&only-results=true">Previous</a>
+      </li>
+    {% else %}
+      <li class="page-item disabled">
+        <span class="page-link">Previous</span>
+      </li>
+    {% endif %}
+    <li class="page-item disabled">
+      <span class="page-link">{{ (offset // limit) + 1 }}</span>
+    </li>
+    <li class="page-item">
+      <a class="page-link"
+         href="{{ base_url }}user/{{ user }}?offset={{ offset + limit }}&limit={{ limit }}&only-results=true">Next</a>
+    </li>
+  </ul>
+{%- endmacro %}
+
 {% macro display_user_test_info(user_results) -%}
-  <table class="table">
+  <table class="table table-sm">
     <tr>
       <td>
         <b>Package</b>
@@ -30,47 +52,123 @@
   </table>
 {%- endmacro %}
 
+{% macro display_queued_running_tests(tests) -%}
+  <table class="table table-sm">
+    <tr>
+      <td>
+        <b>Package</b>
+      </td>
+      <td>
+        <b>Release</b>
+      </td>
+      <td>
+        <b>Arch</b>
+      </td>
+      <td>
+        <b>Triggers</b>
+      </td>
+      <td>
+        <b>Env</b>
+      </td>
+      <td>
+        <b>Date</b>
+      </td>
+    </tr>
+    {% for row in tests %}
+      <tr>
+        {% set package = row["package"] %}
+        {% set release = row["release"] %}
+        {% set arch = row["arch"] %}
+        <td>{{ package }}</td>
+        <td>{{ release }}</td>
+        <td>{{ arch }}</td>
+        <td>{{ row["triggers"] }}</td>
+        <td>{{ row["additional_params"] }}</td>
+        <td>{{ row["human_date"] }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+{%- endmacro %}
+
 {% block content %}
   <h1 id="user-home">
     Running, queued and test results by <a href="https://launchpad.net/~{{ user }}">{{ user }}
     <img src="{{ url_for('static', filename='launchpad.ico') }}" class="icon">
   </a>
 </h1>
-<nav class="navigation-links links">
-  <a href="{{ base_url }}user/{{ user }}">Summary</a>
-  <a href="{{ base_url }}user/{{ user }}?show-running=false&show-queued=true&show-results=false">Queued</a>
-  <a href="{{ base_url }}user/{{ user }}?show-running=true&show-queued=false&show-results=false">Running</a>
-  <a href="{{ base_url }}user/{{ user }}?only-results=true">Results</a>
-  <a href="{{ base_url }}user/{{ user }}/ppa">PPA results</a>
-</nav>
+<ul class="nav nav-tabs mb-4">
+  <li class="nav-item">
+    <a class="nav-link" href="{{ base_url }}user/{{ user }}">Summary</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link"
+       href="{{ base_url }}user/{{ user }}?show-running=false&show-queued=true&show-results=false">Queued</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link"
+       href="{{ base_url }}user/{{ user }}?show-running=true&show-queued=false&show-results=false">Running</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link"
+       href="{{ base_url }}user/{{ user }}?only-results=true">Results</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" href="{{ base_url }}user/{{ user }}/ppa">PPA results</a>
+  </li>
+</ul>
 {% if not (running_tests or queued_tests or previous_test_results) %}
   <p>
     Looks like there's no results, running tests, or queued tests for {{ user }}. You may have reached the end of your results, or maybe there's a typo in the url - you can click the Launchpad icon to double check this user exists, or go back to the summary.
   </p>
 {% endif %}
 
-{% if queued_tests %}
-  <h2 id="results-queued">Queued</h2>
-  {{ display_user_test_info(queued_tests) }}
-{% endif %}
+{% if queued_tests or running_tests %}
+  {% if running_tests %}
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h2 id="results-running" class="mb-0">
+        Running <span class="badge bg-secondary">{{ running_tests|length }}</span>
+      </h2>
+      <button class="btn btn-sm btn-outline-secondary"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#running-table"
+              aria-expanded="true"
+              aria-controls="running-table">
+        <i class="fa fa-chevron-up"></i>
+      </button>
+    </div>
+    <div class="collapse show" id="running-table">{{ display_queued_running_tests(running_tests) }}</div>
+  {% endif %}
 
-{% if running_tests %}
-  <h2 id="results-running">Running</h2>
-  {{ display_user_test_info(running_tests) }}
+  {% if queued_tests %}
+    <div class="d-flex align-items-center justify-content-between mb-3 mt-5">
+      <h2 id="results-queued" class="mb-0">
+        Queued <span class="badge bg-secondary">{{ queued_tests|length }}</span>
+      </h2>
+      <button class="btn btn-sm btn-outline-secondary"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#queued-table"
+              aria-expanded="true"
+              aria-controls="queued-table">
+        <i class="fa fa-chevron-up"></i>
+      </button>
+    </div>
+    <div class="collapse show" id="queued-table">{{ display_queued_running_tests(queued_tests) }}</div>
+  {% endif %}
 {% endif %}
 
 {% if previous_test_results %}
-  <h2 id="results-complete">Test Results</h2>
+  <h2 id="results-complete" class="mt-5">Test Results</h2>
+  <nav aria-label="Results pagination"
+       class="d-flex justify-content-end mb-3">
+    {{ user_pagination(offset, limit, user) }}
+  </nav>
   <p>Results {{ offset }} to {{ offset + limit }}</p>
   {{ display_user_test_info(previous_test_results) }}
-
-  <nav class="page-links links">
-    {% if offset != 0 %}
-      <a href="{{ base_url }}user/{{ user }}?offset={{ offset - limit }}&limit={{ limit }}&only-results=true">Previous page</a>
-    {% endif %}
-    <a href="{{ base_url }}user/{{ user }}?offset={{ offset + limit }}&limit={{ limit }}&only-results=true">Next page</a>
-    <br>
-    <a href="{{ base_url }}user/{{ user }}?only-results=true&limit=10000">Show more results</a>
+  <nav aria-label="Results pagination"
+       class="mt-4 mb-4 d-flex justify-content-center">
+    {{ user_pagination(offset, limit, user) }}
   </nav>
 {% endif %}
 
