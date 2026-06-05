@@ -60,6 +60,14 @@ SNAP_DEPENDENCIES = [
 # utils
 
 
+def get_remote_arch_index(remote):
+    """Extract the architecture and index from a remote name."""
+    parts = remote.split("-")
+    arch = parts[1]
+    index = parts[2]
+    return arch, index
+
+
 def run_as_user(command: str, *, capture_output=False, check=True):
     return subprocess.run(
         [
@@ -76,12 +84,13 @@ def run_as_user(command: str, *, capture_output=False, check=True):
     )
 
 
-def disable_image_builders(arch, releases, index="*"):
+def disable_image_builders(remote, releases):
     """Disable image builders."""
     # We don't try to be smart here hoping to have a good representation
     # of the state of the units. We just query for existing matching units
     # and stop/disable all of them.
 
+    arch, index = get_remote_arch_index(remote)
     for release in releases:
         # stop all matching units
         systemd.service_stop(f"autopkgtest-build-image@{arch}-{index}-{release}-*.*")
@@ -118,8 +127,9 @@ def disable_image_builders(arch, releases, index="*"):
         )
 
 
-def enable_image_builders(arch, index, releases):
+def enable_image_builders(remote, releases):
     for i, release in enumerate(releases):
+        arch, index = get_remote_arch_index(remote)
         if (
             release in RELEASE_ARCH_RESTRICTIONS
             and arch not in RELEASE_ARCH_RESTRICTIONS[release]
@@ -141,12 +151,10 @@ def enable_image_builders(arch, index, releases):
                 f"autopkgtest-build-image@{arch}-{index}-{release}-vm.service"
             )
 
-        logger.info(
-            f"Enabling periodic image builds for {release} on remote {arch}-{index}"
-        )
+        logger.info(f"Enabling periodic image builds for {release} on remote {remote}")
         systemd.service_enable("--now", *timers)
 
-        logger.info(f"Starting image builds for {release} on remote {arch}-{index}")
+        logger.info(f"Starting image builds for {release} on remote {remote}")
         systemd.service_start(*services)
 
 
@@ -184,8 +192,12 @@ def update_autopkgtest(autopkgtest_branch):
     )
 
 
-def write_available_release_arch(arches, releases):
+def write_available_release_arch(remotes, releases):
     logger.info("writing available arches and releases")
+    arches = set()
+    for remote in remotes:
+        remote_arch = remote.split("-")[1]
+        arches.add(remote_arch)
     with open(TARGETS_PATH, "w") as file:
         file.write(
             dedent(
@@ -243,21 +255,21 @@ def install_systemd_units(mirror):
         systemd.service_enable("--now", *units_to_enable)
 
 
-def configure_builder_units(arches, stored_releases, target_releases):
+def configure_builder_units(remotes, stored_releases, target_releases):
     logger.info("enabling/disabling builder units")
     logger.info(f"target releases: {' '.join(target_releases)}")
 
     old_releases = [r for r in stored_releases if r not in target_releases]
     if old_releases:
         logger.info(f"releases to sunset: {' '.join(old_releases)}")
-        for arch in arches:
-            disable_image_builders(arch, old_releases)
+        for remote in remotes:
+            disable_image_builders(remote, old_releases)
 
     new_releases = [r for r in target_releases if r not in stored_releases]
     if new_releases:
         logger.info(f"new releases to activate {' '.join(new_releases)}")
-        for arch in arches:
-            enable_image_builders(arch, new_releases)
+        for remote in remotes:
+            enable_image_builders(remote, new_releases)
 
 
 def install(autopkgtest_branch):
@@ -316,7 +328,7 @@ def start():
 
 
 def configure(
-    arches,
+    remotes,
     autopkgtest_branch,
     mirror,
     stored_releases,
@@ -328,10 +340,10 @@ def configure(
     configure_unprivileged_user()
     update_distro_info_data()
     update_autopkgtest(autopkgtest_branch)
-    write_available_release_arch(arches, target_releases)
+    write_available_release_arch(remotes, target_releases)
     write_rabbitmq_creds(amqp_hostname, amqp_username, amqp_password)
     install_systemd_units(mirror)
-    configure_builder_units(arches, stored_releases, target_releases)
+    configure_builder_units(remotes, stored_releases, target_releases)
 
 
 def get_remotes():
@@ -340,22 +352,23 @@ def get_remotes():
     )
 
 
-def add_remote(arch: str, index: int, token: str, all_releases: list[str]):
+def add_remote(remote: str, token: str, all_releases: list[str]):
     """Handle adding a new remote."""
-    remote = f"remote-{arch}-{index}"
-
     run_as_user(f"lxc remote add '{remote}' '{token}'")
 
     if remote not in get_remotes():
-        raise Exception(f"LXD not reporting remote #{index} for {arch} as expected")
+        raise Exception(f"LXD not reporting remote {remote} as expected")
 
-    enable_image_builders(arch, index, all_releases)
+    enable_image_builders(remote, all_releases)
 
 
-def remove_remote(arch: str, index: int, all_releases):
+def remove_remote(remote: str, all_releases):
     """Remove an existing remote."""
-    disable_image_builders(arch, all_releases, index)
-    run_as_user(f"lxc remote remove 'remote-{arch}-{index}'", check=False)
+    disable_image_builders(remote, all_releases)
+    run_as_user(f"lxc remote remove '{remote}'", check=False)
+
+    if remote in get_remotes():
+        raise Exception(f"LXD still reporting remote {remote} after removal")
 
 
 def rebuild_all_images():
