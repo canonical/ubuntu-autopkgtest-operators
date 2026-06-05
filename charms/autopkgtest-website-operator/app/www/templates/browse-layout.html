@@ -12,12 +12,20 @@
           type="text/css"
           href="{{static_url}}fork-awesome/css/fork-awesome.css" />
     <link rel="stylesheet" type="text/css" href="{{static_url}}style.css" />
+    <script type="text/javascript">
+      window.isDarkMode = localStorage.getItem('darkMode') === 'true' ||
+                          (localStorage.getItem('darkMode') === null &&
+                           window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (window.isDarkMode) {
+        document.documentElement.setAttribute('data-bs-theme', 'dark');
+      }
+    </script>
   </head>
   <body>
     <div id="wrap">
 
       <!-- Fixed navbar -->
-      <nav class="navbar navbar-expand-lg navbar-light bg-light">
+      <nav class="navbar navbar-expand-lg">
         <div class="container">
           <a class="navbar-brand" href="{{base_url}}">
             <svg style="display: inline-block;
@@ -85,6 +93,12 @@
                      href="{{ base_url }}user/{{ session.get("nickname") }}">{{ session.get("nickname") }}</a>
                 </li>
               {% endif %}
+              <li class="nav-item">
+                <button class="nav-link btn btn-link"
+                        id="dark-mode-toggle"
+                        aria-label="Toggle dark mode"></button>
+                <script>document.getElementById('dark-mode-toggle').innerHTML = window.isDarkMode ? '<i class="fa fa-sun-o"></i>' : '<i class="fa fa-moon-o"></i>';</script>
+              </li>
             </ul>
           </div>
         </div>
@@ -99,5 +113,19 @@
     <script type="text/javascript" src="{{static_url}}jquery/jquery.min.js"></script>
     <script type="text/javascript"
             src="{{static_url}}bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script type="text/javascript">
+      const darkModeToggle = document.getElementById('dark-mode-toggle');
+      const htmlElement = document.documentElement;
+
+      darkModeToggle.addEventListener('click', () => {
+        const currentTheme = htmlElement.getAttribute('data-bs-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        htmlElement.setAttribute('data-bs-theme', newTheme);
+        localStorage.setItem('darkMode', newTheme === 'dark');
+        darkModeToggle.innerHTML = newTheme === 'dark' ?
+          '<i class="fa fa-sun-o"></i>' :
+          '<i class="fa fa-moon-o"></i>';
+      });
+    </script>
   </body>
 </html>
