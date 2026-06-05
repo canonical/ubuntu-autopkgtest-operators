@@ -160,6 +160,17 @@
           packageSearch.focus();
         }
       });
+
+      const currentPath = window.location.pathname;
+      document.querySelectorAll('.nav-link').forEach(link => {
+        const href = link.getAttribute('href');
+        if (href) {
+          const linkPath = new URL(href, window.location.origin).pathname;
+          if (currentPath === linkPath) {
+            link.classList.add('active');
+          }
+        }
+      });
     </script>
   </body>
 </html>
