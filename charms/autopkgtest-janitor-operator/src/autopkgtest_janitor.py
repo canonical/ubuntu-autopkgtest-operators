@@ -45,6 +45,10 @@ RELEASE_ARCH_RESTRICTIONS = {
     "questing": ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"],
 }
 
+NO_CONTAINER_RELEASES = [
+    "xenial",
+]
+
 # List of architecture for which the charm should create VM images.
 VM_ARCHITECTURES = ["amd64", "amd64v3", "s390x"]
 
@@ -134,22 +138,30 @@ def enable_image_builders(remote, releases):
             release in RELEASE_ARCH_RESTRICTIONS
             and arch not in RELEASE_ARCH_RESTRICTIONS[release]
         ):
-            logger.info(f"Not creating image for {release}/{arch}")
+            logger.info(f"Not creating images for {release}/{arch}")
             continue
 
         # don't drown systemd
         if i > 0:
             time.sleep(3)
 
-        timers = [f"autopkgtest-build-image@{arch}-{index}-{release}-container.timer"]
-        services = [
-            f"autopkgtest-build-image@{arch}-{index}-{release}-container.service"
-        ]
+        timers = []
+        services = []
+        if release not in NO_CONTAINER_RELEASES:
+            timers.append(
+                f"autopkgtest-build-image@{arch}-{index}-{release}-container.timer"
+            )
+            services.append(
+                f"autopkgtest-build-image@{arch}-{index}-{release}-container.service"
+            )
         if arch in VM_ARCHITECTURES:
             timers.append(f"autopkgtest-build-image@{arch}-{index}-{release}-vm.timer")
             services.append(
                 f"autopkgtest-build-image@{arch}-{index}-{release}-vm.service"
             )
+
+        if not timers:
+            continue
 
         logger.info(f"Enabling periodic image builds for {release} on remote {remote}")
         systemd.service_enable("--now", *timers)
