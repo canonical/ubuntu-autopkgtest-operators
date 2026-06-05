@@ -25,8 +25,9 @@ set -- lxc image info
 if
     # $RELEASE is devel release or unknown
     ([ "$RELEASE" = "$devel" ] || ubuntu-distro-info --all | { ! grep -q "$RELEASE"; }) &&
-    # there are no images for $RELEASE
-    "$@" "$imgremote:$base/$arch" 2>&1 | grep -iq "failed" &&
+    # there are no images for $RELEASE; do not rely on the command generically failing:
+    # grep for the specific error string
+    "$@" "$imgremote:$base/$arch" 2>&1 | grep -iq "failed.*t be found" &&
     # there are image for stable
     "$@" "$imgremote:$stable/$arch" >/dev/null 2>&1
 then
