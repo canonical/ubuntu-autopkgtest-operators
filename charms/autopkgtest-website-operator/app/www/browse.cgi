@@ -313,10 +313,13 @@ def get_queued_for_user(user: str):
                         continue
                     package = req.split("\n")[0]
                     if req_info.get("requester", "") == user:
+                        triggers = list(req_info.get("triggers", ""))
+                        if isinstance(triggers, list):
+                            triggers = " ".join(triggers)
                         queued_tests.append(
                             dict(
                                 version="N/A",
-                                triggers=req_info.get("triggers"),
+                                triggers=triggers,
                                 additional_params="N/A",
                                 human_date=human_date(req_info.get("submit-time")),
                                 human_sec="N/A",
@@ -343,10 +346,13 @@ def get_running_for_user(user: str):
                         continue
                     info_dict = list_of_running_items[0]
                     if info_dict.get("requester", "") == user:
+                        triggers = info_dict.get("triggers", "")
+                        if isinstance(triggers, list):
+                            triggers = " ".join(triggers)
                         running_tests.append(
                             dict(
                                 version="N/A",
-                                triggers=info_dict.get("triggers"),
+                                triggers=triggers,
                                 additional_params="N/A",
                                 human_date=human_date(info_dict.get("submit-time")),
                                 human_sec=human_sec(int(list_of_running_items[1])),
