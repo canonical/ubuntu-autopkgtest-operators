@@ -381,10 +381,30 @@ def index_root():
         res = hc if "code" not in hc else "fail"
         recent.append((res, row[1], row[2], row[3], row[4], row[5]))
 
+    running_info = get_running_jobs()
+    (_, _, queues_info) = get_queues_info()
+
+    running_per_arch = {}
+    for _, runhashes in running_info.items():
+        for _, releases in runhashes.items():
+            for _, archs in releases.items():
+                for arch, tests in archs.items():
+                    running_per_arch.setdefault(arch, 0)
+                    running_per_arch[arch] += 1
+
+    queued_per_arch = {}
+    for _, releases in queues_info.items():
+        for _, archs in releases.items():
+            for arch, (_, tests) in archs.items():
+                queued_per_arch.setdefault(arch, 0)
+                queued_per_arch[arch] += len(tests)
+
     return render(
         "browse-home.html",
         recent_runs=recent,
         alert=alert,
+        running_per_arch=running_per_arch,
+        queued_per_arch=queued_per_arch,
     )
 
 
