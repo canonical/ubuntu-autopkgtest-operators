@@ -1,4 +1,5 @@
 {% extends "browse-layout.html" %}
+{% import "macros.html" as macros %}
 {% block content %}
   {% if alert %}<div class="alert alert-{{ alert.level }}">{{ alert.message }}</div>{% endif %}
   <div class="row">
@@ -9,7 +10,8 @@
           {% for (res, pkg, rel, arch, trigs, run_id) in recent_runs %}
             <a class="list-group-item"
                href="{{base_url}}packages/{{pkg}}/{{rel}}/{{arch}}/{{run_id}}">
-              <span class="{{res}}">{{pkg}} on {{rel}}/{{arch}}</span>
+              {{ macros.status_icon(res) }}
+              <span>{{pkg}} on {{rel}}/{{arch}}</span>
               <br />
               <small class="text-muted">Triggers: {{trigs}}</small>
             </a>

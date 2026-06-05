@@ -1,73 +1,34 @@
-.queued:before {
-  content: ".";
-  display: inline-block;
-  margin: 5px;
-  font-size: 1.3em;
-  vertical-align: top;
-  line-height: 14px;
-  width: 14px;
-  height: 14px;
-  animation: bounce 2s linear infinite;
+.queued {
+  color: #ff9800;
 }
 
-@keyframes bounce {
-  0% { transform: translate(0px); }
-  50% { transform: translate(0px, -14px); }
-  100% { transform: translate(0px); }
+.running {
+  color: #2196F3;
 }
 
-.running:before {
-  content: "⚙";
-  display: inline-block;
-  margin: 5px;
-  font-size: 1.3em;
-  vertical-align: top;
-  line-height: 14px;
-  width: 14px;
-  height: 14px;
-  animation: spin 1.2s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.pass:before {
-  content: "✔ ";
+.pass {
   color: #8ae234;
-  font-size: 18px;
-  vertical-align: top;
 }
 
-.neutral:before {
-  content: "😐";
+.neutral {
   color: #cab388;
-  font-size: 18px;
-  vertical-align: top;
 }
 
-.fail:before,
-.denylisted:before,
-.otherfail:before {
-  content: "✖ ";
+.fail {
   color: #ef2929;
-  font-size: 18px;
-  vertical-align: top;
 }
 
-.tmpfail:before {
-  content: "⚠ ";
-  color: #ffd862;
-  font-size: 18px;
-  vertical-align: top;
+.denylisted {
+  color: #ef2929;
 }
 
-.error:before {
-  content: "😅 ";
+.error,
+.otherfail {
   color: brown;
-  font-size: 18px;
-  vertical-align: top;
+}
+
+.tmpfail {
+  color: #ffd862;
 }
 
 a {

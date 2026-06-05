@@ -1,3 +1,23 @@
+{% macro status_icon(code) -%}
+  {% if code == "queued" %}
+    <i class="fa fa-spinner fa-pulse queued"></i>
+  {% elif code == "running" %}
+    <i class="fa fa-cog fa-spin running"></i>
+  {% elif code == "pass" %}
+    <i class="fa fa-check pass"></i>
+  {% elif code == "neutral" %}
+    <i class="fa fa-circle-thin neutral"></i>
+  {% elif code == "fail" %}
+    <i class="fa fa-times-circle fail"></i>
+  {% elif code == "denylisted" %}
+    <i class="fa fa-ban denylisted"></i>
+  {% elif code == "error" or code == "otherfail" %}
+    <i class="fa fa-bolt error"></i>
+  {% elif code == "tmpfail" %}
+    <i class="fa fa-warning tmpfail"></i>
+  {% endif %}
+{%- endmacro %}
+
 {% macro display_running_job(package, info) -%}
   {% for runhash, relinfo in info.items() %}
     {% for release, archinfo in relinfo.items() %}
@@ -111,7 +131,8 @@
       -
     {% endif %}
   </td>
-  <td class="nowrap {{ code }}" title={{ code }}>
+  <td class="nowrap">
+    {{ status_icon(code) }}
     {% if run_id %}
       <a href="{{ url_for('display_run_summary', release=release, arch=arch, package=package, run_id=run_id) }}">{{ code }}</a>
     {% else %}
@@ -151,9 +172,9 @@
 {% macro retry_button(release, arch, package, triggers, all_proposed) -%}
   {% set ts = triggers.split()|map('urlencode')|join("&trigger=")|safe %}
   {% if all_proposed %}
-    <a href="{{ url_for("index_root") }}request.cgi?release={{ release }}&arch={{ arch }}&package={{ package|urlencode }}&trigger={{ ts }}&all-proposed=1">&#9851;</a>
+    <a href="{{ url_for("index_root") }}request.cgi?release={{ release }}&arch={{ arch }}&package={{ package|urlencode }}&trigger={{ ts }}&all-proposed=1"><i class="fa fa-repeat"></i></a>
   {% else %}
-    <a href="{{ url_for("index_root") }}request.cgi?release={{ release }}&arch={{ arch }}&package={{ package|urlencode }}&trigger={{ ts }}">&#9851;</a>
+    <a href="{{ url_for("index_root") }}request.cgi?release={{ release }}&arch={{ arch }}&package={{ package|urlencode }}&trigger={{ ts }}"><i class="fa fa-repeat"></i></a>
   {% endif %}
 {%- endmacro %}
 
