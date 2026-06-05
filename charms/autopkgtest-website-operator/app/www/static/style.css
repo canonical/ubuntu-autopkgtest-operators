@@ -14,6 +14,10 @@
   transform: rotate(180deg);
 }
 
+a .card {
+  color: #0d6efd;
+}
+
 .pass {
   color: #8ae234;
 }
