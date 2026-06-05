@@ -23,6 +23,9 @@ fi
 stable=$(ubuntu-distro-info --stable) || exit 1
 devel=$(ubuntu-distro-info --devel) || devel=UNKNOWN
 set -- lxc image info
+if [ "$type" = "vm" ]; then
+    set -- "$@" --vm
+fi
 if
     # $RELEASE is devel release or unknown
     ([ "$RELEASE" = "$devel" ] || ubuntu-distro-info --all | { ! grep -q "$RELEASE"; }) &&
@@ -37,7 +40,7 @@ then
 fi
 
 # If there is a minimal images for the selected base release, prefer that.
-if "$@" "$imgremote:$base/$arch" >/dev/null 2>&1; then
+if "$@" "$minimgremote:$base/$arch" >/dev/null 2>&1; then
     imgremote=$minimgremote
 fi
 
