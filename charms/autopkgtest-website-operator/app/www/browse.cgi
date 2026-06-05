@@ -643,7 +643,8 @@ def list_ppa_runs(user, ppa):
 
     return render(
         "browse-ppa.html",
-        ppa_name=f"{user}/{ppa}",
+        user=user,
+        ppa=ppa,
         test_runs=test_runs,
     )
 

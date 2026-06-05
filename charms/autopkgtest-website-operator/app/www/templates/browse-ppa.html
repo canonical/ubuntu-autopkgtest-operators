@@ -2,37 +2,35 @@
 {% import "macros.html" as macros %}
 
 {% block content %}
-  <h2>Test runs for {{ ppa_name }}</h2>
+  <h2>
+    Test runs for <a href="https://launchpad.net/~{{ user }}/+archive/ubuntu/{{ ppa }}">{{ user }}/{{ ppa }}</a>
+  </h2>
 
   {% if test_runs %}
     {% for package, runs in test_runs.items() %}
-      <h2>{{ package }}</h2>
-      <table class="table">
-        <tr>
-          <td>
-            <b>Release</b>
-          </td>
-          <td>
-            <b>Arch</b>
-          </td>
-          <td>
-            <b>
-              Date
-            </b>
-          </td>
-          <td></td>
-        </tr>
-        {% for run in runs %}
+      <h3>{{ package }}</h3>
+      <table class="table table-sm table-striped">
+        <thead>
           <tr>
-            <td>{{ test_runs[package][run]["release"] }}</td>
-            <td>{{ test_runs[package][run]["arch"] }}</td>
-            <td>{{ test_runs[package][run]["date"] }}</td>
-            <td class="nowrap">
-              <a href="{{ base_url }}results/{{ test_runs[package][run]['container_name'] }}/{{ test_runs[package][run]['fullname'] }}/log.gz">log</a> &emsp;
-              <a href="{{ base_url }}results/{{ test_runs[package][run]['container_name'] }}/{{ test_runs[package][run]['fullname'] }}/artifacts.tar.gz">artifacts</a>
-            </td>
+            <th>Release</th>
+            <th>Arch</th>
+            <th>Date</th>
+            <th></th>
           </tr>
-        {% endfor %}
+        </thead>
+        <tbody>
+          {% for run in runs %}
+            <tr>
+              <td>{{ test_runs[package][run]["release"] }}</td>
+              <td>{{ test_runs[package][run]["arch"] }}</td>
+              <td>{{ test_runs[package][run]["date"] }}</td>
+              <td class="nowrap">
+                <a href="{{ base_url }}results/{{ test_runs[package][run]['container_name'] }}/{{ test_runs[package][run]['fullname'] }}/log.gz">log</a>&emsp;
+                <a href="{{ base_url }}results/{{ test_runs[package][run]['container_name'] }}/{{ test_runs[package][run]['fullname'] }}/artifacts.tar.gz">artifacts</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
       </table>
     {% endfor %}
   {% endif %}
