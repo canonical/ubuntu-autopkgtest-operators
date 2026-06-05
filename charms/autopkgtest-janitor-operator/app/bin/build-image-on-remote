@@ -11,6 +11,7 @@ export RELEASE
 
 remote="remote-$arch-$index"
 imgremote="ubuntu-daily"
+minimgremote="ubuntu-minimal-daily"
 base=$RELEASE
 
 if [ -z "${MIRROR-}" ]; then
@@ -35,12 +36,17 @@ then
     base=$stable
 fi
 
+# If there is a minimal images for the selected base release, prefer that.
+if "$@" "$imgremote:$base/$arch" >/dev/null 2>&1; then
+    imgremote=$minimgremote
+fi
+
 # Construct the autopkgtest-build-lxd command line in $@.
 set -- autopkgtest-build-lxd
 if [ "$type" = "vm" ]; then
     set -- "$@" --vm
 fi
-set -- "$@" --remote "$remote" "ubuntu-daily:$base/$arch"
+set -- "$@" --remote "$remote" "$imgremote:$base/$arch"
 
 # If RUNTIME_DIRECTORY is set, which normally happens when this script
 # is started from the systemd service, then limit to one image build
