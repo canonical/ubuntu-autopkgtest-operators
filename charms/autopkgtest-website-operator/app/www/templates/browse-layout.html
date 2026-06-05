@@ -83,6 +83,16 @@
               </li>
             </ul>
             <ul class="nav navbar-nav ms-auto">
+              <li class="nav-item me-3 d-flex align-items-center">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text"><i class="fa fa-search"></i></span>
+                  <input type="text"
+                         id="package-search"
+                         class="form-control"
+                         placeholder="Go to package..."
+                         aria-label="Go to package">
+                </div>
+              </li>
               {% if not session.get("nickname") %}
                 <li class="nav-item">
                   <a class="nav-link" href="{{base_url}}request.cgi?/login">Login</a>
@@ -116,6 +126,7 @@
     <script type="text/javascript">
       const darkModeToggle = document.getElementById('dark-mode-toggle');
       const htmlElement = document.documentElement;
+      const packageSearch = document.getElementById('package-search');
 
       darkModeToggle.addEventListener('click', () => {
         const currentTheme = htmlElement.getAttribute('data-bs-theme');
@@ -125,6 +136,29 @@
         darkModeToggle.innerHTML = newTheme === 'dark' ?
           '<i class="fa fa-sun-o"></i>' :
           '<i class="fa fa-moon-o"></i>';
+      });
+
+      packageSearch.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const packageName = packageSearch.value.trim();
+          if (packageName) {
+            window.location.href = '{{base_url}}packages/' + encodeURIComponent(packageName);
+          }
+        }
+      });
+
+      document.addEventListener('keydown', (e) => {
+         const el = document.activeElement;
+         const isTypingField = el && (
+           el.tagName === 'INPUT' ||
+           el.tagName === 'TEXTAREA' ||
+           el.tagName === 'SELECT' ||
+           el.isContentEditable
+         );
+         if (e.key === '/' && !isTypingField) {
+          e.preventDefault();
+          packageSearch.focus();
+        }
       });
     </script>
   </body>
