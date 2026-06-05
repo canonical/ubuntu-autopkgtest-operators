@@ -2,43 +2,47 @@
 {% block content %}
   <h1>Statistics</h1>
 
-  {% for r in release_arches %}
-    <h3>{{ r.capitalize() }}</h3>
+  <div class="row">
+    {% for r in release_arches %}
+      <div class="col-lg-6">
+        <h3>{{ r.capitalize() }}</h3>
 
-    <table class="table" style="width: auto">
-      <tr>
-        <th>architecture</th>
-        {% for arch in release_arches[r]|sort %}<th>{{arch}}</th>{% endfor %}
-      </tr>
+        <table class="table" style="width: auto">
+          <tr>
+            <th>architecture</th>
+            {% for arch in release_arches[r]|sort %}<th>{{arch}}</th>{% endfor %}
+          </tr>
 
-      <tr>
-        <th>#packages with tests</th>
-        {% for arch in release_arches[r]|sort %}<td>{{data[r][arch]['numpkgs']}}</td>{% endfor %}
-      </tr>
+          <tr>
+            <th>#packages with tests</th>
+            {% for arch in release_arches[r]|sort %}<td>{{data[r][arch]['numpkgs']}}</td>{% endfor %}
+          </tr>
 
-      <tr>
-        <th>#packages with passing tests</th>
-        {% for arch in release_arches[r]|sort %}<td>{{data[r][arch]['numpkgspass']}}</td>{% endfor %}
-      </tr>
+          <tr>
+            <th>#packages with passing tests</th>
+            {% for arch in release_arches[r]|sort %}<td>{{data[r][arch]['numpkgspass']}}</td>{% endfor %}
+          </tr>
 
-      <tr>
-        <th>pass rate</th>
-        {% for arch in release_arches[r]|sort %}
-          <td>{{'%.1f' % (data[r][arch]['numpkgspass'] * 100 / (data[r][arch]['numpkgs'] or 1))}}%</td>
-        {% endfor %}
-      </tr>
+          <tr>
+            <th>pass rate</th>
+            {% for arch in release_arches[r]|sort %}
+              <td>{{'%.1f' % (data[r][arch]['numpkgspass'] * 100 / (data[r][arch]['numpkgs'] or 1))}}%</td>
+            {% endfor %}
+          </tr>
 
-      <tr>
-        <th>#passed test runs</th>
-        {% for arch in release_arches[r]|sort %}<td>{{data[r][arch]['passruns']}}</td>{% endfor %}
-      </tr>
+          <tr>
+            <th>#passed test runs</th>
+            {% for arch in release_arches[r]|sort %}<td>{{data[r][arch]['passruns']}}</td>{% endfor %}
+          </tr>
 
-      <tr>
-        <th>#failed test runs</th>
-        {% for arch in release_arches[r]|sort %}<td>{{data[r][arch]['failruns']}}</td>{% endfor %}
-      </tr>
-    </table>
+          <tr>
+            <th>#failed test runs</th>
+            {% for arch in release_arches[r]|sort %}<td>{{data[r][arch]['failruns']}}</td>{% endfor %}
+          </tr>
+        </table>
+      </div>
 
-  {% endfor %}
+    {% endfor %}
+  </div>
 
 {% endblock content %}
