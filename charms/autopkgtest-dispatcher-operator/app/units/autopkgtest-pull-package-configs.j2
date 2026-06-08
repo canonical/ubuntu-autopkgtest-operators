@@ -5,4 +5,4 @@ Description=Pull autopkgtest-package-configs
 Type=oneshot
 User={{ user }}
 EnvironmentFile=-/etc/environment.d/proxy.conf
-ExecStart=/usr/bin/git -C {{ autopkgtest_package_config_location }} pull
+ExecStart=/usr/bin/git -C {{ autopkgtest_package_configs_location }} pull
