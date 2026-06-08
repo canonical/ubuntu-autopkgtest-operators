@@ -1,0 +1,264 @@
+{% extends "browse-layout.html" %}
+{% import "macros.html" as macros %}
+
+{% block content %}
+  <h2>Request test run</h2>
+
+  <div class="row">
+    <div class="col-md-8 col-lg-6">
+      <div id="alert-container" class="mb-3"></div>
+
+      <form id="test-request-form" novalidate>
+        <div class="mb-3">
+          <label for="package" class="form-label">
+            Package <span class="text-danger">*</span>
+          </label>
+          <input type="text"
+                 class="form-control"
+                 id="package"
+                 name="package"
+                 placeholder="e.g. sed"
+                 required>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">
+            Trigger <span class="text-danger">*</span>
+          </label>
+          <div id="trigger-fields">
+            <input type="text"
+                   class="form-control"
+                   name="trigger"
+                   placeholder="e.g. sed/4.9-3"
+                   required>
+          </div>
+          <div class="form-text">Format: sourcepackage/version</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">PPA</label>
+          <div id="ppa-fields">
+            <input type="text"
+                   class="form-control"
+                   name="ppa"
+                   placeholder="e.g. team/ppa-name">
+          </div>
+          <div class="form-text">Optional. Format: team/ppa-name</div>
+        </div>
+
+        <div class="mb-3">
+          <label for="release" class="form-label">
+            Release <span class="text-danger">*</span>
+          </label>
+          <select class="form-select" id="release" name="release" required>
+            <option value="">Select a release...</option>
+            {% for release in release_arches.keys() | sort | reverse %}
+              <option value="{{ release }}">{{ release }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <label class="form-label mb-0">
+              Architectures <span class="text-danger">*</span>
+            </label>
+            <div class="btn-group btn-group-sm" id="arch-select-buttons">
+              <button type="button"
+                      class="btn btn-outline-secondary"
+                      id="arch-all"
+                      onclick="setAllArches(true)">All</button>
+              <button type="button"
+                      class="btn btn-outline-secondary"
+                      id="arch-none"
+                      onclick="setAllArches(false)">None</button>
+            </div>
+          </div>
+          <div id="arch-checkboxes" class="d-flex flex-wrap gap-3">
+            <span class="text-muted fst-italic">Select a release first</span>
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <div class="form-check">
+            <input class="form-check-input"
+                   type="checkbox"
+                   id="all-proposed"
+                   name="all-proposed"
+                   value="1">
+            <label class="form-check-label" for="all-proposed">All proposed</label>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="submit-btn">Submit</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const releaseArches = {{ release_arches | tojson }};
+    const releaseSelect = document.getElementById('release');
+    const archCheckboxesDiv = document.getElementById('arch-checkboxes');
+
+    function updateArches() {
+      const release = releaseSelect.value;
+      const arches = releaseArches[release] || [];
+
+      if (arches.length === 0) {
+        archCheckboxesDiv.innerHTML = '<span class="text-muted fst-italic">Select a release first</span>';
+        updateArchButtons();
+        return;
+      }
+
+      archCheckboxesDiv.innerHTML = arches.map(arch => `
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="arch-${arch}" name="arch" value="${arch}" checked>
+          <label class="form-check-label" for="arch-${arch}">${arch}</label>
+        </div>
+      `).join('');
+
+      archCheckboxesDiv.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', updateArchButtons);
+      });
+
+      updateArchButtons();
+    }
+
+    function updateArchButtons() {
+      const checkboxes = [...archCheckboxesDiv.querySelectorAll('input[type="checkbox"]')];
+      const allChecked = checkboxes.length > 0 && checkboxes.every(cb => cb.checked);
+      const noneChecked = checkboxes.every(cb => !cb.checked);
+      document.getElementById('arch-all').disabled = allChecked || checkboxes.length === 0;
+      document.getElementById('arch-none').disabled = noneChecked || checkboxes.length === 0;
+    }
+
+    function setAllArches(checked) {
+      archCheckboxesDiv.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.checked = checked;
+      });
+      updateArchButtons();
+    }
+
+    releaseSelect.addEventListener('change', updateArches);
+    updateArches();
+
+    function setupDynamicFields(containerId, placeholder) {
+      const container = document.getElementById(containerId);
+
+      function syncFields() {
+        const inputs = [...container.querySelectorAll('input')];
+
+        // remove trailing empty fields
+        for (let i = inputs.length - 1; i > 0; i--) {
+          if (!inputs[i].value.trim()) {
+            container.removeChild(inputs[i]);
+          } else {
+            break;
+          }
+        }
+
+        // add a new empty field if the last one has content
+        const remaining = container.querySelectorAll('input');
+        const lastInput = remaining[remaining.length - 1];
+        if (lastInput.value.trim()) {
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'form-control mt-2';
+          input.name = lastInput.name;
+          input.placeholder = placeholder;
+          input.addEventListener('input', syncFields);
+          container.appendChild(input);
+        }
+      }
+
+      container.querySelector('input').addEventListener('input', syncFields);
+      syncFields();
+    }
+
+    setupDynamicFields('trigger-fields', 'e.g. sourcepackage/version');
+    setupDynamicFields('ppa-fields', 'e.g. team/ppa-name');
+
+    function showAlert(type, message) {
+      const container = document.getElementById('alert-container');
+      container.innerHTML = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+          ${message}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      `;
+      container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    document.getElementById('test-request-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const checkedArches = document.querySelectorAll('input[name="arch"]:checked');
+      if (checkedArches.length === 0) {
+        showAlert('danger', 'Please select at least one architecture.');
+        return;
+      }
+
+      const formData = new FormData(this);
+
+      // filter empty trigger and ppa values
+      for (const field of ['trigger', 'ppa']) {
+        const values = formData.getAll(field).filter(v => v.trim());
+        formData.delete(field);
+        values.forEach(v => formData.append(field, v));
+      }
+
+      // turn params into valid url format
+      const params = new URLSearchParams(formData);
+
+      const submitBtn = document.getElementById('submit-btn');
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Submitting...';
+
+      try {
+        const response = await fetch('{{ base_url }}request.cgi?' + params.toString(), {
+          credentials: 'same-origin',
+        });
+        const html = await response.text();
+
+        if (response.ok) {
+          showAlert('success', 'Test request submitted successfully.');
+        } else if (response.status === 403) {
+          showAlert('danger', 'You must be logged in to submit a test request.');
+        } else {
+          // try to extract error message from the response page
+          // TODO: change the result page to return json on error to avoid this
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, 'text/html');
+          const paragraphs = [...doc.querySelectorAll('p')];
+          const prefix = 'You submitted an invalid request';
+          let message = '';
+
+          for (let i = 0; i < paragraphs.length; i++) {
+            const text = paragraphs[i].textContent.trim();
+            if (text.startsWith(prefix)) {
+              // "You submitted an invalid request: <message>"
+              const after = text.slice(prefix.length).replace(/^:\s*/, '');
+              if (after) {
+                message = after;
+              } else {
+                // details are in the subsequent paragraphs
+                message = paragraphs.slice(i + 1)
+                  .map(p => p.textContent.trim())
+                  .filter(Boolean)
+                  .join(' ');
+              }
+              break;
+            }
+          }
+
+          showAlert('danger', message || 'An unknown error occurred.');
+        }
+      } catch (err) {
+        showAlert('danger', 'Failed to submit request: ' + err.message);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = 'Submit';
+      }
+    });
+  </script>
+{% endblock content %}

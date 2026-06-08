@@ -707,6 +707,26 @@ def recent():
         )
 
 
+@app.route("/request")
+def test_request_form():
+    release_arches = {}
+    for release in CONFIG["releases"]:
+        arches = [
+            r[0]
+            for r in db_con.execute(
+                "SELECT DISTINCT arch FROM test WHERE release=? ORDER BY arch",
+                (release,),
+            )
+        ]
+        if arches:
+            release_arches[release] = arches
+
+    return render(
+        "browse-request.html",
+        release_arches=release_arches,
+    )
+
+
 # backwards-compatible path with debci that specifies the source hash
 @app.route("/packages/<package>/<release>/<arch>")
 @app.route("/packages/<_>/<package>/<release>/<arch:arch>")
