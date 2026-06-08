@@ -42,6 +42,7 @@ PACKAGES = [
     "fonts-fork-awesome",
     "libjs-bootstrap5",
     "libjs-jquery",
+    "node-popper2",
     "amqp-tools",
     "git",
     "jq",
@@ -117,6 +118,7 @@ def install() -> None:
     )
     os.symlink(Path("/usr/share/javascript/bootstrap5"), WWW_DIR / "static/bootstrap")
     os.symlink(Path("/usr/share/javascript/jquery"), WWW_DIR / "static/jquery")
+    os.symlink(Path("/usr/share/javascript/popperjs2"), WWW_DIR / "static/popperjs2")
     os.symlink(Path("/usr/share/fonts-fork-awesome"), WWW_DIR / "static/fork-awesome")
     os.symlink(DATA_DIR / "running.json", WWW_DIR / "static/running.json")
     os.symlink(PUBLIC_DATA_DIR / "autopkgtest.db", WWW_DIR / "static/autopkgtest.db")
