@@ -79,9 +79,25 @@
                   <a class="nav-link" href="{{base_url}}request.cgi?/login">Login</a>
                 </li>
               {% else %}
-                <li class="nav-item">
-                  <a class="nav-link"
-                     href="{{ base_url }}user/{{ session.get("nickname") }}">{{ session.get("nickname") }}</a>
+                <li class="nav-item dropdown">
+                  <a class="nav-link dropdown-toggle"
+                     href="#"
+                     role="button"
+                     data-bs-toggle="dropdown"
+                     data-bs-display="static"
+                     aria-expanded="false">{{ session.get("nickname") }}</a>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                      <a class="dropdown-item"
+                         href="{{ base_url }}user/{{ session.get("nickname") }}">Test history</a>
+                    </li>
+                    <li>
+                      <hr class="dropdown-divider">
+                    </li>
+                    <li>
+                      <a class="dropdown-item" href="{{ base_url }}logout">Logout</a>
+                    </li>
+                  </ul>
                 </li>
               {% endif %}
               <li class="nav-item">
@@ -113,6 +129,7 @@
     </footer>
 
     <script type="text/javascript" src="{{static_url}}jquery/jquery.min.js"></script>
+    <script type="text/javascript" src="{{static_url}}popperjs2/popper.min.js"></script>
     <script type="text/javascript"
             src="{{static_url}}bootstrap/js/bootstrap.bundle.min.js"></script>
     <script type="text/javascript">
