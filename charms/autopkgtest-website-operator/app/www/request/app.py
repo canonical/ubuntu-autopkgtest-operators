@@ -272,30 +272,44 @@ def index_root():
         s = Submit()
         if list(params.keys()) == ["/login", "requester"]:
             return redirect("/")
-        try:
-            s.validate_args(params)
-            s.validate_distro_request(**params)
-        except WebControlException as e:
-            return invalid(e, e.exit_code())
 
-        if params.get("ppas"):
-            s.send_amqp_request(context="ppa", **params)
-        else:
-            s.send_amqp_request(**params)
-        # add link to result page for Ubuntu results
-        if not params.get("ppas"):
-            url = os.path.join(
-                request.host_url,
-                "packages",
-                params["package"],
-                params["release"],
-                params["arch"],
-            )
-            params["Result history"] = f'<a href="{url}">{url}</a>'
+        arches = [a for a in request.args.getlist("arch")]
+
+        result_urls = []
+        for arch in arches:
+            request_params = dict(params)
+            request_params["arch"] = arch
+            try:
+                s.validate_args(request_params)
+                s.validate_distro_request(**request_params)
+            except WebControlException as e:
+                return invalid(e, e.exit_code())
+
+            if request_params.get("ppas"):
+                s.send_amqp_request(context="ppa", **request_params)
+            else:
+                s.send_amqp_request(**request_params)
+
+            if not request_params.get("ppas"):
+                url = os.path.join(
+                    request.host_url,
+                    "packages",
+                    request_params["package"],
+                    request_params["release"],
+                    arch,
+                )
+                result_urls.append(f'<a href="{url}">{url}</a>')
+
+        display_params = dict(params)
+        display_params["arch"] = ", ".join(arches)
+        if result_urls:
+            display_params["Result history"] = "<br>".join(result_urls)
         success = SUCCESS.format(
-            EMPTY.join(ROW.format(key, val) for key, val in sorted(params.items()))
+            EMPTY.join(
+                ROW.format(key, val) for key, val in sorted(display_params.items())
+            )
         )
-        return HTML.format(LOGOUT + success).format(**ChainMap(session, params))
+        return HTML.format(LOGOUT + success).format(**ChainMap(session, display_params))
     else:
         return HTML.format(LOGIN).format(**session), 403
 

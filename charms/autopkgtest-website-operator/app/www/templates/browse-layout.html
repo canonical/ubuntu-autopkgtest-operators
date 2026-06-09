@@ -1,3 +1,4 @@
+{% import "macros.html" as macros %}
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -5,71 +6,180 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ubuntu Autopkgtest Results {{title_suffix}}</title>
+    <link rel="icon"
+          type="image/svg+xml"
+          href="{{ macros.ubuntu_logo_favicon() }}" />
     <link rel="stylesheet"
           type="text/css"
           href="{{static_url}}bootstrap/css/bootstrap.css" />
     <link rel="stylesheet"
           type="text/css"
-          href="{{static_url}}bootstrap/css/bootstrap-theme.css" />
+          href="{{static_url}}fork-awesome/css/fork-awesome.css" />
     <link rel="stylesheet" type="text/css" href="{{static_url}}style.css" />
+    <script type="text/javascript">
+      window.isDarkMode = localStorage.getItem('darkMode') === 'true' ||
+                          (localStorage.getItem('darkMode') === null &&
+                           window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (window.isDarkMode) {
+        document.documentElement.setAttribute('data-bs-theme', 'dark');
+      }
+    </script>
   </head>
   <body>
     <div id="wrap">
 
       <!-- Fixed navbar -->
-      <div class="navbar navbar-default">
+      <nav class="navbar navbar-expand-lg">
         <div class="container">
-          <div class="navbar-header">
-            <button type="button"
-                    class="navbar-toggle"
-                    data-toggle="collapse"
-                    data-target=".navbar-collapse">
-              <span class="icon-bar"></span>
-              <span class="icon-bar"></span>
-              <span class="icon-bar"></span>
-            </button>
-            <a class="navbar-brand" href="{{base_url}}">Ubuntu Autopkgtest</a>
-          </div>
-          <div class="collapse navbar-collapse">
+          <a class="navbar-brand" href="{{base_url}}">
+            {{ macros.ubuntu_logo() }}
+            Ubuntu Autopkgtest
+          </a>
+          <button type="button"
+                  class="navbar-toggler"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#navbar-collapse">
+            <span class="navbar-toggler-icon"></span>
+          </button>
+          <div class="collapse navbar-collapse" id="navbar-collapse">
             <ul class="nav navbar-nav">
-              <li>
-                <a href="{{base_url}}">Home</a>
+              <li class="nav-item">
+                <a class="nav-link" href="{{base_url}}">Home</a>
               </li>
-              <li>
-                <a href="{{base_url}}running">Running</a>
+              <li class="nav-item">
+                <a class="nav-link" href="{{base_url}}running">Running</a>
               </li>
-              <li>
-                <a href="{{base_url}}recent">Recent</a>
+              <li class="nav-item">
+                <a class="nav-link" href="{{base_url}}recent">Recent</a>
               </li>
-              <li>
-                <a href="{{base_url}}statistics">Statistics</a>
+              <li class="nav-item">
+                <a class="nav-link" href="{{base_url}}request">Request</a>
               </li>
-              <li>
-                <a href="https://wiki.ubuntu.com/ProposedMigration#autopkgtests">Documentation</a>
+              <li class="nav-item">
+                <a class="nav-link" href="{{base_url}}statistics">Statistics</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link"
+                   href="https://documentation.ubuntu.com/project/how-ubuntu-is-made/processes/automatic-package-testing-autopkgtest/">Documentation</a>
+              </li>
+            </ul>
+            <ul class="nav navbar-nav ms-auto">
+              <li class="nav-item me-3 d-flex align-items-center">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text"><i class="fa fa-search"></i></span>
+                  <input type="text"
+                         id="package-search"
+                         class="form-control"
+                         placeholder="Go to package..."
+                         aria-label="Go to package">
+                </div>
               </li>
               {% if not session.get("nickname") %}
-                <li>
-                  <a href="{{base_url}}request.cgi?/login">Login</a>
+                <li class="nav-item">
+                  <a class="nav-link" href="{{base_url}}request.cgi?/login">Login</a>
                 </li>
               {% else %}
-                <li>
-                  <a href="{{ base_url }}user/{{ session.get("nickname") }}">{{ session.get("nickname") }}</a>
+                <li class="nav-item dropdown">
+                  <a class="nav-link dropdown-toggle"
+                     href="#"
+                     role="button"
+                     data-bs-toggle="dropdown"
+                     data-bs-display="static"
+                     aria-expanded="false">{{ session.get("nickname") }}</a>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                      <a class="dropdown-item"
+                         href="{{ base_url }}user/{{ session.get("nickname") }}">Test history</a>
+                    </li>
+                    <li>
+                      <hr class="dropdown-divider">
+                    </li>
+                    <li>
+                      <a class="dropdown-item" href="{{ base_url }}logout">Logout</a>
+                    </li>
+                  </ul>
                 </li>
               {% endif %}
+              <li class="nav-item">
+                <button class="nav-link btn btn-link"
+                        id="dark-mode-toggle"
+                        aria-label="Toggle dark mode"></button>
+                <script>document.getElementById('dark-mode-toggle').innerHTML = window.isDarkMode ? '<i class="fa fa-sun-o"></i>' : '<i class="fa fa-moon-o"></i>';</script>
+              </li>
             </ul>
           </div>
-          <!--/.nav-collapse -->
         </div>
-      </div>
+      </nav>
     </div>
 
-    <div class="container">
+    <div class="container mt-4">
       {% block content %}
       {% endblock content %}
     </div>
 
+    <footer class="mt-5 py-4 border-top">
+      <div class="container">
+        <div class="row text-muted">
+          <p>
+            Ubuntu Autopkgtest - Copyright &copy; 2025-2026 Canonical. This is free software licensed under the GNU General Public License version 3 or later.
+            Source code on <a href="https://www.github.com/canonical/ubuntu-autopkgtest-operators">GitHub</a>.
+          </p>
+        </div>
+      </div>
+    </footer>
+
     <script type="text/javascript" src="{{static_url}}jquery/jquery.min.js"></script>
+    <script type="text/javascript" src="{{static_url}}popperjs2/popper.min.js"></script>
     <script type="text/javascript"
-            src="{{static_url}}bootstrap/js/bootstrap.min.js"></script>
+            src="{{static_url}}bootstrap/js/bootstrap.bundle.min.js"></script>
+    <script type="text/javascript">
+      const darkModeToggle = document.getElementById('dark-mode-toggle');
+      const htmlElement = document.documentElement;
+      const packageSearch = document.getElementById('package-search');
+
+      darkModeToggle.addEventListener('click', () => {
+        const currentTheme = htmlElement.getAttribute('data-bs-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        htmlElement.setAttribute('data-bs-theme', newTheme);
+        localStorage.setItem('darkMode', newTheme === 'dark');
+        darkModeToggle.innerHTML = newTheme === 'dark' ?
+          '<i class="fa fa-sun-o"></i>' :
+          '<i class="fa fa-moon-o"></i>';
+      });
+
+      packageSearch.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const packageName = packageSearch.value.trim();
+          if (packageName) {
+            window.location.href = '{{base_url}}packages/' + encodeURIComponent(packageName);
+          }
+        }
+      });
+
+      document.addEventListener('keydown', (e) => {
+         const el = document.activeElement;
+         const isTypingField = el && (
+           el.tagName === 'INPUT' ||
+           el.tagName === 'TEXTAREA' ||
+           el.tagName === 'SELECT' ||
+           el.isContentEditable
+         );
+         if (e.key === '/' && !isTypingField) {
+          e.preventDefault();
+          packageSearch.focus();
+        }
+      });
+
+      const currentPath = window.location.pathname;
+      document.querySelectorAll('.nav-link').forEach(link => {
+        const href = link.getAttribute('href');
+        if (href) {
+          const linkPath = new URL(href, window.location.origin).pathname;
+          if (currentPath === linkPath) {
+            link.classList.add('active');
+          }
+        }
+      });
+    </script>
   </body>
 </html>

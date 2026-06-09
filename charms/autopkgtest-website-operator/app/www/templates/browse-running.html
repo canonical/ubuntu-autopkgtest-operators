@@ -2,7 +2,7 @@
 {% import "macros.html" as macros %}
 
 {% block content %}
-  <h1 class="page-header">Running and queued tests</h1>
+  <h1 id="running-and-queued">Running and queued tests</h1>
   <p>The data displayed on this page is refreshed approximately every 30 seconds.</p>
 
   <h2>Queue lengths</h2>
@@ -11,31 +11,33 @@
     that release and architecture which are waiting to be run.
   </p>
 
-  {% for context in queues_info.keys() %}
-    <table class="table-condensed table-striped"
-           style="display: inline-block;
-                  padding-right: 30px">
-      <tr>
-        <th>{{ context }}</th>
-        {% for a in arches %}<th>{{ a }}</th>{% endfor %}
-      </tr>
+  <div class="row">
+    {% for context in queues_info.keys() %}
+      <div class="col-auto mb-3">
+        <table class="table table-sm table-striped">
+          <tr>
+            <th>{{ context }}</th>
+            {% for a in arches %}<th>{{ a }}</th>{% endfor %}
+          </tr>
 
-      {% for r in releases %}
-        <tr>
-          <td>{{ r }}</td>
-          {% for a in arches %}
-            <td>
-              {% if queues_lengths[context][r][a] %}
-                <a href="#queue-{{ context }}-{{ r }}-{{ a }}">{{ queues_lengths[context][r][a] }}</a>
-              {% else %}
-                -
-              {% endif %}
-            </td>
+          {% for r in releases %}
+            <tr>
+              <td>{{ r }}</td>
+              {% for a in arches %}
+                <td>
+                  {% if queues_lengths[context][r][a] %}
+                    <a href="#queue-{{ context }}-{{ r }}-{{ a }}">{{ queues_lengths[context][r][a] }}</a>
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              {% endfor %}
+            </tr>
           {% endfor %}
-        </tr>
-      {% endfor %}
-    </table>
-  {% endfor %}
+        </table>
+      </div>
+    {% endfor %}
+  </div>
 
   <!-- Running tests -->
   <h2>Running tests</h2>
@@ -45,7 +47,7 @@
     <p>There is currently {{running_count}} running test.</p>
   {% endif %}
   <p>Click on the package name to jump to the currently running tests of that package.</p>
-  <table class="table-condensed table-striped">
+  <table class="table table-sm table-striped">
     {% for column in running|sort|batch(3) %}
       <tr>
         {% for p in column %}

@@ -19,7 +19,8 @@
         <tr>
           <th>{{a}}</th>
           {% for r in releases %}
-            <td class="{{ results[r][a] }}">
+            <td>
+              {{ macros.status_icon(results[r][a]) }}
               <a href="{{package}}/{{r}}/{{a}}">{{ results[r][a] }}</a>
             </td>
           {% endfor %}

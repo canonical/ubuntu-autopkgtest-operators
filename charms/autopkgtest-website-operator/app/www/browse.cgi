@@ -165,7 +165,8 @@ def should_show_retry(code):
 def get_queues_info():
     """Return information about queued tests.
 
-    Return (releases, arches, context -> release -> arch -> (queue_size, [requests])).
+    Return (releases, arches, context -> release -> arch -> (queue_size, [parsed_requests])).
+    Each parsed request is a dict with keys: package, requester, submit-time, triggers
     """
     with open(CONFIG["amqp_queue_cache"]) as json_file:
         queue_info_j = json.load(json_file)
@@ -180,9 +181,23 @@ def get_queues_info():
                 for arch in queues[context][release]:
                     requests = queues[context][release][arch]["requests"]
                     size = queues[context][release][arch]["size"]
+
+                    parsed_requests = []
+                    for req in requests:
+                        try:
+                            parts = req.split("\n", 1)
+                            if len(parts) == 2:
+                                package = parts[0]
+                                req_json = json.loads(parts[1])
+                                req_json["package"] = package
+                                parsed_requests.append(req_json)
+                        except (json.JSONDecodeError, IndexError, ValueError):
+                            # skip malformed requests (like private jobs)
+                            continue
+
                     ctx.setdefault(context, {}).setdefault(release, {})[arch] = (
                         size,
-                        requests,
+                        parsed_requests,
                     )
 
         return (CONFIG["releases"], arches, ctx)
@@ -306,19 +321,17 @@ def get_queued_for_user(user: str):
                     continue
                 requests = queue_items[1]
                 for req in requests:
-                    try:
-                        req_info = json.loads(req.split("\n")[1])
-                    except (json.JSONDecodeError, IndexError):
-                        # These usually result from `private job` instances
-                        continue
-                    package = req.split("\n")[0]
-                    if req_info.get("requester", "") == user:
+                    if req.get("requester", "") == user:
+                        package = req.get("package", "")
+                        triggers = req.get("triggers", [])
+                        if isinstance(triggers, list):
+                            triggers = " ".join(triggers)
                         queued_tests.append(
                             dict(
                                 version="N/A",
-                                triggers=req_info.get("triggers"),
+                                triggers=triggers,
                                 additional_params="N/A",
-                                human_date=human_date(req_info.get("submit-time")),
+                                human_date=human_date(req.get("submit-time")),
                                 human_sec="N/A",
                                 requester=user,
                                 code="queued",
@@ -343,10 +356,13 @@ def get_running_for_user(user: str):
                         continue
                     info_dict = list_of_running_items[0]
                     if info_dict.get("requester", "") == user:
+                        triggers = info_dict.get("triggers", "")
+                        if isinstance(triggers, list):
+                            triggers = " ".join(triggers)
                         running_tests.append(
                             dict(
                                 version="N/A",
-                                triggers=info_dict.get("triggers"),
+                                triggers=triggers,
                                 additional_params="N/A",
                                 human_date=human_date(info_dict.get("submit-time")),
                                 human_sec=human_sec(int(list_of_running_items[1])),
@@ -381,10 +397,30 @@ def index_root():
         res = hc if "code" not in hc else "fail"
         recent.append((res, row[1], row[2], row[3], row[4], row[5]))
 
+    running_info = get_running_jobs()
+    (_, _, queues_info) = get_queues_info()
+
+    running_per_arch = {}
+    for _, runhashes in running_info.items():
+        for _, releases in runhashes.items():
+            for _, archs in releases.items():
+                for arch, tests in archs.items():
+                    running_per_arch.setdefault(arch, 0)
+                    running_per_arch[arch] += 1
+
+    queued_per_arch = {}
+    for _, releases in queues_info.items():
+        for _, archs in releases.items():
+            for arch, (_, tests) in archs.items():
+                queued_per_arch.setdefault(arch, 0)
+                queued_per_arch[arch] += len(tests)
+
     return render(
         "browse-home.html",
         recent_runs=recent,
         alert=alert,
+        running_per_arch=running_per_arch,
+        queued_per_arch=queued_per_arch,
     )
 
 
@@ -414,7 +450,7 @@ def package_overview(package, _=None):
                     filtered_requests = [
                         r
                         for r in queue[release][arch][1]
-                        if r.startswith(package + "\n")
+                        if r.get("package") == package
                     ]
                     queues_info[queue_name][release][arch] = (
                         len(filtered_requests),  # update the size too
@@ -607,7 +643,8 @@ def list_ppa_runs(user, ppa):
 
     return render(
         "browse-ppa.html",
-        ppa_name=f"{user}/{ppa}",
+        user=user,
+        ppa=ppa,
         test_runs=test_runs,
     )
 
@@ -668,6 +705,26 @@ def recent():
             arch=arch or "",
             release=release or "",
         )
+
+
+@app.route("/request")
+def test_request_form():
+    release_arches = {}
+    for release in CONFIG["releases"]:
+        arches = [
+            r[0]
+            for r in db_con.execute(
+                "SELECT DISTINCT arch FROM test WHERE release=? ORDER BY arch",
+                (release,),
+            )
+        ]
+        if arches:
+            release_arches[release] = arches
+
+    return render(
+        "browse-request.html",
+        release_arches=release_arches,
+    )
 
 
 # backwards-compatible path with debci that specifies the source hash
@@ -782,19 +839,18 @@ def package_release_arch(package, release, arch, _=None):
         for _, queue in queues_info.items():
             queue_items = queue.get(release, {}).get(arch, [0, []])[1]
             for item in queue_items:
-                if item.startswith(package + "\n"):
-                    item_info = json.loads(item.split("\n")[1])
+                if item.get("package") == package:
                     results.insert(
                         0,
                         dict(
                             version="N/A",
-                            triggers=item_info.get("triggers"),
+                            triggers=item.get("triggers"),
                             additional_params=(
                                 "all-proposed=1"
-                                if "all-proposed" in item_info.keys()
+                                if "all-proposed" in item.keys()
                                 else ""
                             ),
-                            human_date=human_date(item_info.get("submit-time")),
+                            human_date=human_date(item.get("submit-time")),
                             human_sec="N/A",
                             requester="-",
                             code="queued",
@@ -995,7 +1051,9 @@ def running():
     packages = running_info.keys()
     running_count = 0
     for pkg in packages:
-        running_count += len(running_info[pkg].keys())
+        for runhash in running_info[pkg]:
+            for release in running_info[pkg][runhash]:
+                running_count += len(running_info[pkg][runhash][release])
 
     return render(
         "browse-running.html",
