@@ -19,9 +19,9 @@ USER = "ubuntu"
 AUTOPKGTEST_REPO = "https://salsa.debian.org/ubuntu-ci-team/autopkgtest.git"
 AUTOPKGTEST_LOCATION = Path(f"~{USER}/autopkgtest").expanduser()
 
-AUTOPKGTEST_PACKAGE_CONFIG_REPO = "https://git.launchpad.net/~ubuntu-release/autopkgtest-cloud/+git/autopkgtest-package-configs"
-AUTOPKGTEST_PACKAGE_CONFIG_BRANCH = "main"
-AUTOPKGTEST_PACKAGE_CONFIG_LOCATION = Path(
+AUTOPKGTEST_PACKAGE_CONFIGS_REPO = "https://git.launchpad.net/~ubuntu-release/autopkgtest-cloud/+git/autopkgtest-package-configs"
+AUTOPKGTEST_PACKAGE_CONFIGS_BRANCH = "main"
+AUTOPKGTEST_PACKAGE_CONFIGS_LOCATION = Path(
     f"~{USER}/autopkgtest-package-configs"
 ).expanduser()
 
@@ -92,7 +92,7 @@ def write_worker_config(releases):
                 f"""\
                 [autopkgtest]
                 checkout_dir = {AUTOPKGTEST_LOCATION}
-                per_package_config_dir = {AUTOPKGTEST_PACKAGE_CONFIG_LOCATION}
+                per_package_config_dir = {AUTOPKGTEST_PACKAGE_CONFIGS_LOCATION}
                 releases = {" ".join(releases)}
                 extra_args = {" ".join(extra_args)}
                 setup_command =
@@ -191,9 +191,9 @@ def install(autopkgtest_branch, releases):
             AUTOPKGTEST_LOCATION,
         ),
         (
-            AUTOPKGTEST_PACKAGE_CONFIG_REPO,
-            AUTOPKGTEST_PACKAGE_CONFIG_BRANCH,
-            AUTOPKGTEST_PACKAGE_CONFIG_LOCATION,
+            AUTOPKGTEST_PACKAGE_CONFIGS_REPO,
+            AUTOPKGTEST_PACKAGE_CONFIGS_BRANCH,
+            AUTOPKGTEST_PACKAGE_CONFIGS_LOCATION,
         ),
     ]:
         shutil.rmtree(location, ignore_errors=True)
@@ -223,7 +223,7 @@ def install(autopkgtest_branch, releases):
         "user": USER,
         "conf_directory": CONF_DIRECTORY,
         "rabbitmq_creds_path": RABBITMQ_CREDS_PATH,
-        "autopkgtest_package_config_location": AUTOPKGTEST_PACKAGE_CONFIG_LOCATION,
+        "autopkgtest_package_configs_location": AUTOPKGTEST_PACKAGE_CONFIGS_LOCATION,
     }
     for unit in units_to_install:
         if unit.endswith(".j2"):
