@@ -27,6 +27,7 @@ CHARM_TOOLS_DEST = Path("/usr/local/bin")
 
 CONF_DIRECTORY = Path("/etc/autopkgtest-janitor")
 RABBITMQ_CREDS_PATH = CONF_DIRECTORY / "rabbitmq.cred"
+POSTGRESQL_CREDS_PATH = CONF_DIRECTORY / "postgres.cred"
 TARGETS_PATH = CONF_DIRECTORY / "targets.conf"
 
 AUTOPKGTEST_REPO = "https://salsa.debian.org/ubuntu-ci-team/autopkgtest.git"
@@ -50,6 +51,7 @@ VM_ARCHITECTURES = ["amd64", "amd64v3", "s390x"]
 
 DEB_DEPENDENCIES = [
     "python3-pika",
+    "python3-psycopg",
     "distro-info",
     "retry",
 ]
@@ -223,6 +225,21 @@ def write_rabbitmq_creds(hostname, username, password):
         )
 
 
+def write_postgres_creds(hostname, username, password, database_name):
+    """Set postgres creds."""
+    with open(POSTGRESQL_CREDS_PATH, "w") as file:
+        file.write(
+            dedent(
+                f"""\
+                POSTGRES_HOST="{hostname}"
+                POSTGRES_USER="{username}"
+                POSTGRES_PASSWORD="{password}"
+                POSTGRES_DATABASE="{database_name}"
+                """
+            )
+        )
+
+
 def install_systemd_units(mirror):
     logger.info("installing systemd units")
     units_path = CHARM_APP_DATA / "units"
@@ -336,13 +353,24 @@ def configure(
     amqp_hostname,
     amqp_username,
     amqp_password,
+    postgresql_hostname,
+    postgresql_username,
+    postgresql_password,
+    postgresql_database_name,
 ):
     configure_unprivileged_user()
     update_distro_info_data()
     update_autopkgtest(autopkgtest_branch)
     write_available_release_arch(remotes, target_releases)
     write_rabbitmq_creds(amqp_hostname, amqp_username, amqp_password)
+    write_postgres_creds(
+        postgresql_hostname,
+        postgresql_username,
+        postgresql_password,
+        postgresql_database_name,
+    )
     install_systemd_units(mirror)
+    systemd.service_enable("--now", "autopkgtest-db-init.service")
     configure_builder_units(remotes, stored_releases, target_releases)
 
 
