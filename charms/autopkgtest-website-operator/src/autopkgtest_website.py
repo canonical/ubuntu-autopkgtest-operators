@@ -105,7 +105,7 @@ def install() -> None:
     # data
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     shutil.chown(DATA_DIR, user=USER, group=GROUP)
-    # public data
+    # public data (sqlite snapshot served as static download)
     PUBLIC_DATA_DIR.mkdir(exist_ok=True)
     shutil.chown(PUBLIC_DATA_DIR, user=USER, group=GROUP)
     # tools
