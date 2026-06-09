@@ -1,0 +1,78 @@
+#!/usr/bin/python3
+
+"""Initialize the autopkgtest PostgreSQL database schema.
+
+This is a oneshot script that creates the required tables and indexes
+if they don't exist, then exits. It is run by the janitor charm on
+every configure cycle; the actual writing of test results is performed
+by the dispatcher's worker process directly.
+
+Connection credentials are read from the environment (supplied by the
+autopkgtest-db-init.service EnvironmentFile pointing at postgres.cred).
+"""
+
+import logging
+import os
+import sys
+
+import psycopg
+
+
+def init_db():
+    """Connect to PostgreSQL and ensure schema exists."""
+    db_uri = "postgresql://{user}:{password}@{host}/{database}".format(
+        user=os.environ["POSTGRES_USER"],
+        password=os.environ["POSTGRES_PASSWORD"],
+        host=os.environ["POSTGRES_HOST"],
+        database=os.environ["POSTGRES_DATABASE"],
+    )
+
+    db = psycopg.connect(db_uri)
+    c = db.cursor()
+
+    # Create the result table if it doesn't exist.
+    # release/arch/package are stored directly rather than via a normalized
+    # `test` lookup table: they are short strings, the surrogate id was never
+    # exposed outside the database, and every read query was joining `test`
+    # purely for projection.
+    c.execute(
+        "CREATE TABLE IF NOT EXISTS result ("
+        "  release VARCHAR(20) NOT NULL, "
+        "  arch VARCHAR(20) NOT NULL, "
+        "  package VARCHAR(120) NOT NULL, "
+        "  run_id VARCHAR(30) NOT NULL, "
+        "  version VARCHAR(200), "
+        "  triggers TEXT, "
+        "  duration INTEGER, "
+        "  exitcode INTEGER, "
+        "  requester TEXT, "
+        "  env TEXT, "
+        "  PRIMARY KEY(release, arch, package, run_id))"
+    )
+    # Indexes:
+    #   - PRIMARY KEY (release, arch, package, run_id) covers point lookups
+    #     (display_run_summary), per-test history (package_release_arch),
+    #     prefix scans on release (get_release_arches), and uniqueness.
+    #   - result_run_ix supports ORDER BY run_id DESC LIMIT N (home page,
+    #     /recent, /api/experimental/recent.json, /user/<user>/).
+    #   - result_requester_idx supports the per-user filter.
+    #   - result_package_ix supports /packages/<package> which filters on
+    #     package alone (the PK starts with release, so it can't serve this).
+    c.execute("CREATE INDEX IF NOT EXISTS result_run_ix ON result(run_id DESC)")
+    c.execute("CREATE INDEX IF NOT EXISTS result_requester_idx ON result(requester)")
+    c.execute("CREATE INDEX IF NOT EXISTS result_package_ix ON result(package)")
+    db.commit()
+
+    db.close()
+    logging.info("Database schema initialized successfully")
+
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=(logging.DEBUG if "DEBUG" in os.environ else logging.INFO)
+    )
+    try:
+        init_db()
+    except psycopg.Error as e:
+        logging.error(f"Database initialization failed: {e}")
+        sys.exit(1)
