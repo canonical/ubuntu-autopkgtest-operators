@@ -107,30 +107,15 @@
                    id="queue-{{ queue_name }}-{{ r }}-{{ a }}">
               <thead>
                 <tr>
-                  <th colspan="4" class="sticky-table-headers">
-                    <h3 style="margin: 0;">Queued tests for {{ queue_name }} {{ r }} {{ a }}</h3>
+                  <th class="sticky-table-headers">
+                    <h3>Queued tests for {{ queue_name }} {{ r }} {{ a }}</h3>
                   </th>
-                </tr>
-                <tr>
-                  <th>Package</th>
-                  <th>Triggers</th>
-                  <th>Submit Time</th>
-                  <th>Requester</th>
                 </tr>
               </thead>
               <tbody>
                 {% for req in reqs %}
                   <tr>
-                    <td>{{ req.package }}</td>
-                    <td>{{ req.get('triggers', []) | join(", ") }}</td>
-                    <td>{{ req.get('submit-time', '-') }}</td>
-                    <td>
-                      {% if req.get("requester") %}
-                        <a href="https://launchpad.net/~{{ req.requester }}">{{ req.requester }}</a>
-                      {% else %}
-                        -
-                      {% endif %}
-                    </td>
+                    <td>{{ req }}</td>
                   </tr>
                 {% endfor %}
               </tbody>

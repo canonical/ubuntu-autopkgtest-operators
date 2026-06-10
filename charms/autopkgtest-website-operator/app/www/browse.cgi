@@ -165,8 +165,7 @@ def should_show_retry(code):
 def get_queues_info():
     """Return information about queued tests.
 
-    Return (releases, arches, context -> release -> arch -> (queue_size, [parsed_requests])).
-    Each parsed request is a dict with keys: package, requester, submit-time, triggers
+    Return (releases, arches, context -> release -> arch -> (queue_size, [requests])).
     """
     with open(CONFIG["amqp_queue_cache"]) as json_file:
         queue_info_j = json.load(json_file)
@@ -181,23 +180,9 @@ def get_queues_info():
                 for arch in queues[context][release]:
                     requests = queues[context][release][arch]["requests"]
                     size = queues[context][release][arch]["size"]
-
-                    parsed_requests = []
-                    for req in requests:
-                        try:
-                            parts = req.split("\n", 1)
-                            if len(parts) == 2:
-                                package = parts[0]
-                                req_json = json.loads(parts[1])
-                                req_json["package"] = package
-                                parsed_requests.append(req_json)
-                        except (json.JSONDecodeError, IndexError, ValueError):
-                            # skip malformed requests (like private jobs)
-                            continue
-
                     ctx.setdefault(context, {}).setdefault(release, {})[arch] = (
                         size,
-                        parsed_requests,
+                        requests,
                     )
 
         return (CONFIG["releases"], arches, ctx)
@@ -321,9 +306,14 @@ def get_queued_for_user(user: str):
                     continue
                 requests = queue_items[1]
                 for req in requests:
-                    if req.get("requester", "") == user:
-                        package = req.get("package", "")
-                        triggers = req.get("triggers", [])
+                    try:
+                        req_info = json.loads(req.split("\n")[1])
+                    except (json.JSONDecodeError, IndexError):
+                        # These usually result from `private job` instances
+                        continue
+                    package = req.split("\n")[0]
+                    if req_info.get("requester", "") == user:
+                        triggers = list(req_info.get("triggers", ""))
                         if isinstance(triggers, list):
                             triggers = " ".join(triggers)
                         queued_tests.append(
@@ -331,7 +321,7 @@ def get_queued_for_user(user: str):
                                 version="N/A",
                                 triggers=triggers,
                                 additional_params="N/A",
-                                human_date=human_date(req.get("submit-time")),
+                                human_date=human_date(req_info.get("submit-time")),
                                 human_sec="N/A",
                                 requester=user,
                                 code="queued",
@@ -450,7 +440,7 @@ def package_overview(package, _=None):
                     filtered_requests = [
                         r
                         for r in queue[release][arch][1]
-                        if r.get("package") == package
+                        if r.startswith(package + "\n")
                     ]
                     queues_info[queue_name][release][arch] = (
                         len(filtered_requests),  # update the size too
@@ -839,18 +829,19 @@ def package_release_arch(package, release, arch, _=None):
         for _, queue in queues_info.items():
             queue_items = queue.get(release, {}).get(arch, [0, []])[1]
             for item in queue_items:
-                if item.get("package") == package:
+                if item.startswith(package + "\n"):
+                    item_info = json.loads(item.split("\n")[1])
                     results.insert(
                         0,
                         dict(
                             version="N/A",
-                            triggers=item.get("triggers"),
+                            triggers=item_info.get("triggers"),
                             additional_params=(
                                 "all-proposed=1"
-                                if "all-proposed" in item.keys()
+                                if "all-proposed" in item_info.keys()
                                 else ""
                             ),
-                            human_date=human_date(item.get("submit-time")),
+                            human_date=human_date(item_info.get("submit-time")),
                             human_sec="N/A",
                             requester="-",
                             code="queued",
