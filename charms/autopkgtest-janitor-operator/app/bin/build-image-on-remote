@@ -40,7 +40,10 @@ then
 fi
 
 # If there is a minimal images for the selected base release, prefer that.
-if "$@" "$minimgremote:$base/$arch" >/dev/null 2>&1; then
+# Some known bad base/type combinations are excluded.
+if { [ "$base" != bionic ] || [ "$type" != "vm" ]; } &&
+   "$@" "$minimgremote:$base/$arch" >/dev/null 2>&1
+then
     imgremote=$minimgremote
 fi
 
