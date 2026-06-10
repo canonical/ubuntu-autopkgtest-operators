@@ -22,7 +22,7 @@ ExecStart=/bin/sh -ec '\
     exec /usr/local/bin/worker --config "{{ conf_directory }}/worker.conf" -v LXD_REMOTE="$$remote" -v NAME="$$name" -a "$$arch"'
 ExecReload=/bin/kill -HUP $MAINPID
 SuccessExitStatus=0 99 SIGTERM SIGHUP
-RestartSec=2min
+RestartSec=10min
 Restart=on-failure
 
 [Install]
