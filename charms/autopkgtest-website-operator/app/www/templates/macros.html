@@ -52,6 +52,14 @@
   {% endif %}
 {%- endmacro %}
 
+{% macro render_requester(requester) -%}
+  {% if requester and requester != "-" and requester != "" %}
+    <a href="https://launchpad.net/~{{ requester }}">{{ requester }}</a>
+  {% else %}
+    -
+  {% endif %}
+{%- endmacro %}
+
 {% macro display_running_job(package, info) -%}
   {% for runhash, relinfo in info.items() %}
     {% for release, archinfo in relinfo.items() %}
@@ -73,9 +81,7 @@
             {% if param == "requester" %}
               <tr>
                 <th>{{ param|capitalize }}:</th>
-                <td>
-                  <a href="https://launchpad.net/~{{ v }}">{{ v }}</a>
-                </td>
+                <td>{{ render_requester(v) }}</td>
               </tr>
             {% else %}
               <tr>
@@ -126,13 +132,7 @@
                     </td>
                     <td>{{ req.triggers }}</td>
                     <td>{{ req.submit_time }}</td>
-                    <td>
-                      {% if req.requester %}
-                        <a href="https://launchpad.net/~{{ req.requester }}">{{ req.requester }}</a>
-                      {% else %}
-                        -
-                      {% endif %}
-                    </td>
+                    <td>{{ render_requester(req.requester) }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -175,13 +175,7 @@
   <td>{{ env }}</td>
   <td>{{ date }}</td>
   <td>{{ duration | replace(' ', '&nbsp;') | safe }}</td>
-  <td>
-    {% if requester != None and requester != "-" and requester != "" %}
-      <a href="https://launchpad.net/~{{ requester }}">{{ requester }}</a>
-    {% else %}
-      -
-    {% endif %}
-  </td>
+  <td>{{ render_requester(requester) }}</td>
   <td class="nowrap">
     {{ status_icon(code) }}
     {% if run_id %}
