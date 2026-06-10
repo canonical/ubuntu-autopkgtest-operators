@@ -1,12 +1,12 @@
 {% extends "browse-layout.html" %}
 {% import "macros.html" as macros %}
 
-{% macro pagination(offset, limit, arch, release) -%}
+{% macro pagination(offset, limit, arch, release, result) -%}
   <ul class="pagination pagination-sm mb-0">
     {% if offset != 0 %}
       <li class="page-item">
         <a class="page-link"
-           href="?offset={{ offset - limit }}&limit={{ limit }}&arch={{ arch }}&release={{ release }}">Previous</a>
+           href="?offset={{ offset - limit }}&limit={{ limit }}&arch={{ arch }}&release={{ release }}&result={{ result }}">Previous</a>
       </li>
     {% else %}
       <li class="page-item disabled">
@@ -18,7 +18,7 @@
     </li>
     <li class="page-item">
       <a class="page-link"
-         href="?offset={{ offset + limit }}&limit={{ limit }}&arch={{ arch }}&release={{ release }}">Next</a>
+         href="?offset={{ offset + limit }}&limit={{ limit }}&arch={{ arch }}&release={{ release }}&result={{ result }}">Next</a>
     </li>
   </ul>
 {%- endmacro %}
@@ -94,13 +94,22 @@
           {% endfor %}
         </select>
       </div>
+      <div class="col-auto d-flex align-items-center gap-2">
+        <label for="result" class="form-label mb-0 text-nowrap">Test result:</label>
+        <select name="result" id="result" class="form-select form-select-sm">
+          <option value=""></option>
+          {% for r in results %}
+            <option value="{{ r }}" {% if result == r %}selected="selected"{% endif %}>{{ r }}</option>
+          {% endfor %}
+        </select>
+      </div>
       <div class="col-auto d-flex align-items-center">
         <button type="submit" class="btn btn-primary btn-sm">Show</button>
       </div>
       {% if recent_test_results %}
         <div class="col-auto d-flex align-items-end ms-auto">
           <nav aria-label="Results pagination">
-            {{ pagination(offset, limit, arch, release) }}
+            {{ pagination(offset, limit, arch, release, result) }}
           </nav>
         </div>
       {% endif %}
@@ -112,7 +121,7 @@
     {{ display_test_info(recent_test_results) }}
     <nav aria-label="Results pagination"
          class="m-4 d-flex justify-content-center">
-      {{ pagination(offset, limit, arch, release) }}
+      {{ pagination(offset, limit, arch, release, result) }}
     </nav>
   {% else %}
     <p>Looks like there are no results.</p>
