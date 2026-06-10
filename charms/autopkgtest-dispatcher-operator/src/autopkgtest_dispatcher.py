@@ -27,6 +27,7 @@ AUTOPKGTEST_PACKAGE_CONFIGS_LOCATION = Path(
 
 DEB_DEPENDENCIES = [
     "python3-pika",
+    "python3-psycopg",
     "python3-swiftclient",
     # autopkgtest dependencies
     "apt-utils",
@@ -42,6 +43,7 @@ SNAP_DEPENDENCIES = [{"name": "lxd", "channel": "6/stable"}]
 CONF_DIRECTORY = Path("/etc/autopkgtest-dispatcher")
 
 RABBITMQ_CREDS_PATH = CONF_DIRECTORY / "rabbitmq.cred"
+POSTGRESQL_CREDS_PATH = CONF_DIRECTORY / "postgres.cred"
 
 WORKER_CONFIG_PATH = CONF_DIRECTORY / "worker.conf"
 SWIFT_CONFIG_PATH = CONF_DIRECTORY / "swift.cred"
@@ -125,6 +127,21 @@ def write_rabbitmq_creds(hostname, username, password):
                 RABBIT_HOST="{hostname}"
                 RABBIT_USER="{username}"
                 RABBIT_PASSWORD="{password}"
+                """
+            )
+        )
+
+
+def write_postgres_creds(hostname, username, password, database_name):
+    """Set postgres creds."""
+    with open(POSTGRESQL_CREDS_PATH, "w") as file:
+        file.write(
+            dedent(
+                f"""\
+                POSTGRES_HOST="{hostname}"
+                POSTGRES_USER="{username}"
+                POSTGRES_PASSWORD="{password}"
+                POSTGRES_DATABASE="{database_name}"
                 """
             )
         )
@@ -250,10 +267,20 @@ def configure(
     amqp_hostname,
     amqp_username,
     amqp_password,
+    postgresql_hostname,
+    postgresql_username,
+    postgresql_password,
+    postgresql_database_name,
 ):
     write_worker_config(releases)
     write_swift_config(swift_creds)
     write_rabbitmq_creds(amqp_hostname, amqp_username, amqp_password)
+    write_postgres_creds(
+        postgresql_hostname,
+        postgresql_username,
+        postgresql_password,
+        postgresql_database_name,
+    )
     update_autopkgtest(autopkgtest_branch)
 
 

@@ -2,6 +2,7 @@
 Description=autopkgtest worker %i
 ConditionFileNotEmpty=/etc/autopkgtest-dispatcher/rabbitmq.cred
 ConditionFileNotEmpty=/etc/autopkgtest-dispatcher/swift.cred
+ConditionFileNotEmpty=/etc/autopkgtest-dispatcher/postgres.cred
 Wants=network-online.target
 After=network-online.target
 
@@ -11,6 +12,7 @@ TimeoutStartSec=5min
 EnvironmentFile=-/etc/environment.d/proxy.conf
 EnvironmentFile={{ conf_directory }}/rabbitmq.cred
 EnvironmentFile={{ conf_directory }}/swift.cred
+EnvironmentFile={{ conf_directory }}/postgres.cred
 ExecStart=/bin/sh -ec '\
     param="%i"; \
     remote="$${param%-*}"; \

@@ -24,6 +24,10 @@ parts:
     stage:
       - units/*
 
+charm-libs:
+  - lib: data_platform_libs.data_interfaces
+    version: "0"
+
 actions:
   add-remote:
     description: Add remote to run maintenance tasks on.
@@ -72,3 +76,7 @@ requires:
   amqp:
     interface: rabbitmq
     limit: 1
+  postgresql:
+    interface: postgresql_client
+    limit: 1
+    optional: false

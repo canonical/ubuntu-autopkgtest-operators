@@ -1,10 +1,13 @@
 #!/usr/bin/python3
 """Generate database for publication.
 
-download/read Sources.gz for all known releases and write them into
-a copy of autopkgtest.db, which is then published to the public location.
-This is being used for statistics, and is used by britney and other
-external monitoring tools.
+Read the live autopkgtest postgresql database for all known releases and
+create a public sqlite snapshot with current package version information.
+
+current_version and url_last_checked are maintained exclusively in the
+sqlite snapshot: the previous snapshot (if any) is read at startup to
+seed the url_last_checked cache (for If-Modified-Since requests)
+and to carry forward any current_version rows for URLs that returned 304.
 """
 
 import gzip
@@ -19,158 +22,211 @@ from pathlib import Path
 import apt_pkg
 from helpers.utils import db_connect_readonly, get_autopkgtest_cloud_conf
 
-sqlite3.paramstyle = "named"
-
 COMPONENTS = ["main", "restricted", "universe", "multiverse"]
 
+_SNAPSHOT_BATCH = 10_000
 
-def publish_db(path, path_current):
-    """Generate database to publish."""
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(path)
-    db_live = db_connect_readonly()
 
-    logging.info(f"backing up database to {path}")
-    with db:
-        db_live.backup(db)
-    db_live.close()
+def load_sqlite_caches(sqlite_path):
+    """Read url_last_checked and current_version from an existing sqlite snapshot.
 
-    db.execute("PRAGMA journal_mode = MEMORY")
-    db.execute("ATTACH DATABASE ? AS current", (path_current,))
+    Returns (url_cache, current_versions).
 
+    Both are empty if the snapshot does not exist or is unreadable.
+    """
+    url_cache = {}
+    current_versions = {}
     try:
-        db.execute(
-            "CREATE TABLE current_version("
-            "  release CHAR[20], "
-            "  pocket CHAR[40], "
-            "  component CHAR[10],"
-            "  package CHAR[50], "
-            "  version CHAR[120], "
-            "  PRIMARY KEY(release, package))"
-        )
-        logging.debug("database table current_version created")
-    except sqlite3.OperationalError as e:
-        if "already exists" not in str(e):
-            raise
-        try:  # schema upgrade
-            db.execute("ALTER TABLE current_version ADD COLUMN pocket CHAR[40]")
-            db.execute("ALTER TABLE current_version ADD COLUMN component CHAR[10]")
-        except sqlite3.OperationalError as e2:
-            if "duplicate column name" not in str(e2):
-                raise
-        logging.debug("table 'current_version' already exists")
-    db.execute(
-        "CREATE INDEX IF NOT EXISTS current_version_pocket_ix "
-        "ON current_version(pocket, component)"
-    )
-
-    try:
-        db.execute(
-            "INSERT OR REPLACE INTO current_version "
-            "(release, pocket, component, package, version) "
-            "SELECT release, pocket, component, package, version "
-            "FROM current.current_version"
-        )
-        logging.debug("Old current_versions copied over")
-        current_version_copied = True
-    except sqlite3.OperationalError as e:
-        logging.debug("failed to copy current_version: %s", str(e))
-        current_version_copied = False
-
-    try:
-        db.execute(
-            "CREATE TABLE url_last_checked("
-            "  url CHAR[100], "
-            "  timestamp CHAR[50], "
-            "  PRIMARY KEY(url))"
-        )
-        logging.debug("database table url_last_checked created")
-    except sqlite3.OperationalError as e:
-        if "already exists" not in str(e):
-            raise
-        logging.debug("table 'url_last_checked' already exists")
-
-    try:
-        if current_version_copied:
-            db.execute(
-                "INSERT OR REPLACE INTO url_last_checked (url, timestamp) "
-                "SELECT url, timestamp FROM current.url_last_checked"
-            )
-            logging.debug("Old url_last_checked copied over")
-    except sqlite3.OperationalError as e:
-        if "no such table" not in str(e):
-            raise
-        logging.debug("no url_last_checked yet, first run probably")
-
-    db.commit()
-    db.execute("DETACH DATABASE current")
-    return db
+        db = sqlite3.connect(f"file:{sqlite_path}?mode=ro", uri=True)
+        try:
+            for url, ts in db.execute("SELECT url, timestamp FROM url_last_checked"):
+                url_cache[url] = ts
+        except sqlite3.OperationalError:
+            pass
+        try:
+            for release, pocket, component, package, version in db.execute(
+                "SELECT release, pocket, component, package, version "
+                "FROM current_version"
+            ):
+                current_versions[(release, package)] = (pocket, component, version)
+        except sqlite3.OperationalError:
+            pass
+        db.close()
+    except Exception as e:
+        logging.debug("Could not load caches from existing snapshot: %s", e)
+    return url_cache, current_versions
 
 
-def get_last_checked(db_con, url):
-    c = db_con.cursor()
-    c.execute("SELECT timestamp FROM url_last_checked WHERE url=?", (url,))
+def get_sources(release, archive_url, url_cache, current_versions):
+    """Fetch Sources.gz for a release and update the in-memory caches.
 
-    try:
-        (ts,) = c.fetchone()
-        return ts
-    except TypeError:  # not found
-        return None
-
-
-def get_sources(db_con, release, archive_url):
+    url_cache and current_versions are mutated in place:
+      - url_cache gains/updates the Last-Modified timestamp for each URL.
+      - current_versions gains the freshly-parsed packages for each
+        successfully fetched pocket/component; 304 Not Modified responses
+        leave the existing entries for that pocket/component unchanged.
+    """
     for component in COMPONENTS:
         for pocket in (release, release + "-updates"):
             logging.debug("Processing %s/%s", pocket, component)
             try:
                 url = f"{archive_url}/dists/{pocket}/{component}/source/Sources.gz"
                 request = urllib.request.Request(url)
-                last_checked = get_last_checked(db_con, url)
+                last_checked = url_cache.get(url)
                 if last_checked:
                     request.add_header("If-Modified-Since", last_checked)
 
-                # meh, apt_pkg.TagFile() apparently cannot directly read  from an urllib stream
+                # meh, apt_pkg.TagFile() apparently cannot directly read from an urllib stream
                 with tempfile.TemporaryFile() as temp_file:
                     with urllib.request.urlopen(request) as response:
                         temp_file.write(response.read())
                         last_modified = response.getheader("Last-Modified")
                         if last_modified:
-                            db_con.execute(
-                                "INSERT INTO url_last_checked (url, timestamp) "
-                                "VALUES (:url, :timestamp) "
-                                "ON CONFLICT (url) DO "
-                                "UPDATE SET timestamp = :timestamp",
-                                {"url": url, "timestamp": last_modified},
-                            )
+                            url_cache[url] = last_modified
 
-                    db_con.execute(
-                        "DELETE FROM current_version "
-                        "WHERE pocket = ? AND component = ?",
-                        (pocket, component),
-                    )
-                    temp_file.seek(0)
-                    with gzip.open(temp_file) as fd:
-                        for section in apt_pkg.TagFile(fd):
-                            db_con.execute(
-                                "INSERT INTO current_version "
-                                "(release, pocket, component, package, version) "
-                                "VALUES "
-                                "(:release, :pocket, :component, :package, :version) "
-                                "ON CONFLICT (release, package) DO "
-                                "UPDATE SET pocket = :pocket, "
-                                "component = :component, version = :version",
-                                {
-                                    "release": release,
-                                    "pocket": pocket,
-                                    "component": component,
-                                    "package": section["Package"],
-                                    "version": section["Version"],
-                                },
-                            )
-                db_con.commit()
+                        # replace any stale entries with freshly-fetched data
+                        stale = [
+                            key
+                            for key, (p, c, _) in current_versions.items()
+                            if key[0] == release and p == pocket and c == component
+                        ]
+                        for key in stale:
+                            del current_versions[key]
+
+                        temp_file.seek(0)
+                        with gzip.open(temp_file) as fd:
+                            for section in apt_pkg.TagFile(fd):
+                                current_versions[(release, section["Package"])] = (
+                                    pocket,
+                                    component,
+                                    section["Version"],
+                                )
+
             except (urllib.error.HTTPError, ConnectionResetError) as e:
-                if e.code == 304:
-                    logging.debug(f"url {url} not modified")
+                if hasattr(e, "code") and e.code == 304:
+                    logging.debug("url %s not modified", url)
+
+
+def create_sqlite_snapshot(pg_con, sqlite_path, current_versions, url_cache):
+    """Write a SQLite snapshot of the public tables to sqlite_path.
+
+    Reconstructs the normalised test/result schema that external consumers
+    (britney) expect from the denormalised PostgreSQL result table.
+    current_version and url_last_checked are written from the in-memory
+    dicts built by get_sources(); they are not stored in PostgreSQL.
+    Written atomically via a temporary file so the path is never partial.
+    """
+    sqlite_path = Path(sqlite_path)
+    tmp_path = sqlite_path.with_suffix(".tmp")
+
+    db = sqlite3.connect(tmp_path)
+    c = db.cursor()
+
+    c.execute(
+        "CREATE TABLE test ("
+        "  id INTEGER PRIMARY KEY,"
+        "  release VARCHAR(20),"
+        "  arch VARCHAR(20),"
+        "  package VARCHAR(120),"
+        "  UNIQUE(release, arch, package))"
+    )
+    c.execute(
+        "CREATE TABLE result ("
+        "  test_id INTEGER REFERENCES test(id),"
+        "  run_id VARCHAR(30),"
+        "  version VARCHAR(200),"
+        "  triggers TEXT,"
+        "  duration INTEGER,"
+        "  exitcode INTEGER,"
+        "  requester TEXT,"
+        "  env TEXT,"
+        "  PRIMARY KEY(test_id, run_id))"
+    )
+    c.execute(
+        "CREATE TABLE current_version ("
+        "  release VARCHAR(20),"
+        "  pocket VARCHAR(40),"
+        "  component VARCHAR(10),"
+        "  package VARCHAR(50),"
+        "  version VARCHAR(120),"
+        "  PRIMARY KEY(release, package))"
+    )
+    c.execute(
+        "CREATE TABLE url_last_checked ("
+        "  url VARCHAR(100) PRIMARY KEY,"
+        "  timestamp VARCHAR(50))"
+    )
+
+    pg_c = pg_con.cursor()
+
+    # reconstruct test table: assign sequential integer IDs to each distinct
+    # (release, arch, package) triple. this table is expected by britney.
+    pg_c.execute(
+        "SELECT DISTINCT release, arch, package FROM result "
+        "ORDER BY release, arch, package"
+    )
+    test_id_map = {}
+    test_rows = []
+    for i, (release, arch, package) in enumerate(pg_c.fetchall(), start=1):
+        test_id_map[(release, arch, package)] = i
+        test_rows.append((i, release, arch, package))
+    c.executemany("INSERT INTO test VALUES (?, ?, ?, ?)", test_rows)
+
+    # copy result rows in batches, translating flat columns back to test_id
+    pg_c.execute(
+        "SELECT release, arch, package, run_id, version, triggers, "
+        "       duration, exitcode, requester, env "
+        "FROM result"
+    )
+    while True:
+        rows = pg_c.fetchmany(_SNAPSHOT_BATCH)
+        if not rows:
+            break
+        c.executemany(
+            "INSERT INTO result VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    test_id_map[(release, arch, package)],
+                    run_id,
+                    version,
+                    triggers,
+                    duration,
+                    exitcode,
+                    requester,
+                    env,
+                )
+                for release, arch, package, run_id, version, triggers, duration, exitcode, requester, env in rows
+            ],
+        )
+
+    # write current_version from the in-memory dict
+    c.executemany(
+        "INSERT INTO current_version VALUES (?, ?, ?, ?, ?)",
+        [
+            (release, pocket, component, package, version)
+            for (release, package), (
+                pocket,
+                component,
+                version,
+            ) in current_versions.items()
+        ],
+    )
+
+    # write url_last_checked from the in-memory dict
+    c.executemany(
+        "INSERT INTO url_last_checked VALUES (?, ?)",
+        url_cache.items(),
+    )
+
+    db.commit()
+    db.close()
+
+    # atomic replace so the path is never in a partial state
+    tmp_path.rename(sqlite_path)
+
+    # write companion sha256 checksum
+    sha256 = hashlib.sha256(sqlite_path.read_bytes()).hexdigest()
+    Path(str(sqlite_path) + ".sha256").write_text(sha256 + "\n")
 
 
 if __name__ == "__main__":
@@ -179,31 +235,21 @@ if __name__ == "__main__":
     )
 
     config = get_autopkgtest_cloud_conf()
-
-    target = config["web"]["database_public"]
-    target_new = f"{target}.new"
-    target_checksum = f"{target}.sha256"
-    target_checksum_new = f"{target_checksum}.new"
-
     archive_url = config["web"]["archive_url"]
+    sqlite_path = Path(config["web"]["database_public"])
 
-    try:
-        # systemd makes sure to not run us in parallel, so we can safely
-        # delete any leftover file.
-        os.unlink(target_new)
-    except FileNotFoundError:
-        pass
-    db_con = publish_db(target_new, target)
+    url_cache, current_versions = load_sqlite_caches(sqlite_path)
 
-    for row in db_con.execute("SELECT DISTINCT release FROM test"):
-        get_sources(db_con, row[0], archive_url)
-    db_con.commit()
+    db_con = db_connect_readonly()
+
+    c = db_con.cursor()
+    c.execute("SELECT DISTINCT release FROM result")
+    for (release,) in c.fetchall():
+        get_sources(release, archive_url, url_cache, current_versions)
+
+    # write the public sqlite snapshot
+    logging.info("writing sqlite snapshot to %s", sqlite_path)
+    create_sqlite_snapshot(db_con, sqlite_path, current_versions, url_cache)
+    logging.info("sqlite snapshot complete")
+
     db_con.close()
-
-    with open(target_new, "rb") as f:
-        checksum = hashlib.sha256(f.read()).hexdigest()
-    with open(target_checksum_new, "w") as f:
-        f.write(checksum)
-
-    os.rename(target_checksum_new, target_checksum)
-    os.rename(target_new, target)

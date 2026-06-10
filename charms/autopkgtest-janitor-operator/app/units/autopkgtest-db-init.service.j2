@@ -1,0 +1,13 @@
+[Unit]
+Description=Initialize autopkgtest database schema
+ConditionFileNotEmpty={{ config }}/postgres.cred
+
+[Service]
+Type=oneshot
+User={{ user }}
+EnvironmentFile={{ config }}/postgres.cred
+ExecStart=/usr/local/bin/autopkgtest-db-init
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

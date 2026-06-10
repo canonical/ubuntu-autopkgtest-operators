@@ -24,6 +24,7 @@ import tempfile
 import time
 
 import pika
+import psycopg
 import swiftclient
 import systemd.journal
 
@@ -37,8 +38,8 @@ swift_upload = True
 exit_requested = None
 running_test = False
 status_exchange_name = "teststatus.fanout"
-complete_exchange_name = "testcomplete.fanout"
 amqp_con = None
+db_con = None
 systemd_logging_handler = systemd.journal.JournalHandler()
 hostname = socket.gethostname()
 
@@ -421,6 +422,22 @@ def log_contents(out_dir):
     except OSError as e:
         logging.error(f"Could not read log file: {str(e)}")
         return ""
+
+
+def db_connect():
+    """Connect to PostgreSQL database."""
+    global db_con
+    db_uri = "postgresql://{user}:{password}@{host}/{database}".format(
+        user=os.environ["POSTGRES_USER"],
+        password=os.environ["POSTGRES_PASSWORD"],
+        host=os.environ["POSTGRES_HOST"],
+        database=os.environ["POSTGRES_DATABASE"],
+    )
+    db_con = psycopg.connect(db_uri)
+
+    logging.debug("database connected")
+
+    return db_con
 
 
 def request(channel, method, properties, body):
@@ -887,38 +904,54 @@ def request(channel, method, properties, body):
         else:
             logging.info("Keeping results in %s", work_dir)
 
-    complete_amqp = amqp_con.channel()
-    complete_amqp.exchange_declare(
-        exchange=complete_exchange_name,
-        exchange_type="fanout",
-        durable=True,
-    )
-    complete_msg = json.dumps(
-        {
-            "architecture": architecture,
-            "container": container,
-            "duration": duration,
-            "exitcode": code,
-            "package": pkgname,
-            "testpkg_version": testpkg_version,
-            "release": release,
-            "requester": requester,
-            "swift_dir": swift_dir,
-            "triggers": triggers,
-            "env": ",".join(
-                [f"{key}={value}" for key, value in additional_parameters.items()]
-            ),
-        }
-    )
-    complete_amqp.basic_publish(
-        exchange=complete_exchange_name,
-        routing_key="",
-        body=complete_msg,
-        properties=pika.BasicProperties(
-            delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
-        ),
-    )
-    complete_amqp.close()
+    # record test result in postgres database
+    # skip ppa requests - their containers are formatted like autopkgtest-$release-$user-$ppaname
+    if container != f"autopkgtest-{release}":
+        logging.debug("Ignoring non-distro request for db: %s", container)
+    elif not triggers:
+        logging.error(
+            "%s/%s/%s result has no ADT_TEST_TRIGGERS, not recording",
+            pkgname,
+            architecture,
+            release,
+        )
+    else:
+        env_str = ",".join(
+            [f"{key}={value}" for key, value in additional_parameters.items()]
+        )
+        requester_str = (requester or "").strip()
+
+        try:
+            c = db_con.cursor()
+            c.execute(
+                "INSERT INTO result "
+                "(release, arch, package, run_id, version, triggers, "
+                " duration, exitcode, requester, env) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (
+                    release,
+                    architecture,
+                    pkgname,
+                    run_id,
+                    testpkg_version,
+                    triggers,
+                    duration,
+                    code,
+                    requester_str,
+                    env_str,
+                ),
+            )
+            db_con.commit()
+            logging.info(
+                "Recorded test result for %s/%s/%s run %s",
+                pkgname,
+                architecture,
+                release,
+                run_id,
+            )
+        except psycopg.IntegrityError:
+            db_con.rollback()
+            logging.info("%s was already recorded - skipping", run_id)
 
     running_test = False
 
@@ -1041,6 +1074,9 @@ def main():
 
         # ensure that we can connect to swift
         swiftclient.Connection(**swift_creds).close()
+
+    # connect to postgres database
+    db_connect()
 
     # connect to AMQP queues
     amqp_connect(cfg)

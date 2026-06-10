@@ -1,0 +1,159 @@
+#!/usr/bin/python3
+# Seed a new release of Ubuntu by copying over
+# the last test and the last migration-reference
+# test of all packages in the previous release
+
+import argparse
+
+import psycopg
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("old_release")
+    parser.add_argument("new_release")
+    parser.add_argument("results_db_uri", default="postgresql://localhost/autopkgtest")
+    parser.add_argument("--dry-run", action="store_true")
+
+    return parser.parse_args()
+
+
+def seed_result(
+    db_con,
+    dry_run,
+    arch,
+    duration,
+    exitcode,
+    package,
+    release,
+    requester,
+    version,
+    run_id,
+    triggers,
+    env,
+):
+    if dry_run:
+        print(
+            f"would insert {package}/{arch}/{triggers} run {run_id} "
+            f"into release {release}"
+        )
+        return
+
+    print(f"seeding {package}/{arch}/{triggers}")
+    try:
+        c = db_con.cursor()
+        c.execute(
+            "INSERT INTO result "
+            "(release, arch, package, run_id, version, triggers, "
+            " duration, exitcode, requester, env) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                release,
+                arch,
+                package,
+                run_id,
+                version,
+                triggers,
+                duration,
+                exitcode,
+                requester,
+                env,
+            ),
+        )
+        db_con.commit()
+    except psycopg.IntegrityError:
+        db_con.rollback()
+        print(f"{run_id} for {package}/{arch} was already recorded - skipping")
+
+
+def main():
+    args = parse_args()
+
+    db_con = psycopg.connect(args.results_db_uri)
+
+    total_results = 0
+
+    c = db_con.cursor()
+    c.execute(
+        """
+        SELECT DISTINCT ON (package, arch)
+               arch, duration, exitcode, package, requester, version, triggers, env, run_id
+        FROM result
+        WHERE release = %s
+            AND (exitcode = 0 OR exitcode = 2 OR exitcode = 8)
+            AND triggers != %s
+        ORDER BY package, arch, run_id DESC
+        """,
+        (args.old_release, "migration-reference/0"),
+    )
+    for (
+        arch,
+        duration,
+        exitcode,
+        package,
+        requester,
+        version,
+        triggers,
+        env,
+        run_id,
+    ) in c.fetchall():
+        total_results += 1
+        seed_result(
+            db_con,
+            args.dry_run,
+            arch,
+            duration,
+            exitcode,
+            package,
+            args.new_release,
+            requester,
+            version,
+            run_id,
+            triggers,
+            env,
+        )
+
+    c.execute(
+        """
+        SELECT DISTINCT ON (package, arch)
+               arch, duration, exitcode, package, requester, version, triggers, env, run_id
+        FROM result
+        WHERE release = %s
+            AND exitcode != 16
+            AND triggers = %s
+        ORDER BY package, arch, run_id DESC
+        """,
+        (args.old_release, "migration-reference/0"),
+    )
+    for (
+        arch,
+        duration,
+        exitcode,
+        package,
+        requester,
+        version,
+        triggers,
+        env,
+        run_id,
+    ) in c.fetchall():
+        total_results += 1
+        seed_result(
+            db_con,
+            args.dry_run,
+            arch,
+            duration,
+            exitcode,
+            package,
+            args.new_release,
+            requester,
+            version,
+            run_id,
+            triggers,
+            env,
+        )
+
+    print(f"seeded {total_results} total results")
+
+
+if __name__ == "__main__":
+    main()

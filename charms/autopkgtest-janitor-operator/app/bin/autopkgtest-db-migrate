@@ -1,0 +1,87 @@
+#!/usr/bin/python3
+"""One-time migration: import a legacy SQLite autopkgtest database into PostgreSQL.
+
+The legacy schema has two tables:
+
+  test(id, release, arch, package)
+  result(test_id, run_id, version, triggers, duration, exitcode, requester, env)
+
+The new PostgreSQL schema denormalises these into a single table:
+
+  result(release, arch, package, run_id, version, triggers,
+         duration, exitcode, requester, env)
+
+Usage:
+  autopkgtest-db-migrate <sqlite_path> <pg_uri>
+
+The PostgreSQL schema must already exist (run autopkgtest-db-init first).
+The insert is ON CONFLICT DO NOTHING, so the script is safe to re-run if
+interrupted.
+"""
+
+import argparse
+import sqlite3
+import sys
+
+import psycopg
+
+BATCH_SIZE = 10_000
+
+
+def migrate(sqlite_path, pg_uri):
+    sqlite_con = sqlite3.connect(f"file:{sqlite_path}?mode=ro", uri=True)
+    pg_con = psycopg.connect(pg_uri)
+
+    (total,) = sqlite_con.execute("SELECT COUNT(*) FROM result").fetchone()
+    print(f"Migrating {total:,} rows...")
+
+    cur = sqlite_con.cursor()
+    cur.execute(
+        "SELECT t.release, t.arch, t.package,"
+        "       r.run_id, r.version, r.triggers,"
+        "       r.duration, r.exitcode, r.requester, r.env "
+        "FROM test t JOIN result r ON t.id = r.test_id"
+    )
+
+    pg_cur = pg_con.cursor()
+    done = 0
+    while True:
+        rows = cur.fetchmany(BATCH_SIZE)
+        if not rows:
+            break
+        pg_cur.executemany(
+            "INSERT INTO result "
+            "(release, arch, package, run_id, version, triggers,"
+            " duration, exitcode, requester, env) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+            "ON CONFLICT DO NOTHING",
+            rows,
+        )
+        pg_con.commit()
+        done += len(rows)
+        print(f"  {done:,} / {total:,} ({100 * done // total}%)")
+
+    sqlite_con.close()
+    pg_con.close()
+    print(f"Done. {done:,} rows processed.")
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("sqlite_path", help="Path to the legacy SQLite database file")
+    parser.add_argument(
+        "pg_uri",
+        help="PostgreSQL connection URI, e.g. postgresql://user:pass@host/autopkgtest",
+    )
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    try:
+        migrate(args.sqlite_path, args.pg_uri)
+    except (sqlite3.Error, psycopg.Error) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)

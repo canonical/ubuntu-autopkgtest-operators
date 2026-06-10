@@ -6,7 +6,6 @@ import gzip
 import json
 import os
 import re
-import sqlite3
 import sys
 import traceback
 from collections import OrderedDict
@@ -14,6 +13,8 @@ from pathlib import Path
 from wsgiref.handlers import CGIHandler
 
 import flask
+import psycopg
+import psycopg.rows
 from helpers.exceptions import NotFound, RunningJSONNotFound
 from helpers.utils import (
     db_connect_readonly,
@@ -69,7 +70,6 @@ def init_config():
     CONFIG["swift_container_url"] = cp["web"]["external_swift_url"] + "/autopkgtest-%s"
     CONFIG["amqp_queue_cache"] = Path(cp["web"]["amqp_queue_cache"])
     CONFIG["running_cache"] = Path(cp["web"]["running_cache"])
-    CONFIG["database"] = Path(cp["web"]["database_public"])
     CONFIG["alert"] = Path(cp["web"]["alert"])
 
 
@@ -84,16 +84,15 @@ def get_alert():
         return None
 
 
-def get_test_id(release, arch, src):
+def has_results_for(release, arch, package):
     c = db_con.cursor()
     c.execute(
-        "SELECT id FROM test WHERE release=? AND arch=? AND package=?",
-        (release, arch, src),
+        "SELECT 1 FROM result "
+        "WHERE release = %s AND arch = %s AND package = %s "
+        "LIMIT 1",
+        (release, arch, package),
     )
-    try:
-        return c.fetchone()[0]
-    except TypeError:
-        return None
+    return c.fetchone() is not None
 
 
 def get_running_jobs():
@@ -203,109 +202,79 @@ def get_queues_info():
         return (CONFIG["releases"], arches, ctx)
 
 
-def db_has_result_requester_idx(cursor: sqlite3.Cursor):
-    for row in cursor.execute("PRAGMA index_list('result')"):
-        if row["name"] == "result_requester_idx":
-            return True
-    return False
-
-
 def get_results(limit: int, offset: int = 0, **kwargs) -> list:
     requested_arch = kwargs.get("arch", None)
     requested_release = kwargs.get("release", None)
     requested_user = kwargs.get("user", None)
 
     results = []
-    # We want to use sqlite3.Row here, so we need to create a cursor
-    # as to not affect the overall db_con object, which could interfere
-    # with other queries
-    cursor = db_con.cursor()
-    cursor.row_factory = sqlite3.Row
-    if db_has_result_requester_idx(cursor):
-        filters = []
-        if requested_arch:
-            filters.append("arch=:requested_arch")
-        if requested_release:
-            filters.append("release=:requested_release")
-        if requested_user:
-            filters.append("requester=:requested_user")
+    # create a cursor with dict_row factory for named column access
+    cursor = db_con.cursor(row_factory=psycopg.rows.dict_row)
 
-        for row in cursor.execute(
-            "SELECT test_id, run_id, version, triggers, "
-            "duration, exitcode, requester, env, arch, package, release FROM result "
-            "JOIN test on test_id = test.id "
-            + ("WHERE " + (" AND ".join(filters)) + " " if filters else "")
-            + "ORDER BY run_id DESC "
-            "LIMIT :limit OFFSET :offset ",
-            {
-                "limit": limit,
-                "offset": offset,
-                "requested_arch": requested_arch,
-                "requested_release": requested_release,
-                "requested_user": requested_user,
-            },
-        ):
-            arch = row["arch"]
-            package = row["package"]
-            release = row["release"]
-            run_id = row["run_id"]
-            requester = row["requester"]
-            triggers = row["triggers"]
-            version = row["version"]
-            additional_params = row[
-                "env"
-            ]  # string of comma separated env variables e.g. all-proposed=1,test-name=mytest
-            code = human_exitcode(row["exitcode"])
-            url = os.path.join(
-                CONFIG["swift_container_url"] % release,
-                release,
-                arch,
-                srchash(package),
-                package,
-                run_id,
-            )
-            show_retry = should_show_retry(code)
-            all_proposed = (
-                additional_params is not None and "all-proposed=1" in additional_params
-            )
-            results.append(
-                dict(
-                    version=version,
-                    triggers=triggers,
-                    additional_params=additional_params,
-                    human_date=human_date(run_id),
-                    human_sec=human_sec(int(row["duration"])),
-                    requester=requester,
-                    code=code,
-                    url=url,
-                    show_retry=show_retry,
-                    all_proposed=all_proposed,
-                    run_id=run_id,
-                    package=package,
-                    release=release,
-                    arch=arch,
-                )
-            )
-    else:
-        # If we reach this block, we need to signal to
-        # the user that the issue is the db index not
-        # being present
+    filters = []
+    params = []
+
+    if requested_arch:
+        filters.append("arch = %s")
+        params.append(requested_arch)
+    if requested_release:
+        filters.append("release = %s")
+        params.append(requested_release)
+    if requested_user:
+        filters.append("requester = %s")
+        params.append(requested_user)
+
+    query = (
+        "SELECT run_id, version, triggers, "
+        "duration, exitcode, requester, env, arch, package, release "
+        "FROM result "
+    )
+    if filters:
+        query += "WHERE " + " AND ".join(filters) + " "
+    query += "ORDER BY run_id DESC LIMIT %s OFFSET %s"
+
+    params.extend([limit, offset])
+
+    for row in cursor.execute(query, params):
+        arch = row["arch"]
+        package = row["package"]
+        release = row["release"]
+        run_id = row["run_id"]
+        requester = row["requester"]
+        triggers = row["triggers"]
+        version = row["version"]
+        additional_params = row[
+            "env"
+        ]  # string of comma separated env variables e.g. all-proposed=1,test-name=mytest
+        code = human_exitcode(row["exitcode"])
+        url = os.path.join(
+            CONFIG["swift_container_url"] % release,
+            release,
+            arch,
+            srchash(package),
+            package,
+            run_id,
+        )
+        show_retry = should_show_retry(code)
+        all_proposed = (
+            additional_params is not None and "all-proposed=1" in additional_params
+        )
         results.append(
             dict(
-                version="No results are being displayed as",
-                triggers="the db index required for this page",
-                additional_params="is not present, please contact an admin.",
-                human_date="",
-                human_sec="",
-                requester=1,
-                code="",
-                url=False,
-                show_retry=False,
-                all_proposed="",
-                run_id="",
-                package="",
-                release="",
-                arch="",
+                version=version,
+                triggers=triggers,
+                additional_params=additional_params,
+                human_date=human_date(run_id),
+                human_sec=human_sec(int(row["duration"])),
+                requester=requester,
+                code=code,
+                url=url,
+                show_retry=show_retry,
+                all_proposed=all_proposed,
+                run_id=run_id,
+                package=package,
+                release=release,
+                arch=arch,
             )
         )
     return results
@@ -386,13 +355,14 @@ def index_root():
     alert = get_alert()
 
     recent = []
-    for row in db_con.execute(
+    cursor = db_con.cursor()
+    cursor.execute(
         "SELECT exitcode, package, release, arch, triggers, run_id "
-        "FROM result, test "
-        "WHERE test.id == result.test_id "
+        "FROM result "
         "ORDER BY run_id DESC "
         "LIMIT 10"
-    ):
+    )
+    for row in cursor.fetchall():
         hc = human_exitcode(row[0])
         res = hc if "code" not in hc else "fail"
         recent.append((res, row[1], row[2], row[3], row[4], row[5]))
@@ -430,13 +400,16 @@ def index_root():
 def package_overview(package, _=None):
     results = {}
     arches = set()
-    for row in db_con.execute(
-        "SELECT MAX(run_id), exitcode, release, arch "
-        "FROM test, result "
-        "WHERE package = ? AND test.id = result.test_id "
-        "GROUP BY release, arch",
+    cursor = db_con.cursor()
+    cursor.execute(
+        "SELECT DISTINCT ON (release, arch) "
+        "       run_id, exitcode, release, arch "
+        "FROM result "
+        "WHERE package = %s "
+        "ORDER BY release, arch, run_id DESC",
         (package,),
-    ):
+    )
+    for row in cursor.fetchall():
         arches.add(row[3])
         results.setdefault(row[2], {})[row[3]] = human_exitcode(row[1])
 
@@ -731,8 +704,7 @@ def test_request_form():
 @app.route("/packages/<package>/<release>/<arch>")
 @app.route("/packages/<_>/<package>/<release>/<arch:arch>")
 def package_release_arch(package, release, arch, _=None):
-    test_id = get_test_id(release, arch, package)
-    if test_id is None:
+    if not has_results_for(release, arch, package):
         return render(
             "browse-results.html",
             package=package,
@@ -744,12 +716,15 @@ def package_release_arch(package, release, arch, _=None):
 
     seen = set()
     results = []
-    for row in db_con.execute(
-        "SELECT run_id, version, triggers, duration, exitcode, requester, env FROM result "
-        "WHERE test_id=? "
+    cursor = db_con.cursor()
+    cursor.execute(
+        "SELECT run_id, version, triggers, duration, exitcode, requester, env "
+        "FROM result "
+        "WHERE release = %s AND arch = %s AND package = %s "
         "ORDER BY run_id DESC",
-        (test_id,),
-    ):
+        (release, arch, package),
+    )
+    for row in cursor.fetchall():
         run_id = row[0]
         requester = row[5] if row[5] else "-"
         code = human_exitcode(row[4])
@@ -892,12 +867,11 @@ def package_release_arch(package, release, arch, _=None):
 
 @app.route("/packages/<package>/<release>/<arch>/<run_id:run_id>")
 def display_run_summary(release, arch, package, run_id):
-    cursor = db_con.cursor()
-    cursor.row_factory = sqlite3.Row
+    cursor = db_con.cursor(row_factory=psycopg.rows.dict_row)
     result = cursor.execute(
-        "SELECT version, triggers, exitcode, requester, env, duration FROM result "
-        "LEFT JOIN test ON result.test_id = test.id "
-        "WHERE release = ? AND arch = ? AND package = ? AND run_id = ?",
+        "SELECT version, triggers, exitcode, requester, env, duration "
+        "FROM result "
+        "WHERE release = %s AND arch = %s AND package = %s AND run_id = %s",
         (release, arch, package, run_id),
     ).fetchone()
 

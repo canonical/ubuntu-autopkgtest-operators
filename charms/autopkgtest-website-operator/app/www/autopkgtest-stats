@@ -5,9 +5,8 @@ import json
 import logging
 
 from helpers.utils import (
-    db_connect_public_readonly,
+    db_connect_readonly,
     get_release_arches,
-    get_source_versions,
     get_stats_cache,
 )
 
@@ -17,64 +16,25 @@ STAT_FAILRUNS = "failruns"
 STAT_PASSRUNS = "passruns"
 
 
-def success_count_for_release_and_arch(db, release, arch, src_versions):
-    """Return number of packages with tests that pass."""
-    count = 0
-
-    # we consider the latest successful run of a package's current version with
-    # triggers for current packages; if none exist (i. e. tests generally fail,
-    # but succeeded for a trigger that is not published), don't count it as
-    # success
-    cur_pkg = None
-    for pkg, triggers, code in db.execute(
-        "SELECT test.package, triggers, exitcode "
-        "FROM test, result, current_version "
-        "WHERE test.id == result.test_id AND test.release=? AND arch=? "
-        "  AND test.package = current_version.package "
-        "  AND test.release = current_version.release "
-        "  AND result.version = current_version.version "
-        "  AND (exitcode = 0 OR exitcode = 2 OR exitcode = 8) "
-        "ORDER BY test.package, run_id DESC",
-        (release, arch),
-    ):
-        # start of a new package block?
-        if pkg != cur_pkg:
-            logger.debug("new package start: %s [%s] %i", pkg, triggers, code)
-            cur_pkg = pkg
-            found_valid = False
-        elif found_valid:
-            # we found a valid success, skip over the older test results of
-            # that package
-            logger.debug("ignored older result: %s [%s] %i", pkg, triggers, code)
-            continue
-        logger.debug("considered result: %s [%s] %i", pkg, triggers, code)
-        # weed out non-current triggers
-        for trigger in triggers.split():
-            src, ver = trigger.split("/")
-            # it can happen that src_versions does not have a trigger source
-            # package if that trigger source got removed in the final release
-            if src_versions.get(src) != ver:
-                logger.debug(
-                    "%s/%s/%s: ignoring non-current trigger %s",
-                    release,
-                    arch,
-                    pkg,
-                    trigger,
-                )
-                continue
-        # if we arrive here, we have a passing test result for pkg with current
-        # triggers, so count it
-        logger.debug("counting result: %s [%s] %i", pkg, triggers, code)
-        count += 1
-        # ... and ignore older results for that package
-        found_valid = True
-
-    return count
+def success_count_for_release_and_arch(db, release, arch):
+    """Return number of packages whose most recent migration-reference/0 run was a pass."""
+    c = db.cursor()
+    c.execute(
+        "SELECT COUNT(*) FROM ("
+        "  SELECT DISTINCT ON (package) exitcode"
+        "  FROM result"
+        "  WHERE release = %s AND arch = %s AND triggers = %s"
+        "  ORDER BY package, run_id DESC"
+        ") AS latest "
+        "WHERE exitcode IN (0, 2, 8)",
+        (release, arch, "migration-reference/0"),
+    )
+    return c.fetchone()[0]
 
 
 def calc_stats():
-    logger.debug("Connecting to autopkgtest.db")
-    db_con = db_connect_public_readonly()
+    logger.debug("Connecting to autopkgtest db")
+    db_con = db_connect_readonly()
     if not db_con:
         logger.debug("Unable to get DB con")
         exit(1)
@@ -94,9 +54,11 @@ def calc_stats():
             }
 
     logger.debug("Getting package count per arch")
-    for release, arch, numpkgs in db_con.execute(
-        "SELECT release, arch, COUNT(DISTINCT package) FROM test GROUP BY release, arch"
-    ):
+    c = db_con.cursor()
+    c.execute(
+        "SELECT release, arch, COUNT(DISTINCT package) FROM result GROUP BY release, arch"
+    )
+    for release, arch, numpkgs in c.fetchall():
         if numpkgs > 1:
             try:
                 data[release][arch][STAT_NUMPKGS] = numpkgs
@@ -104,14 +66,15 @@ def calc_stats():
                 pass
 
     logger.debug("Getting pass info for packages")
-    for release, arch, key, numruns in db_con.execute(
+    c.execute(
         "SELECT release, arch, "
         "       CASE WHEN exitcode IN (0,2,8) "
         "           THEN 'passruns' ELSE 'failruns' END exit, "
         "       COUNT(run_id) "
-        "FROM result LEFT JOIN test ON result.test_id = test.id "
+        "FROM result "
         "GROUP BY release, arch, exit"
-    ):
+    )
+    for release, arch, key, numruns in c.fetchall():
         try:
             data[release][arch][key] = data[release][arch].get(key, 0) + numruns
         except KeyError:
@@ -119,10 +82,9 @@ def calc_stats():
 
     logger.debug("Collating stats")
     for release in release_arches:
-        sources = get_source_versions(db_con, release)
         for arch in release_arches[release]:
             data[release][arch][STAT_NUMPKGSPASS] = success_count_for_release_and_arch(
-                db_con, release, arch, sources
+                db_con, release, arch
             )
 
     return data

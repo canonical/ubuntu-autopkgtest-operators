@@ -4,14 +4,12 @@ import configparser
 import logging
 import os
 import pathlib
-import sqlite3
 import urllib.parse
 from pathlib import Path
 
 import pika
+import psycopg
 import swiftclient
-
-sqlite3.paramstyle = "named"
 
 
 def read_config_file(filepath: str | pathlib.Path, cfg_key: str = None):
@@ -97,31 +95,11 @@ def get_release_arches():
     release_arches = {}
     releases = cp["web"]["releases"].split()
     for r in releases:
-        for row in db_con.execute(
-            "SELECT DISTINCT arch from test WHERE release=?", (r,)
-        ):
+        c = db_con.cursor()
+        c.execute("SELECT DISTINCT arch FROM result WHERE release = %s", (r,))
+        for row in c.fetchall():
             release_arches.setdefault(r, []).append(row[0])
     return release_arches
-
-
-def get_source_versions(db_con, release):
-    """Get latest version of packages for given release.
-
-    :param db_con:
-        sqlite3 connection for autopkgtest db
-    :type db_con: ``sqlite3.Connection``
-    :param release:
-        release to get package versions for
-    :type release: ``str``
-    :return ``dict(package -> version)``:
-    """
-    srcs = {}
-    for pkg, ver in db_con.execute(
-        "SELECT package, version FROM current_version WHERE release = ?",
-        (release,),
-    ):
-        srcs[pkg] = ver
-    return srcs
 
 
 def get_github_context(params: dict[str, str]) -> str:
@@ -184,28 +162,27 @@ def amqp_connect():
     return amqp_con
 
 
+def db_connect():
+    """Get a read-write connection to the autopkgtest db.
+
+    :return conn: ``psycopg.Connection``
+    """
+    cp = get_autopkgtest_cloud_conf()
+    return psycopg.connect(cp["web"]["database"])
+
+
 def db_connect_readonly():
-    """Get connection to autopkgtest db from config.
+    """Get a read-only connection to the autopkgtest db.
 
-    :return conn: ``sqlite3.Connection``
+    PostgreSQL enforces read-only at the session level: any attempt to write
+    will raise an error.
+
+    :return conn: ``psycopg.Connection``
     """
     cp = get_autopkgtest_cloud_conf()
-    return sqlite3.connect(
-        "file:{}?mode=ro".format(cp["web"]["database"]),
-        uri=True,
-    )
-
-
-def db_connect_public_readonly():
-    """Get connection to public autopkgtest db from config.
-
-    :return conn: ``sqlite3.Connection``
-    """
-    cp = get_autopkgtest_cloud_conf()
-    return sqlite3.connect(
-        "file:{}?mode=ro".format(cp["web"]["database_public"]),
-        uri=True,
-    )
+    conn = psycopg.connect(cp["web"]["database"])
+    conn.read_only = True
+    return conn
 
 
 def swift_connect() -> swiftclient.Connection:

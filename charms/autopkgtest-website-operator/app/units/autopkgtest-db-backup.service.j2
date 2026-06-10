@@ -1,9 +1,0 @@
-[Unit]
-Description=backup autopkgtest.db
-
-[Service]
-User={{ user }}
-EnvironmentFile=-/etc/environment.d/proxy.conf
-Type=oneshot
-ExecStart={{ webcontrol }}/autopkgtest-db-backup
-TimeoutSec=600

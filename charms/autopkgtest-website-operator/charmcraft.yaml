@@ -26,6 +26,8 @@ parts:
 charm-libs:
   - lib: traefik_k8s.ingress
     version: "2"
+  - lib: data_platform_libs.data_interfaces
+    version: "0"
 
 actions:
   set-alert:
@@ -88,3 +90,7 @@ requires:
   ingress:
     interface: ingress
     limit: 1
+  postgresql:
+    interface: postgresql_client
+    limit: 1
+    optional: false
