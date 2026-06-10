@@ -108,7 +108,7 @@
               <thead>
                 <tr>
                   <th colspan="4" class="sticky-table-headers">
-                    <h3 style="margin: 0;">Queued tests for {{ queue_name }} {{ r }} {{ a }}</h3>
+                    <h3>Queued tests for {{ queue_name }} {{ r }} {{ a }}</h3>
                   </th>
                 </tr>
                 <tr>
@@ -121,11 +121,13 @@
               <tbody>
                 {% for req in reqs %}
                   <tr>
-                    <td>{{ req.package }}</td>
-                    <td>{{ req.get('triggers', []) | join(", ") }}</td>
-                    <td>{{ req.get('submit-time', '-') }}</td>
                     <td>
-                      {% if req.get("requester") %}
+                      <a href="{{ url_for('package_overview', package=req.package) }}">{{ req.package }}</a>
+                    </td>
+                    <td>{{ req.triggers }}</td>
+                    <td>{{ req.submit_time }}</td>
+                    <td>
+                      {% if req.requester %}
                         <a href="https://launchpad.net/~{{ req.requester }}">{{ req.requester }}</a>
                       {% else %}
                         -

@@ -165,8 +165,7 @@ def should_show_retry(code):
 def get_queues_info():
     """Return information about queued tests.
 
-    Return (releases, arches, context -> release -> arch -> (queue_size, [parsed_requests])).
-    Each parsed request is a dict with keys: package, requester, submit-time, triggers
+    Return (releases, arches, context -> release -> arch -> (queue_size, [requests])).
     """
     with open(CONFIG["amqp_queue_cache"]) as json_file:
         queue_info_j = json.load(json_file)
@@ -181,26 +180,40 @@ def get_queues_info():
                 for arch in queues[context][release]:
                     requests = queues[context][release][arch]["requests"]
                     size = queues[context][release][arch]["size"]
-
-                    parsed_requests = []
-                    for req in requests:
-                        try:
-                            parts = req.split("\n", 1)
-                            if len(parts) == 2:
-                                package = parts[0]
-                                req_json = json.loads(parts[1])
-                                req_json["package"] = package
-                                parsed_requests.append(req_json)
-                        except (json.JSONDecodeError, IndexError, ValueError):
-                            # skip malformed requests (like private jobs)
-                            continue
-
                     ctx.setdefault(context, {}).setdefault(release, {})[arch] = (
                         size,
-                        parsed_requests,
+                        requests,
                     )
 
         return (CONFIG["releases"], arches, ctx)
+
+
+def parse_queues(queues):
+    """Parse the queues into dicts for use in templates."""
+    for queue, queue_info in queues.items():
+        for release, release_info in queue_info.items():
+            for arch, (size, requests) in release_info.items():
+                parsed_requests = []
+                for req in requests:
+                    try:
+                        parts = req.split("\n", 1)
+                        if len(parts) == 2:
+                            package = parts[0]
+                            req_json = json.loads(parts[1])
+                            req_json["package"] = package
+                            req_json["triggers"] = " ".join(
+                                req_json.get("triggers", [])
+                            )
+                            req_json["requester"] = req_json.get("requester", "-")
+                            # all requests *should* have a timestamp, but just in case
+                            req_json["submit-time"] = req_json.get("submit-time", "-")
+                            parsed_requests.append(req_json)
+                    except json.JSONDecodeError:
+                        # skip malformed or private requests
+                        continue
+                queues[queue][release][arch] = (size, parsed_requests)
+
+    return queues
 
 
 def db_has_result_requester_idx(cursor: sqlite3.Cursor):
@@ -314,22 +327,19 @@ def get_results(limit: int, offset: int = 0, **kwargs) -> list:
 def get_queued_for_user(user: str):
     queued_tests = []
     (_, _, queues_info) = get_queues_info()
+    queues_info = parse_queues(queues_info)
     for _, queue in queues_info.items():
         for release, queue_by_arch in queue.items():
             for arch, queue_items in queue_by_arch.items():
-                if queue_items[0] == 0:
+                if queue_items[0] == 0:  # queue is empty
                     continue
                 requests = queue_items[1]
                 for req in requests:
                     if req.get("requester", "") == user:
-                        package = req.get("package", "")
-                        triggers = req.get("triggers", [])
-                        if isinstance(triggers, list):
-                            triggers = " ".join(triggers)
                         queued_tests.append(
                             dict(
                                 version="N/A",
-                                triggers=triggers,
+                                triggers=req.get("triggers"),
                                 additional_params="N/A",
                                 human_date=human_date(req.get("submit-time")),
                                 human_sec="N/A",
@@ -338,7 +348,7 @@ def get_queued_for_user(user: str):
                                 url="",
                                 show_retry=False,
                                 all_proposed="",
-                                package=package,
+                                package=req.get("package"),
                                 release=release,
                                 arch=arch,
                             ),
@@ -450,12 +460,14 @@ def package_overview(package, _=None):
                     filtered_requests = [
                         r
                         for r in queue[release][arch][1]
-                        if r.get("package") == package
+                        if r.startswith(package + "\n")
                     ]
                     queues_info[queue_name][release][arch] = (
                         len(filtered_requests),  # update the size too
                         filtered_requests,
                     )
+        # parse queues after filtering
+        queues_info = parse_queues(queues_info)
     except Exception:
         # We never want to fail in that block, even is there are issues with cache-amqp
         queues_info = {
@@ -836,10 +848,11 @@ def package_release_arch(package, release, arch, _=None):
     # Add queued jobs if any
     try:
         (_, _, queues_info) = get_queues_info()
+        queues_info = parse_queues(queues_info)
         for _, queue in queues_info.items():
             queue_items = queue.get(release, {}).get(arch, [0, []])[1]
             for item in queue_items:
-                if item.get("package") == package:
+                if item["package"] == package:
                     results.insert(
                         0,
                         dict(
@@ -1040,6 +1053,7 @@ def display_run_logs(release, arch, package, run_id):
 @app.route("/running")
 def running():
     (releases, arches, queues_info) = get_queues_info()
+    queues_info = parse_queues(queues_info)
     queues_lengths = {}
     for c in queues_info:
         for r in releases:
