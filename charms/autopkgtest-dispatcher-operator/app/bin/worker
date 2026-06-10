@@ -55,6 +55,7 @@ ARCH_RELEASE_RESTRICTION_MAPPING = {
 }
 
 SUCCESS_CODES = (0, 2, 8)
+TESTBED_FAILURE_CODE = 16
 
 KEYS_FOR_ADDITIONAL_PARAMS = ["all-proposed", "testname"]
 
@@ -921,6 +922,12 @@ def request(channel, method, properties, body):
     complete_amqp.close()
 
     running_test = False
+
+    if code == TESTBED_FAILURE_CODE:
+        logging.error(
+            f"autopkgtest exited with status {code}, probable infrastructure issue"
+        )
+        sys.exit(code)
 
 
 def amqp_connect(cfg):
