@@ -59,6 +59,16 @@ setup_key(app, secret_path)
 db_con = None
 CONFIG = {}
 
+EXITCODES = {
+    "pass": (0, 2),
+    "fail": (4, 6, 12, 14),
+    "neutral": (8,),
+    "denylisted": (99,),
+    "tmpfail": (16,),
+    "error": (20,),
+    "otherfail": None,
+}
+
 
 def init_config():
     global CONFIG
@@ -142,20 +152,14 @@ def human_sec(secs):
 
 
 def human_exitcode(code):
-    if code in (0, 2):
-        return "pass"
-    elif code in (4, 6, 12, 14):
-        return "fail"
-    elif code == 8:
-        return "neutral"
-    elif code == 99:
-        return "denylisted"
-    elif code == 16:
-        return "tmpfail"
-    elif code == 20:
-        return "error"
-    else:
-        return "otherfail"
+    for name, codes in EXITCODES.items():
+        if codes is not None and code in codes:
+            return name
+    return "otherfail"
+
+
+def exitcode_from_string(string):
+    return EXITCODES.get(string, None)
 
 
 def should_show_retry(code):
@@ -227,6 +231,7 @@ def get_results(limit: int, offset: int = 0, **kwargs) -> list:
     requested_arch = kwargs.get("arch", None)
     requested_release = kwargs.get("release", None)
     requested_user = kwargs.get("user", None)
+    requested_exitcode = exitcode_from_string(kwargs.get("result", None))
 
     results = []
     # We want to use sqlite3.Row here, so we need to create a cursor
@@ -242,6 +247,10 @@ def get_results(limit: int, offset: int = 0, **kwargs) -> list:
             filters.append("release=:requested_release")
         if requested_user:
             filters.append("requester=:requested_user")
+        # special handling for exitcode, since it may be multiple codes
+        if requested_exitcode:
+            codes = ",".join(str(code) for code in requested_exitcode)
+            filters.append(f"exitcode IN ({codes})")
 
         for row in cursor.execute(
             "SELECT test_id, run_id, version, triggers, "
@@ -256,6 +265,7 @@ def get_results(limit: int, offset: int = 0, **kwargs) -> list:
                 "requested_arch": requested_arch,
                 "requested_release": requested_release,
                 "requested_user": requested_user,
+                "requested_exitcode": requested_exitcode,
             },
         ):
             arch = row["arch"]
@@ -689,9 +699,10 @@ def recent():
     arch = args.get("arch")
     release = args.get("release")
     user = args.get("user")
+    exitcode = args.get("result")
 
     recent_test_results = get_results(
-        limit, offset, arch=arch, release=release, user=user
+        limit, offset, arch=arch, release=release, user=user, result=exitcode
     )
 
     if flask.request.path.endswith(".json"):
@@ -705,6 +716,8 @@ def recent():
             for a in arches:
                 all_arches.add(a)
 
+        all_exitcodes = [k for k in EXITCODES.keys() if k != "otherfail"]
+
         return render(
             "browse-recent.html",
             running_tests=[],
@@ -714,8 +727,10 @@ def recent():
             offset=offset,
             releases=all_releases,
             all_arches=all_arches,
+            all_exitcodes=all_exitcodes,
             arch=arch or "",
             release=release or "",
+            exitcode=exitcode or "",
         )
 
 
