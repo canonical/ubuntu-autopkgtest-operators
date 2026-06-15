@@ -11,7 +11,6 @@ export RELEASE
 
 remote="remote-$arch-$index"
 imgremote="ubuntu-daily"
-minimgremote="ubuntu-minimal-daily"
 base=$RELEASE
 
 if [ -z "${MIRROR-}" ]; then
@@ -37,14 +36,6 @@ if
 then
     echo "No $base image appears to be available, falling back to $stable"
     base=$stable
-fi
-
-# If there is a minimal images for the selected base release, prefer that.
-# Some known bad base/type combinations are excluded.
-if { [ "$base" != bionic ] || [ "$type" != "vm" ]; } &&
-   "$@" "$minimgremote:$base/$arch" >/dev/null 2>&1
-then
-    imgremote=$minimgremote
 fi
 
 # Construct the autopkgtest-build-lxd command line in $@.
