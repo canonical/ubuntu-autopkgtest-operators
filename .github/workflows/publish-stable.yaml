@@ -1,0 +1,76 @@
+name: publish-stable
+
+on:
+  push:
+    tags:
+      - 'dispatcher-*'
+      - 'janitor-*'
+      - 'website-*'
+  workflow_dispatch:
+    inputs:
+      charm:
+        description: Charm short name
+        type: choice
+        required: true
+        options: [dispatcher, janitor, website]
+      revision:
+        description: Charmhub revision number
+        type: string
+        required: true
+      channel:
+        description: Destination channel (e.g. latest/stable, latest/candidate)
+        type: string
+        required: true
+        default: latest/stable
+
+permissions: {}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse and validate parameters
+        id: params
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+          IN_CHARM: ${{ inputs.charm }}
+          IN_REVISION: ${{ inputs.revision }}
+          IN_CHANNEL: ${{ inputs.channel }}
+        run: |
+          if [[ "$EVENT" == 'workflow_dispatch' ]]; then
+            charm="$IN_CHARM"
+            revision="$IN_REVISION"
+            channel="$IN_CHANNEL"
+          else
+            charm="${TAG%-*}"
+            revision="${TAG##*-}"
+            channel="latest/stable"
+          fi
+
+          [[ "$revision" =~ ^[1-9][0-9]*$ ]] \
+            || { echo "::error::invalid revision '${revision}' — must be a positive integer"; exit 1; }
+
+          case "$charm" in
+            dispatcher) full_name="ubuntu-autopkgtest-dispatcher" ;;
+            janitor)    full_name="ubuntu-autopkgtest-janitor" ;;
+            website)    full_name="ubuntu-autopkgtest-website" ;;
+            *)          echo "::error::unknown charm '${charm}' — expected dispatcher, janitor, or website"; exit 1 ;;
+          esac
+
+          {
+            echo "charm=$full_name"
+            echo "revision=$revision"
+            echo "channel=$channel"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install charmcraft
+        run: sudo snap install charmcraft --classic
+
+      - name: Release ${{ steps.params.outputs.charm }} rev ${{ steps.params.outputs.revision }} to ${{ steps.params.outputs.channel }}
+        env:
+          CHARMCRAFT_AUTH: ${{ secrets.CHARMHUB_TOKEN }}
+          CHARM: ${{ steps.params.outputs.charm }}
+          REVISION: ${{ steps.params.outputs.revision }}
+          CHANNEL: ${{ steps.params.outputs.channel }}
+        run: charmcraft release "$CHARM" --revision="$REVISION" --channel="$CHANNEL"
