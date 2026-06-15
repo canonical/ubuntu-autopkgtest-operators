@@ -1,0 +1,92 @@
+name: publish-edge
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force_all:
+        description: Build & publish all charms regardless of changed paths
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      charms: ${{ steps.matrix.outputs.charms }}
+      any: ${{ steps.matrix.outputs.any }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          persist-credentials: false
+
+      - id: filter
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36  # v3.0.2
+        with:
+          filters: |
+            dispatcher:
+              - 'charms/autopkgtest-dispatcher-operator/**'
+            janitor:
+              - 'charms/autopkgtest-janitor-operator/**'
+            website:
+              - 'charms/autopkgtest-website-operator/**'
+
+      - id: matrix
+        env:
+          FORCE_ALL: ${{ inputs.force_all }}
+          CHANGED_DISPATCHER: ${{ steps.filter.outputs.dispatcher }}
+          CHANGED_JANITOR: ${{ steps.filter.outputs.janitor }}
+          CHANGED_WEBSITE: ${{ steps.filter.outputs.website }}
+        run: |
+          CHARMS='[]'
+
+          add_if_changed() {
+            local name="$1"
+            local path="$2"
+            local changed="$3"
+            if [[ "$FORCE_ALL" == 'true' || "$changed" == 'true' ]]; then
+              CHARMS=$(printf '%s' "$CHARMS" | jq --arg name "$name" --arg path "$path" \
+                '. + [{"name": $name, "path": $path}]')
+            fi
+          }
+
+          add_if_changed dispatcher charms/autopkgtest-dispatcher-operator "$CHANGED_DISPATCHER"
+          add_if_changed janitor    charms/autopkgtest-janitor-operator    "$CHANGED_JANITOR"
+          add_if_changed website    charms/autopkgtest-website-operator    "$CHANGED_WEBSITE"
+
+          echo "charms=$CHARMS" >> "$GITHUB_OUTPUT"
+          if [[ "$CHARMS" == '[]' ]]; then
+            echo "any=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        charm: ${{ fromJSON(needs.detect-changes.outputs.charms) }}
+    name: publish ${{ matrix.charm.name }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          persist-credentials: false
+
+      - uses: canonical/charming-actions/upload-charm@1753e0803f70445132e92acd45c905aba6473225  # 2.7.0
+        with:
+          credentials: ${{ secrets.CHARMHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          charm-path: ${{ matrix.charm.path }}
+          channel: latest/edge
+          upload-image: 'false'
+          github-tag: 'false'
