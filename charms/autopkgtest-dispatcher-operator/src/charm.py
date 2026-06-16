@@ -131,6 +131,10 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         index = params.index
         remote_key = self._get_remote_key(arch, index)
 
+        if remote_key not in self._stored.workers:
+            event.fail(f"remote with index {index} does not exist for {arch}")
+            return
+
         event.log(f"Setting worker count for arch {remote_key}")
         self._stored.workers[remote_key] = params.count
         event.set_results(
