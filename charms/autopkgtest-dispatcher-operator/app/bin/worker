@@ -64,10 +64,6 @@ ARCH_RELEASE_RESTRICTION_MAPPING = {
 # Architectures supporting VM testbeds.
 VM_ARCHES = ["amd64", "amd64v3", "s390x"]
 
-# All the ARCH_RELEASE_RESTRICTION_MAPPING architectures for each
-# VM_ONLY_RELEASES release must be in VM_ARCHES.
-VM_ONLY_RELEASES = ["xenial"]
-
 SUCCESS_CODES = (0, 2, 8)
 TESTBED_FAILURE_CODE = 16
 
@@ -567,7 +563,6 @@ def request(channel, method, properties, body):
         vm_pkg = (
             request_matches_per_package(pkgname, architecture, release, vm_packages)
             and architecture in VM_ARCHES
-            or release in VM_ONLY_RELEASES
         )
 
         autopkgtest_checkout = cfg.get("autopkgtest", "checkout_dir").strip()
