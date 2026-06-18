@@ -49,17 +49,29 @@ never_run = set()
 esm_specials = set()
 vm_packages = set()
 
+# Releases not listed here are assumed to support any architecture.
 ARCH_RELEASE_RESTRICTION_MAPPING = {
-    "trusty": ["amd64", "i386"],
-    "xenial": ["amd64", "i386", "s390x"],
+    "trusty": ["amd64"],
+    "xenial": ["amd64"],
+    "bionic": ["amd64", "arm64", "ppc64el", "s390x"],
+    "focal": ["amd64", "arm64", "armhf", "ppc64el", "s390x"],
+    "jammy": ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"],
+    "noble": ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"],
+    "oracular": ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"],
+    "questing": ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"],
 }
+
+# Architectures supporting VM testbeds.
+VM_ARCHES = ["amd64", "amd64v3", "s390x"]
+
+# All the ARCH_RELEASE_RESTRICTION_MAPPING architectures for each
+# VM_ONLY_RELEASES release must be in VM_ARCHES.
+VM_ONLY_RELEASES = ["xenial"]
 
 SUCCESS_CODES = (0, 2, 8)
 TESTBED_FAILURE_CODE = 16
 
 KEYS_FOR_ADDITIONAL_PARAMS = ["all-proposed", "testname"]
-
-VM_ARCHES = ["amd64", "amd64v3"]
 
 
 def term_handler(signum, frame):
@@ -555,6 +567,7 @@ def request(channel, method, properties, body):
         vm_pkg = (
             request_matches_per_package(pkgname, architecture, release, vm_packages)
             and architecture in VM_ARCHES
+            or release in VM_ONLY_RELEASES
         )
 
         autopkgtest_checkout = cfg.get("autopkgtest", "checkout_dir").strip()
