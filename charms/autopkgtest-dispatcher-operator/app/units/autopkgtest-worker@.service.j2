@@ -8,6 +8,7 @@ After=network-online.target
 [Service]
 User={{ user }}
 TimeoutStartSec=5min
+WorkingDirectory={{ worker_lib_dest }}
 EnvironmentFile=-/etc/environment.d/proxy.conf
 EnvironmentFile={{ conf_directory }}/rabbitmq.cred
 EnvironmentFile={{ conf_directory }}/swift.cred
@@ -19,7 +20,7 @@ ExecStart=/bin/sh -ec '\
     juju_unit=$$(find /var/lib/juju/agents -maxdepth 1 -type d -name "unit-*" -printf %%f); \
     dispatcher="$${juju_unit#unit-}"; \
     name="$${dispatcher}-$${param}"; \
-    exec /usr/local/bin/worker --config "{{ conf_directory }}/worker.conf" -v LXD_REMOTE="$$remote" -v NAME="$$name" -a "$$arch"'
+    exec /usr/bin/python3 -m worker --config "{{ conf_directory }}/worker.conf" -r "$$remote" -n "$$name" -a "$$arch"'
 ExecReload=/bin/kill -HUP $MAINPID
 SuccessExitStatus=0 99 SIGTERM SIGHUP
 RestartSec=10min
