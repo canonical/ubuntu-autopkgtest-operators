@@ -49,7 +49,17 @@ set -- "$@" --remote "$remote" "$imgremote:$base/$arch"
 # is started from the systemd service, then limit to one image build
 # per remote.
 if [ -d "${RUNTIME_DIRECTORY-}" ]; then
-    set -- flock --verbose "$RUNTIME_DIRECTORY/$remote.lock" "$@"
+    # Open the lock file on fd 9 and block until the per-remote lock is
+    # available. The fd is kept open across the final exec below, so the lock
+    # is held for the whole build.
+    exec 9>"$RUNTIME_DIRECTORY/$remote.lock"
+    flock --verbose 9
+
+    # Lock acquired: tell systemd the build is about to start, so the unit
+    # transitions to "running" and RuntimeMaxSec starts counting from here.
+    if [ -n "${NOTIFY_SOCKET-}" ]; then
+        systemd-notify --ready
+    fi
 fi
 
 exec "$@"

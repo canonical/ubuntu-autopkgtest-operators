@@ -4,9 +4,11 @@ Wants=network-online.target
 After=network-online.target
 
 [Service]
-Type=exec
+Type=notify
+NotifyAccess=all
 User={{ user }}
 TimeoutStartSec=18h
+RuntimeMaxSec=2h
 EnvironmentFile=-/etc/environment.d/proxy.conf
 Environment="PATH={{ autopkgtest_location }}/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/snap/bin"
 Environment="MIRROR={{ mirror }}"
