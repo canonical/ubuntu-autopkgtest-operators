@@ -20,6 +20,7 @@ jobs:
     outputs:
       charms: ${{ steps.matrix.outputs.charms }}
       any: ${{ steps.matrix.outputs.any }}
+      dispatcher: ${{ steps.filter.outputs.dispatcher }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
@@ -66,9 +67,22 @@ jobs:
             echo "any=true" >> "$GITHUB_OUTPUT"
           fi
 
-  publish:
+  test-dispatcher:
     needs: detect-changes
-    if: needs.detect-changes.outputs.any == 'true'
+    if: needs.detect-changes.outputs.dispatcher == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/worker-tests.yaml
+
+  publish:
+    needs: [detect-changes, test-dispatcher]
+    # force_all is a manual override: publish regardless of worker-test results
+    if: |
+      !cancelled()
+      && needs.detect-changes.outputs.any == 'true'
+      && (inputs.force_all
+          || needs.test-dispatcher.result == 'success'
+          || needs.test-dispatcher.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
