@@ -80,6 +80,12 @@ def is_proxy_defined():
 
 def write_worker_config(releases):
     extra_args = []
+    if is_proxy_defined():
+        extra_args = [
+            f"--env http_proxy={os.getenv('JUJU_CHARM_HTTP_PROXY')}",
+            f"--env https_proxy={os.getenv('JUJU_CHARM_HTTPS_PROXY')}",
+            f"--env no_proxy={os.getenv('JUJU_CHARM_NO_PROXY')}",
+        ]
     with open(WORKER_CONFIG_PATH, "w") as file:
         file.write(
             dedent(
