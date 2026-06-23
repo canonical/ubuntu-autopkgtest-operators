@@ -524,7 +524,7 @@ def request(channel, method, properties, body):
             with open(os.path.join(out_dir, "log"), "w") as log:
                 log.write(errormessage)
             with open(os.path.join(out_dir, "testpkg-version"), "w") as testpkg_version:
-                testpkg_version.write(errormessage)
+                testpkg_version.write(f"{pkgname} unknown")
             dont_run = True
         elif request_matches_per_package(pkgname, architecture, release, never_run):
             logging.warning("Marked to never run, ignoring")
