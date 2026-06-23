@@ -46,7 +46,6 @@ hostname = socket.gethostname()
 big_packages = set()
 long_tests = set()
 never_run = set()
-esm_specials = set()
 vm_packages = set()
 
 # Releases not listed here are assumed to support any architecture.
@@ -148,14 +147,13 @@ def read_per_package_configs(cfg):
                     out.add(f"{package}/{arch}/{release}")
             return out
 
-    global big_packages, long_tests, never_run, esm_specials, vm_packages
+    global big_packages, long_tests, never_run, vm_packages
 
     d = cfg.get("autopkgtest", "per_package_config_dir").strip()
 
     big_packages = read_per_package_file(os.path.join(d, "big_packages"))
     long_tests = read_per_package_file(os.path.join(d, "long_tests"))
     never_run = read_per_package_file(os.path.join(d, "never_run"))
-    esm_specials = read_per_package_file(os.path.join(d, "esm_specials"))
     vm_packages = read_per_package_file(os.path.join(d, "vm_packages"))
 
 
@@ -510,9 +508,6 @@ def request(channel, method, properties, body):
         if (
             release.lower() in ARCH_RELEASE_RESTRICTION_MAPPING
             and architecture not in ARCH_RELEASE_RESTRICTION_MAPPING[release.lower()]
-            and not request_matches_per_package(
-                pkgname, architecture, release, esm_specials
-            )
         ):
             os.makedirs(out_dir)
             # these will be written later on
