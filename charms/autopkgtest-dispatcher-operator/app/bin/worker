@@ -571,6 +571,7 @@ def request(channel, method, properties, body):
         else:
             argv = ["autopkgtest"]
         argv += ["--output-dir", out_dir]
+        argv += ["--needs-internet=try"]
 
         if i386_foreign_series(release) and architecture == "i386":
             argv += ["-a", "i386"]
