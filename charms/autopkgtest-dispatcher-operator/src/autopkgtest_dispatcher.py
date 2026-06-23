@@ -50,7 +50,7 @@ SWIFT_CONFIG_PATH = CONF_DIRECTORY / "swift.cred"
 CHARM_SOURCE_PATH = Path(__file__).parent.parent
 CHARM_APP_DATA = CHARM_SOURCE_PATH / "app"
 
-WORKER_TOOLS_DEST = Path("/usr/local/bin/")
+WORKER_LIB_DEST = Path("/usr/local/lib/autopkgtest-worker")
 
 systemd_helper = SystemdHelper()
 
@@ -95,16 +95,6 @@ def write_worker_config(releases):
                 per_package_config_dir = {AUTOPKGTEST_PACKAGE_CONFIGS_LOCATION}
                 releases = {" ".join(releases)}
                 extra_args = {" ".join(extra_args)}
-                setup_command =
-                setup_command2 =
-                retry_delay = 300
-                debug = 0
-                architectures =
-
-                [virt]
-                args = lxd --delete-existing --name $NAME $VMOPT -r $LXD_REMOTE $LXD_REMOTE:autopkgtest/ubuntu/$RELEASE/$ARCHITECTURE$VMFLAG $PACKAGESIZE
-                package_size_default = -c limits.cpu=2 -c limits.memory=4GiB -d root,size=20GiB
-                package_size_big = -c limits.cpu=4 -c limits.memory=8GiB -d root,size=100GiB
                 """
             )
         )
@@ -204,7 +194,12 @@ def install(autopkgtest_branch, releases):
 
     logger.info("installing worker and tools")
     src_path = CHARM_APP_DATA / "bin"
-    shutil.copy(src_path / "worker", WORKER_TOOLS_DEST)
+    WORKER_LIB_DEST.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        src_path / "worker",
+        WORKER_LIB_DEST / "worker",
+        dirs_exist_ok=True,
+    )
 
     logger.info("writing worker config")
     write_worker_config(releases)
@@ -222,6 +217,7 @@ def install(autopkgtest_branch, releases):
     j2context = {
         "user": USER,
         "conf_directory": CONF_DIRECTORY,
+        "worker_lib_dest": WORKER_LIB_DEST,
         "rabbitmq_creds_path": RABBITMQ_CREDS_PATH,
         "autopkgtest_package_configs_location": AUTOPKGTEST_PACKAGE_CONFIGS_LOCATION,
     }

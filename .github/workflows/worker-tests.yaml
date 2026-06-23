@@ -1,0 +1,78 @@
+name: worker-tests
+
+on:
+  pull_request:
+    paths:
+      - 'charms/autopkgtest-dispatcher-operator/app/bin/worker/**'
+      - 'charms/autopkgtest-dispatcher-operator/tests/**'
+      - '.github/workflows/worker-tests.yaml'
+  push:
+    branches: [main]
+    paths:
+      - 'charms/autopkgtest-dispatcher-operator/app/bin/worker/**'
+      - 'charms/autopkgtest-dispatcher-operator/tests/**'
+      - '.github/workflows/worker-tests.yaml'
+  workflow_call: {}
+
+permissions: {}
+
+jobs:
+  dispatcher-worker:
+    name: dispatcher worker unit tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: charms/autopkgtest-dispatcher-operator
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: charms/autopkgtest-dispatcher-operator/tests/requirements.txt
+
+      - name: Install test dependencies
+        run: pip install -r tests/requirements.txt
+
+      - name: Run unit tests with coverage
+        run: |
+          python -m pytest -c tests/pyproject.toml \
+            --cov=worker \
+            --cov-fail-under=95 \
+            --cov-report=term-missing \
+            --cov-report=html:coverage-html \
+            --cov-report=json:coverage.json
+
+      - name: Write coverage summary to job page
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          import pathlib
+
+          path = pathlib.Path("coverage.json")
+          if path.exists():
+              totals = json.loads(path.read_text())["totals"]
+              print("## Worker coverage")
+              print(f"- **Line coverage:** {totals['percent_covered']:.2f}%")
+              print(f"- Statements: {totals['covered_lines']}/{totals['num_statements']}")
+              print(f"- Branches: {totals['covered_branches']}/{totals['num_branches']}")
+              print(f"- Missing branches: {totals['missing_branches']}")
+          else:
+              print("## Worker coverage")
+              print("_Coverage report not generated; the test step did not complete._")
+          PY
+
+      - name: Upload HTML coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: dispatcher-worker-coverage
+          path: charms/autopkgtest-dispatcher-operator/coverage-html
+          retention-days: 14
+          if-no-files-found: error

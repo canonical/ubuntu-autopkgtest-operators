@@ -1,0 +1,17 @@
+[tool.pytest.ini_options]
+testpaths = ["unit"]
+addopts = "--strict-markers -ra --cov-config=tests/pyproject.toml"
+
+[tool.coverage.run]
+source = ["worker"]
+branch = true
+omit = ["*/worker/__main__.py"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+]
