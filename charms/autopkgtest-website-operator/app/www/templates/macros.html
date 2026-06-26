@@ -128,11 +128,11 @@
                 {% for req in reqs %}
                   <tr>
                     <td>
-                      <a href="{{ url_for('package_overview', package=req.package) }}">{{ req.package }}</a>
+                      <a href="{{ url_for('package_overview', package=req["package"]) }}">{{ req["package"] }}</a>
                     </td>
-                    <td>{{ req.triggers }}</td>
-                    <td>{{ req.submit_time }}</td>
-                    <td>{{ render_requester(req.requester) }}</td>
+                    <td>{{ req["triggers"] }}</td>
+                    <td>{{ req["submit-time"] }}</td>
+                    <td>{{ render_requester(req["requester"]) }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
