@@ -10,7 +10,7 @@
   RewriteRule ^/favicon\.ico$ - [R=204,L]
 
   # Block AI crawlers
-  RewriteCond %{HTTP_USER_AGENT} ".*(Macintosh|Windows|Apple).*" [NC]
+  RewriteCond %{HTTP_USER_AGENT} ".*(Macintosh|Windows|GPTBot).*" [NC]
   RewriteRule ^ - [F,L]
 
   RemoteIPHeader X-Forwarded-For
