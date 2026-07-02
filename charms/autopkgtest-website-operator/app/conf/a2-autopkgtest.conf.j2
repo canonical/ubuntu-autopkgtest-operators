@@ -9,9 +9,12 @@
   # Return 204 for favicon.ico
   RewriteRule ^/favicon\.ico$ - [R=204,L]
 
-  # Block AI crawlers
-  RewriteCond %{HTTP_USER_AGENT} ".*(Macintosh|Windows|GPTBot).*" [NC]
-  RewriteRule ^ - [F,L]
+  # Block naive AI crawlers: require a cookie that only a real browser
+  # (executing JavaScript) will set. Allow known CLI tooling through.
+  ErrorDocument 429 "<script>document.cookie='not_a_crawler=1; path=/';location.reload();</script>"
+  RewriteCond %{HTTP_USER_AGENT} !^(curl|Wget|Python-urllib) [NC]
+  RewriteCond %{HTTP_COOKIE} !not_a_crawler=1 [NC]
+  RewriteRule ^ - [R=429,L]
 
   RemoteIPHeader X-Forwarded-For
   ErrorLog ${APACHE_LOG_DIR}/error.log
