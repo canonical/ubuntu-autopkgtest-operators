@@ -84,14 +84,12 @@ Credentials are read from /etc/autopkgtest-janitor/rabbitmq.cred.
     parser.add_argument(
         "-n",
         "--dry-run",
-        default=False,
         action="store_true",
         help="only show the operations that would be performed",
     )
     parser.add_argument(
         "-v",
         "--verbose",
-        default=False,
         action="store_true",
         help="additionally show queue items that are not removed",
     )
