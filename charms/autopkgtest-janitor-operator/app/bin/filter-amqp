@@ -7,7 +7,6 @@ import logging
 import os
 import re
 import sys
-import time
 
 import distro_info
 import pika
@@ -68,6 +67,7 @@ def filter_amqp(options, queue_name, regex):
                 num_items_deleted += 1
     channel.close()
     amqp_con.close()
+    logging.info("Removed %d items from %s", num_items_deleted, queue_name)
     return num_items_deleted
 
 
@@ -146,24 +146,9 @@ $RABBIT_HOST, $RABBIT_USER, and $RABBIT_PASSWORD environment variables.
     queues = [args.queue_name] if args.queue_name != "all" else generate_queue_names()
 
     for this_queue in queues:
-        deletion_count_history = []
-        while True:
-            num_deleted = filter_amqp(args, this_queue, args.regex)
-            if num_deleted is None:
-                logging.info("Skipping %s", this_queue)
-                break
-            deletion_count_history.append(num_deleted)
-            if args.dry_run:
-                break
-            if len(deletion_count_history) >= 5 and all(
-                x == 0 for x in deletion_count_history[-5:]
-            ):
-                history = "\n".join(str(x) for x in deletion_count_history)
-                logging.info(
-                    "Finished filtering queue objects, run history:\n%s", history
-                )
-                break
-            time.sleep(5)
+        num_deleted = filter_amqp(args, this_queue, args.regex)
+        if num_deleted is None:
+            logging.info("Skipping %s", this_queue)
 
 
 if __name__ == "__main__":
