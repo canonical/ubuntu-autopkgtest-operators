@@ -12,7 +12,7 @@
   # Block naive AI crawlers: require a cookie that only a real browser
   # (executing JavaScript) will set. Allow known CLI tooling through.
   ErrorDocument 429 "<script>document.cookie='not_a_crawler=1; path=/';location.reload();</script>"
-  RewriteCond %{HTTP_USER_AGENT} !^(curl|Wget|Python-urllib|ubuntu/) [NC]
+  RewriteCond %{HTTP_USER_AGENT} !^(curl|Wget|Python-urllib|ubuntu/|GitHub-Hookshot) [NC]
   RewriteCond %{HTTP_COOKIE} !not_a_crawler=1 [NC]
   RewriteRule ^ - [R=429,L]
 
