@@ -4,7 +4,6 @@
 import argparse
 import configparser
 import logging
-import os
 import re
 import sys
 
@@ -13,23 +12,15 @@ import pika
 
 
 def get_amqp_channel():
-    try:
-        cp = configparser.ConfigParser()
-        with open("/etc/autopkgtest-janitor/rabbitmq.cred") as f:
-            cp.read_string("[rabbit]\n" + f.read().replace('"', ""))
-        host = cp["rabbit"]["RABBIT_HOST"]
-        user = cp["rabbit"]["RABBIT_USER"]
-        password = cp["rabbit"]["RABBIT_PASSWORD"]
-    except (FileNotFoundError, KeyError):
-        host = os.environ["RABBIT_HOST"]
-        user = os.environ["RABBIT_USER"]
-        password = os.environ["RABBIT_PASSWORD"]
+    cp = configparser.ConfigParser()
+    with open("/etc/autopkgtest-janitor/rabbitmq.cred") as f:
+        cp.read_string("[rabbit]\n" + f.read().replace('"', ""))
     amqp_con = pika.BlockingConnection(
         parameters=pika.ConnectionParameters(
-            host=host,
+            host=cp["rabbit"]["RABBIT_HOST"],
             credentials=pika.PlainCredentials(
-                username=user,
-                password=password,
+                username=cp["rabbit"]["RABBIT_USER"],
+                password=cp["rabbit"]["RABBIT_PASSWORD"],
             ),
         ),
     )
@@ -94,8 +85,7 @@ one, and that previous upload still had a lot of tests scheduled. To avoid
 processing useless jobs, the queue can be filtered on the trigger of the
 obsolete upload.
 
-If /etc/autopkgtest-janitor/rabbitmq.cred is not present, this script will load credentials from
-$RABBIT_HOST, $RABBIT_USER, and $RABBIT_PASSWORD environment variables.
+Credentials are read from /etc/autopkgtest-janitor/rabbitmq.cred.
 """,
         formatter_class=argparse.RawTextHelpFormatter,
     )
