@@ -5,7 +5,6 @@ import argparse
 import configparser
 import logging
 import re
-import sys
 
 import distro_info
 import pika
@@ -45,11 +44,7 @@ def filter_amqp(options, queue_name, regex):
         if isinstance(body, str):
             body = body.encode("UTF-8")
         logging.debug("queue item: %s (not deleting)", body)
-        if options.all_items_in_queue:
-            last_search_successful = True
-        else:
-            last_search_successful = filter_re.search(body)
-        if last_search_successful:
+        if filter_re.search(body):
             if options.dry_run:
                 logging.info("queue item: %s (would delete)", body)
             else:
@@ -104,16 +99,6 @@ Credentials are read from /etc/autopkgtest-janitor/rabbitmq.cred.
         help="additionally show queue items that are not removed",
     )
     parser.add_argument(
-        "-a",
-        "--all-items-in-queue",
-        default=False,
-        action="store_true",
-        help=(
-            "delete all items from specified queue. "
-            "When using this option, the provided regex will be ignored."
-        ),
-    )
-    parser.add_argument(
         "queue_name",
         help="The name of the queue to filter. `all` is a valid value.",
     )
@@ -126,13 +111,6 @@ Credentials are read from /etc/autopkgtest-janitor/rabbitmq.cred.
         format="%(asctime)s - %(message)s",
     )
 
-    if args.all_items_in_queue:
-        print("Do you really want to flush this queue? [yN]", end="")
-        sys.stdout.flush()
-        response = sys.stdin.readline()
-        if not response.strip().lower().startswith("y"):
-            print("Exiting")
-            sys.exit(1)
     queues = [args.queue_name] if args.queue_name != "all" else generate_queue_names()
 
     for this_queue in queues:
