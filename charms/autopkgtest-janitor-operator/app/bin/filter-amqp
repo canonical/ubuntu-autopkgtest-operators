@@ -10,11 +10,11 @@ import distro_info
 import pika
 
 
-def get_amqp_channel():
+def get_amqp_connection():
     cp = configparser.ConfigParser()
     with open("/etc/autopkgtest-janitor/rabbitmq.cred") as f:
         cp.read_string("[rabbit]\n" + f.read().replace('"', ""))
-    amqp_con = pika.BlockingConnection(
+    return pika.BlockingConnection(
         parameters=pika.ConnectionParameters(
             host=cp["rabbit"]["RABBIT_HOST"],
             credentials=pika.PlainCredentials(
@@ -23,14 +23,13 @@ def get_amqp_channel():
             ),
         ),
     )
-    return amqp_con, amqp_con.channel()
 
 
-def filter_amqp(options, queue_name, regex):
+def filter_amqp(dry_run, amqp_con, queue_name, regex):
     num_items_deleted = 0
-    filter_re = re.compile(regex.encode("UTF-8"), re.DOTALL)
+    filter_re = re.compile(regex, re.DOTALL)
 
-    amqp_con, channel = get_amqp_channel()
+    channel = amqp_con.channel()
 
     while True:
         try:
@@ -41,18 +40,16 @@ def filter_amqp(options, queue_name, regex):
         if body is None:
             logging.info("Message empty, we probably reached the end of the queue")
             break
-        if isinstance(body, str):
-            body = body.encode("UTF-8")
+        body = body.decode("UTF-8")
         logging.debug("queue item: %s (not deleting)", body)
         if filter_re.search(body):
-            if options.dry_run:
+            if dry_run:
                 logging.info("queue item: %s (would delete)", body)
             else:
                 logging.info("queue item: %s (deleting)", body)
                 channel.basic_ack(method.delivery_tag)
                 num_items_deleted += 1
     channel.close()
-    amqp_con.close()
     logging.info("Removed %d items from %s", num_items_deleted, queue_name)
     return num_items_deleted
 
@@ -113,10 +110,12 @@ Credentials are read from /etc/autopkgtest-janitor/rabbitmq.cred.
 
     queues = [args.queue_name] if args.queue_name != "all" else generate_queue_names()
 
+    amqp_con = get_amqp_connection()
     for this_queue in queues:
-        num_deleted = filter_amqp(args, this_queue, args.regex)
+        num_deleted = filter_amqp(args.dry_run, amqp_con, this_queue, args.regex)
         if num_deleted is None:
             logging.info("Skipping %s", this_queue)
+    amqp_con.close()
 
 
 if __name__ == "__main__":
