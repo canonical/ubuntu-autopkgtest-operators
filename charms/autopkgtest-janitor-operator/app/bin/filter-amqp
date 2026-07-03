@@ -40,7 +40,6 @@ def filter_amqp(dry_run, amqp_con, queue_name, regex):
             logger.warning(f"Queue {queue_name} not found")
             return None
         if body is None:
-            logger.info("Message empty, we probably reached the end of the queue")
             break
         body = body.decode("UTF-8")
         logger.debug("queue item: %s (not deleting)", body)
