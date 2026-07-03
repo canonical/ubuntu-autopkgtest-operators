@@ -16,7 +16,7 @@ import pika
 def get_amqp_channel():
     try:
         cp = configparser.ConfigParser()
-        with open("/home/ubuntu/rabbitmq.cred") as f:
+        with open("/etc/autopkgtest-janitor/rabbitmq.cred") as f:
             cp.read_string("[rabbit]\n" + f.read().replace('"', ""))
         host = cp["rabbit"]["RABBIT_HOST"]
         user = cp["rabbit"]["RABBIT_USER"]
@@ -98,7 +98,7 @@ one, and that previous upload still had a lot of tests scheduled. To avoid
 processing useless jobs, the queue can be filtered on the trigger of the
 obsolete upload.
 
-If ~/rabbitmq.cred is not present, this script will load credentials from
+If /etc/autopkgtest-janitor/rabbitmq.cred is not present, this script will load credentials from
 $RABBIT_HOST, $RABBIT_USER, and $RABBIT_PASSWORD environment variables.
 """,
         formatter_class=argparse.RawTextHelpFormatter,
