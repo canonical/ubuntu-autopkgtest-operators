@@ -76,17 +76,13 @@ def generate_queue_names():
     releases = set(udi.supported() + udi.supported_esm())
     prefix = "debci"
     architectures = ["amd64", "arm64", "armhf", "i386", "ppc64el", "s390x"]
-    poss_secondaries = ["huge", None]
-    queues = []
-    for secondary in poss_secondaries:
-        for release in releases:
-            for arch in architectures:
-                if secondary is not None:
-                    queue_name = "-".join([prefix, secondary, release, arch])
-                else:
-                    queue_name = "-".join([prefix, release, arch])
-                queues.append(queue_name)
-    return queues
+    secondaries = ["huge", None]
+    return [
+        "-".join(part for part in (prefix, secondary, release, arch) if part)
+        for secondary in secondaries
+        for release in releases
+        for arch in architectures
+    ]
 
 
 def main():
@@ -141,11 +137,11 @@ $RABBIT_HOST, $RABBIT_USER, and $RABBIT_PASSWORD environment variables.
     )
 
     if args.all_items_in_queue:
-        print("""Do you really want to flush this queue? [yN]""", end="")
+        print("Do you really want to flush this queue? [yN]", end="")
         sys.stdout.flush()
         response = sys.stdin.readline()
         if not response.strip().lower().startswith("y"):
-            print("""Exiting""")
+            print("Exiting")
             sys.exit(1)
     queues = [args.queue_name] if args.queue_name != "all" else generate_queue_names()
 
@@ -160,12 +156,11 @@ $RABBIT_HOST, $RABBIT_USER, and $RABBIT_PASSWORD environment variables.
             if args.dry_run:
                 break
             if len(deletion_count_history) >= 5 and all(
-                [x == 0 for x in deletion_count_history[-5:]]
+                x == 0 for x in deletion_count_history[-5:]
             ):
+                history = "\n".join(str(x) for x in deletion_count_history)
                 logging.info(
-                    "Finished filtering queue objects, run history:\n{}".format(
-                        "\n".join(str(x) for x in deletion_count_history)
-                    )
+                    "Finished filtering queue objects, run history:\n%s", history
                 )
                 break
             time.sleep(5)
