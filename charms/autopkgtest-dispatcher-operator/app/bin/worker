@@ -1072,7 +1072,7 @@ def main():
             method, properties, body = channel.basic_get(q)
             if method:
                 request(channel, method, properties, body)
-            if exit_requested:
+            if exit_requested is not None:
                 break
             time.sleep(2)
     except OSError:
@@ -1082,6 +1082,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-    if exit_requested:
+    if exit_requested is not None:
         logging.info("Exiting with %i due to queued exit request", exit_requested)
         sys.exit(exit_requested)
