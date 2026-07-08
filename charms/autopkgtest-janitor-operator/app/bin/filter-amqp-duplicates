@@ -1,0 +1,163 @@
+#!/usr/bin/python3
+# Read all queues and drop duplicate or invalid messages.
+
+import configparser
+import json
+import logging
+
+import pika
+from pika.exceptions import AMQPError
+
+AMQP_CONTEXTS = ["ubuntu", "huge", "ppa", "upstream"]
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+
+def get_targets():
+    """Read the target releases and architectures from targets.conf.
+
+    The file is in shell VAR=value format, e.g.:
+
+        ARCHES=armhf amd64 arm64
+        RELEASES=focal jammy noble
+    """
+    values = {}
+    with open("/etc/autopkgtest-janitor/targets.conf") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip().strip("\"'").split()
+    return values["RELEASES"], values["ARCHES"]
+
+
+def get_amqp_connection():
+    cp = configparser.ConfigParser()
+    with open("/etc/autopkgtest-janitor/rabbitmq.cred") as f:
+        cp.read_string("[rabbit]\n" + f.read().replace('"', ""))
+    return pika.BlockingConnection(
+        parameters=pika.ConnectionParameters(
+            host=cp["rabbit"]["RABBIT_HOST"],
+            credentials=pika.PlainCredentials(
+                username=cp["rabbit"]["RABBIT_USER"],
+                password=cp["rabbit"]["RABBIT_PASSWORD"],
+            ),
+        ),
+    )
+
+
+def request_unique_key(body):
+    """Return a stable deduplication key for an AMQP request."""
+    package, params = body.split("\n", 1)
+    params = json.loads(params)
+    params.pop("requester", None)
+    params.pop("submit-time", None)
+    return package, json.dumps(params, sort_keys=True)
+
+
+def queue_release_arch(queue_name):
+    """Return the release and architecture encoded in an AMQP queue name."""
+    if not queue_name.startswith("debci-"):
+        raise ValueError(f"invalid queue name: {queue_name}")
+
+    queue = queue_name.removeprefix("debci-")
+    for context in AMQP_CONTEXTS:
+        if context == "ubuntu":
+            continue
+        context_prefix = f"{context}-"
+        if queue.startswith(context_prefix):
+            queue = queue.removeprefix(context_prefix)
+            break
+
+    release, arch = queue.rsplit("-", 1)
+    return release, arch
+
+
+def queue_names():
+    """Yield all autopkgtest queue names that should be deduplicated."""
+    releases, architectures = get_targets()
+
+    for context in AMQP_CONTEXTS:
+        for release in releases:
+            for arch in architectures:
+                if context == "ubuntu":
+                    # Ubuntu test requests use context-less names.
+                    yield f"debci-{release}-{arch}"
+                else:
+                    yield f"debci-{context}-{release}-{arch}"
+
+
+def deduplicate_queue(amqp_conn, queue_name, seen):
+    """Drop invalid and duplicate requests from one AMQP queue."""
+    release, arch = queue_release_arch(queue_name)
+    channel = amqp_conn.channel()
+    kept = dropped = invalid = 0
+
+    try:
+        # Unique requests are left unacked; closing the channel puts them back.
+        while True:
+            method, _, body = channel.basic_get(queue_name)
+            if body is None:
+                break
+
+            try:
+                if isinstance(body, bytes):
+                    body = body.decode("UTF-8")
+                key = (release, arch, request_unique_key(body))
+            except (
+                UnicodeDecodeError,
+                ValueError,
+                IndexError,
+                TypeError,
+                AttributeError,
+            ) as e:
+                invalid += 1
+                logger.warning(f"Received invalid request {body}: {repr(e)}")
+                channel.basic_ack(delivery_tag=method.delivery_tag)
+                continue
+
+            if key in seen:
+                dropped += 1
+                logger.info(f"Dropping duplicate request from {queue_name}: {key}")
+                channel.basic_ack(delivery_tag=method.delivery_tag)
+                continue
+
+            kept += 1
+            seen.add(key)
+            logger.debug(f"Keeping request from {queue_name}: {key}")
+    finally:
+        channel.close()
+
+    return kept, dropped, invalid
+
+
+def deduplicate_queues(amqp_conn):
+    """Deduplicate all autopkgtest queues."""
+    seen = set()
+
+    for queue_name in queue_names():
+        try:
+            kept, dropped, invalid = deduplicate_queue(amqp_conn, queue_name, seen)
+        except AMQPError:
+            logger.warning(f"Failed reading data from queue {queue_name}")
+            continue
+
+        logger.info(
+            "%s: kept %d request(s), dropped %d duplicate(s), dropped %d invalid request(s)",
+            queue_name,
+            kept,
+            dropped,
+            invalid,
+        )
+
+
+if __name__ == "__main__":
+    amqp_conn = get_amqp_connection()
+    logger.info("Connected to AMQP")
+
+    try:
+        deduplicate_queues(amqp_conn)
+    finally:
+        amqp_conn.close()
