@@ -895,6 +895,9 @@ def request(channel, method, properties, body):
             logging.info("Keeping results in %s", work_dir)
 
     complete_amqp = amqp_con.channel()
+    # Wait for broker confirmation so a lost publish raises instead of
+    # silently dropping the result.
+    complete_amqp.confirm_delivery()
     complete_amqp.exchange_declare(
         exchange=complete_exchange_name,
         exchange_type="fanout",
