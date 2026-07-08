@@ -6,10 +6,28 @@ import configparser
 import logging
 import re
 
-import distro_info
 import pika
 
 logger = logging.getLogger(__name__)
+
+
+def get_targets():
+    """Read the target releases and architectures from targets.conf.
+
+    The file is in shell VAR=value format, e.g.:
+
+        ARCHES=armhf amd64 arm64
+        RELEASES=focal jammy noble
+    """
+    values = {}
+    with open("/etc/autopkgtest-janitor/targets.conf") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip().strip("\"'").split()
+    return values["RELEASES"], values["ARCHES"]
 
 
 def get_amqp_connection():
@@ -56,10 +74,8 @@ def filter_amqp(dry_run, amqp_con, queue_name, regex):
 
 
 def generate_queue_names():
-    udi = distro_info.UbuntuDistroInfo()
-    releases = set(udi.supported() + udi.supported_esm())
+    releases, architectures = get_targets()
     prefix = "debci"
-    architectures = ["amd64", "arm64", "armhf", "i386", "ppc64el", "s390x"]
     secondaries = ["huge", None]
     return [
         "-".join(part for part in (prefix, secondary, release, arch) if part)
