@@ -735,9 +735,6 @@ def request(channel, method, properties, body):
         if private:
             container = f"private-{container}"
 
-        logging.info(f"Acknowledging request {body}")
-        channel.basic_ack(delivery_tag=method.delivery_tag)
-
         # run autopkgtest
         if not dont_run:
             global running_test
@@ -898,6 +895,9 @@ def request(channel, method, properties, body):
             logging.info("Keeping results in %s", work_dir)
 
     complete_amqp = amqp_con.channel()
+    # Wait for broker confirmation so a lost publish raises instead of
+    # silently dropping the result.
+    complete_amqp.confirm_delivery()
     complete_amqp.exchange_declare(
         exchange=complete_exchange_name,
         exchange_type="fanout",
@@ -929,6 +929,9 @@ def request(channel, method, properties, body):
         ),
     )
     complete_amqp.close()
+
+    logging.info(f"Acknowledging request {body}")
+    channel.basic_ack(delivery_tag=method.delivery_tag)
 
     running_test = False
 
@@ -1069,7 +1072,7 @@ def main():
             method, properties, body = channel.basic_get(q)
             if method:
                 request(channel, method, properties, body)
-            if exit_requested:
+            if exit_requested is not None:
                 break
             time.sleep(2)
     except OSError:
@@ -1079,6 +1082,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-    if exit_requested:
+    if exit_requested is not None:
         logging.info("Exiting with %i due to queued exit request", exit_requested)
         sys.exit(exit_requested)
