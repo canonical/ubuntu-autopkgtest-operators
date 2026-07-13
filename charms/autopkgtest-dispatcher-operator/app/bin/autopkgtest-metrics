@@ -1,0 +1,338 @@
+#!/usr/bin/python3
+"""Autopkgtest Prometheus metrics exporter.
+
+Exposes four metric series on port 9101 (/metrics):
+
+  autopkgtest_queue_size         Gauge  release, arch
+  autopkgtest_exit_event_total   Counter arch, exit_status
+  autopkgtest_unit_status        Gauge  arch, status
+  autopkgtest_lxd_status         Gauge  status
+"""
+
+import concurrent.futures
+import configparser
+import json
+import logging
+import os
+import subprocess
+import threading
+import time
+
+import pika
+import pika.exceptions
+import prometheus_client
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
+
+# Port the HTTP metrics server listens on.
+METRICS_PORT = 9101
+
+# How often (seconds) the polling thread refreshes gauge metrics.
+POLL_INTERVAL = 30
+
+# How often (seconds) the LXD remote connectivity probe runs.
+# Probing each remote is expensive (up to 10s timeout per remote, ~100 remotes in
+# production), so this runs much less frequently than the other gauges.
+LXD_POLL_INTERVAL = 120
+
+# Maximum number of concurrent LXD remote probes.
+LXD_PROBE_MAX_WORKERS = 20
+
+# All architectures that can appear in queue names.
+# NOTE: this list is a maintenance point — update it when a new architecture is
+# added to the dispatcher.
+KNOWN_ARCHES = [
+    "amd64", "amd64v3", "i386", "arm64",
+    "armhf", "s390x", "ppc64el", "riscv64",
+]
+
+# All queue context prefixes used by the dispatcher worker.
+QUEUE_CONTEXTS = ["", "huge-", "ppa-", "upstream-"]
+
+# Path to the rabbitmq credentials env-file.
+RABBITMQ_CRED_PATH = "/etc/autopkgtest-dispatcher/rabbitmq.cred"
+
+# Path to the worker config (used to read the releases list).
+WORKER_CONF_PATH = "/etc/autopkgtest-dispatcher/worker.conf"
+
+# Name of the RabbitMQ fanout exchange that the worker publishes to on
+# every job completion.
+COMPLETE_EXCHANGE = "testcomplete.fanout"
+
+# --------------------------------------------------------------------------
+# Prometheus metric objects
+# --------------------------------------------------------------------------
+
+queue_size = prometheus_client.Gauge(
+    "autopkgtest_queue_size",
+    "Number of pending jobs in the autopkgtest AMQP queue",
+    ["release", "arch", "context"],
+)
+
+exit_event = prometheus_client.Counter(
+    # prometheus_client appends _total automatically → autopkgtest_exit_event_total
+    "autopkgtest_exit_event",
+    "Number of autopkgtest jobs that have exited",
+    ["arch", "exit_status"],
+)
+
+unit_status = prometheus_client.Gauge(
+    "autopkgtest_unit_status",
+    "Count of autopkgtest worker systemd units by state",
+    ["arch", "status"],
+)
+
+lxd_status = prometheus_client.Gauge(
+    "autopkgtest_lxd_status",
+    "Count of LXD remotes by reachability status",
+    ["status"],
+)
+
+
+# --------------------------------------------------------------------------
+# Helpers
+# --------------------------------------------------------------------------
+
+def read_rabbitmq_creds(path=RABBITMQ_CRED_PATH):
+    """Parse the rabbitmq.cred env-file and return (host, user, password)."""
+    creds = {}
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            key, _, value = line.partition("=")
+            creds[key.strip()] = value.strip().strip('"')
+    return creds["RABBIT_HOST"], creds["RABBIT_USER"], creds["RABBIT_PASSWORD"]
+
+
+def read_releases(path=WORKER_CONF_PATH):
+    """Read the configured releases from worker.conf."""
+    cfg = configparser.ConfigParser()
+    cfg.read(path)
+    releases_str = cfg.get("autopkgtest", "releases", fallback="").strip()
+    return releases_str.split() if releases_str else []
+
+
+def amqp_connection(host, user, password):
+    return pika.BlockingConnection(
+        pika.ConnectionParameters(
+            host=host,
+            credentials=pika.PlainCredentials(user, password),
+            heartbeat=60,
+        )
+    )
+
+
+def get_queue_depth(connection, queue_name):
+    """Return the number of messages in queue_name, or 0 if it does not exist.
+
+    A new channel is opened for each call because a passive declare that
+    returns 404 closes the channel.
+    """
+    channel = connection.channel()
+    try:
+        result = channel.queue_declare(queue=queue_name, passive=True)
+        depth = result.method.message_count
+        channel.close()
+        return depth
+    except pika.exceptions.ChannelClosedByBroker as exc:
+        if exc.reply_code == 404:
+            return 0
+        raise
+
+
+# --------------------------------------------------------------------------
+# Polling thread — queue sizes, unit statuses, LXD remote statuses
+# --------------------------------------------------------------------------
+
+def poll_queue_sizes(connection, releases):
+    """Update autopkgtest_queue_size for all (release, arch, context) combinations."""
+    for release in releases:
+        for arch in KNOWN_ARCHES:
+            for ctx in QUEUE_CONTEXTS:
+                queue_name = f"debci-{ctx}{release}-{arch}"
+                # Use the prefix without trailing dash as the label value;
+                # the empty prefix (regular queue) is labelled "default".
+                ctx_label = ctx.rstrip("-") if ctx else "default"
+                try:
+                    depth = get_queue_depth(connection, queue_name)
+                except Exception:
+                    logger.exception("Error polling queue %s", queue_name)
+                    continue
+                queue_size.labels(release=release, arch=arch, context=ctx_label).set(depth)
+
+
+def poll_unit_statuses():
+    """Update autopkgtest_unit_status from systemctl."""
+    try:
+        proc = subprocess.run(
+            [
+                "systemctl", "list-units",
+                "--plain", "--no-legend", "--no-pager",
+                "--type=service", "--all",
+                "autopkgtest-worker@remote-*.service",
+            ],
+            capture_output=True, text=True, check=True,
+        )
+    except subprocess.CalledProcessError:
+        logger.exception("systemctl list-units failed")
+        return
+
+    # Tally counts by (arch, active_state).
+    counts = {}
+    for line in proc.stdout.splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        unit_name = parts[0]          # e.g. autopkgtest-worker@remote-amd64-1-2.service
+        active_state = parts[2] if len(parts) > 2 else "unknown"
+        # Instance: remote-{arch}-{lxd_index}-{worker_index}
+        instance = unit_name.split("@", 1)[-1].removesuffix(".service")
+        instance_parts = instance.split("-")
+        if len(instance_parts) < 2:
+            continue
+        arch = instance_parts[1]  # always the second component
+        counts[(arch, active_state)] = counts.get((arch, active_state), 0) + 1
+
+    for (arch, state), count in counts.items():
+        unit_status.labels(arch=arch, status=state).set(count)
+
+
+def _probe_remote(remote):
+    """Return (remote, True) if reachable, (remote, False) otherwise."""
+    try:
+        result = subprocess.run(
+            ["lxc", "info", f"{remote}:"],
+            capture_output=True, timeout=10,
+        )
+        return remote, result.returncode == 0
+    except subprocess.TimeoutExpired:
+        return remote, False
+    except Exception:
+        logger.exception("Error probing remote %s", remote)
+        return remote, False
+
+
+def poll_lxd_statuses():
+    """Update autopkgtest_lxd_status by probing each remote-* LXD remote concurrently."""
+    try:
+        proc = subprocess.run(
+            ["lxc", "remote", "list", "--format=json"],
+            capture_output=True, text=True, check=True,
+        )
+        remotes = json.loads(proc.stdout)
+    except Exception:
+        logger.exception("lxc remote list failed")
+        return
+
+    # Only consider remotes that were added by the charm (named remote-*).
+    worker_remotes = [name for name in remotes if name.startswith("remote-")]
+
+    active_count = 0
+    error_count = 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=LXD_PROBE_MAX_WORKERS) as executor:
+        for _remote, reachable in executor.map(_probe_remote, worker_remotes):
+            if reachable:
+                active_count += 1
+            else:
+                error_count += 1
+
+    lxd_status.labels(status="active").set(active_count)
+    lxd_status.labels(status="error").set(error_count)
+
+
+def polling_loop():
+    """Main loop for the polling thread. Reconnects on AMQP failures."""
+    while True:
+        try:
+            host, user, password = read_rabbitmq_creds()
+            releases = read_releases()
+            connection = amqp_connection(host, user, password)
+            logger.info("Polling thread connected to RabbitMQ at %s", host)
+            last_lxd_poll = 0.0
+            while True:
+                poll_queue_sizes(connection, releases)
+                poll_unit_statuses()
+                if time.monotonic() - last_lxd_poll >= LXD_POLL_INTERVAL:
+                    poll_lxd_statuses()
+                    last_lxd_poll = time.monotonic()
+                time.sleep(POLL_INTERVAL)
+        except Exception:
+            logger.exception("Polling loop error; reconnecting in 30s")
+            time.sleep(30)
+
+
+# --------------------------------------------------------------------------
+# Fanout consumer thread — exit events
+# --------------------------------------------------------------------------
+
+def fanout_loop():
+    """Subscribe to testcomplete.fanout and increment the exit event counter."""
+    while True:
+        try:
+            host, user, password = read_rabbitmq_creds()
+            connection = amqp_connection(host, user, password)
+            channel = connection.channel()
+
+            channel.exchange_declare(
+                exchange=COMPLETE_EXCHANGE,
+                exchange_type="fanout",
+                durable=True,
+            )
+            # Exclusive, auto-delete queue: each metrics service instance gets
+            # its own queue; messages are not persisted between restarts.
+            result = channel.queue_declare(queue="", exclusive=True)
+            queue_name = result.method.queue
+            channel.queue_bind(exchange=COMPLETE_EXCHANGE, queue=queue_name)
+
+            logger.info("Fanout consumer ready on exchange %s", COMPLETE_EXCHANGE)
+
+            def on_message(ch, method, properties, body):
+                try:
+                    msg = json.loads(body)
+                    arch = msg.get("architecture", "unknown")
+                    code = str(msg.get("exitcode", "unknown"))
+                    exit_event.labels(arch=arch, exit_status=code).inc()
+                except Exception:
+                    logger.exception("Error processing fanout message")
+
+            channel.basic_consume(
+                queue=queue_name,
+                on_message_callback=on_message,
+                auto_ack=True,
+            )
+            channel.start_consuming()
+        except Exception:
+            logger.exception("Fanout consumer error; reconnecting in 30s")
+            time.sleep(30)
+
+
+# --------------------------------------------------------------------------
+# Entry point
+# --------------------------------------------------------------------------
+
+def main():
+    # Disable the default process/Python metrics from prometheus_client.
+    prometheus_client.REGISTRY.unregister(prometheus_client.GC_COLLECTOR)
+    prometheus_client.REGISTRY.unregister(prometheus_client.PLATFORM_COLLECTOR)
+    prometheus_client.REGISTRY.unregister(prometheus_client.PROCESS_COLLECTOR)
+
+    logger.info("Starting autopkgtest metrics exporter on port %d", METRICS_PORT)
+    prometheus_client.start_http_server(METRICS_PORT)
+
+    # Pre-initialise lxd_status so the metric exists even before the first poll.
+    lxd_status.labels(status="active").set(0)
+    lxd_status.labels(status="error").set(0)
+
+    threading.Thread(target=polling_loop, daemon=True).start()
+    threading.Thread(target=fanout_loop, daemon=True).start()
+
+    # Keep the main thread alive.
+    while True:
+        time.sleep(60)
+
+
+if __name__ == "__main__":
+    main()

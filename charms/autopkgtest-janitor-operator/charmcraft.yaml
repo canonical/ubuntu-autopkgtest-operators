@@ -68,7 +68,16 @@ config:
       description: Ubuntu mirror to use
       default: http://archive.ubuntu.com/ubuntu/
 
+charm-libs:
+  - lib: grafana_agent.cos_agent
+    version: "0"
+
 requires:
   amqp:
     interface: rabbitmq
     limit: 1
+
+provides:
+  cos-agent:
+    interface: cos_agent
+    scope: container
