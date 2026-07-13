@@ -28,6 +28,7 @@ CHARM_TOOLS_DEST = Path("/usr/local/bin")
 CONF_DIRECTORY = Path("/etc/autopkgtest-janitor")
 RABBITMQ_CREDS_PATH = CONF_DIRECTORY / "rabbitmq.cred"
 TARGETS_PATH = CONF_DIRECTORY / "targets.conf"
+LOG_DIR = Path("/var/log/autopkgtest-janitor")
 
 AUTOPKGTEST_REPO = "https://salsa.debian.org/ubuntu-ci-team/autopkgtest.git"
 AUTOPKGTEST_LOCATION = Path(f"~{USER}/autopkgtest").expanduser()
@@ -317,6 +318,24 @@ def install(autopkgtest_branch):
 
     logger.info("creating directories")
     CONF_DIRECTORY.mkdir(exist_ok=True)
+    LOG_DIR.mkdir(exist_ok=True)
+
+    logger.info("installing logrotate config")
+    with open("/etc/logrotate.d/autopkgtest-janitor", "w") as f:
+        f.write(
+            dedent(
+                f"""\
+                {LOG_DIR}/*.log {{
+                    daily
+                    rotate 7
+                    compress
+                    missingok
+                    copytruncate
+                    ifempty
+                }}
+                """
+            )
+        )
 
     logger.info("installing charm tools")
     src_dir = CHARM_APP_DATA / "bin"
