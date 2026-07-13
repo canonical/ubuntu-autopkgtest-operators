@@ -27,6 +27,7 @@ AUTOPKGTEST_PACKAGE_CONFIGS_LOCATION = Path(
 
 DEB_DEPENDENCIES = [
     "python3-pika",
+    "python3-prometheus-client",
     "python3-swiftclient",
     # autopkgtest dependencies
     "apt-utils",
@@ -40,6 +41,7 @@ DEB_DEPENDENCIES = [
 SNAP_DEPENDENCIES = [{"name": "lxd", "channel": "6/stable"}]
 
 CONF_DIRECTORY = Path("/etc/autopkgtest-dispatcher")
+LOG_DIR = Path("/var/log/autopkgtest-dispatcher")
 
 RABBITMQ_CREDS_PATH = CONF_DIRECTORY / "rabbitmq.cred"
 
@@ -176,6 +178,24 @@ def install(autopkgtest_branch, releases):
 
     logger.info("creating directories")
     CONF_DIRECTORY.mkdir(exist_ok=True)
+    LOG_DIR.mkdir(exist_ok=True)
+
+    logger.info("installing logrotate config")
+    with open("/etc/logrotate.d/autopkgtest-dispatcher", "w") as f:
+        f.write(
+            dedent(
+                f"""\
+                {LOG_DIR}/*.log {{
+                    daily
+                    rotate 7
+                    compress
+                    missingok
+                    copytruncate
+                    ifempty
+                }}
+                """
+            )
+        )
 
     logger.info("cloning repositories")
     for repo, branch, location in [
@@ -199,6 +219,8 @@ def install(autopkgtest_branch, releases):
     logger.info("installing worker and tools")
     src_path = CHARM_APP_DATA / "bin"
     shutil.copy(src_path / "worker", WORKER_TOOLS_DEST)
+    shutil.copy(src_path / "autopkgtest-metrics", WORKER_TOOLS_DEST)
+    (WORKER_TOOLS_DEST / "autopkgtest-metrics").chmod(0o755)
 
     logger.info("writing worker config")
     write_worker_config(releases)
@@ -231,6 +253,8 @@ def install(autopkgtest_branch, releases):
     systemd.daemon_reload()
     if units_to_enable:
         systemd.service_enable("--now", *units_to_enable)
+    logger.info("enabling metrics service")
+    systemd.service_enable("autopkgtest-metrics.service")
 
 
 def start():
@@ -249,6 +273,7 @@ def configure(
     write_swift_config(swift_creds)
     write_rabbitmq_creds(amqp_hostname, amqp_username, amqp_password)
     update_autopkgtest(autopkgtest_branch)
+    systemd.service_restart("autopkgtest-metrics.service")
 
 
 def add_remote(arch: str, index: int, token: str):

@@ -15,4 +15,6 @@ Environment="MIRROR={{ mirror }}"
 Environment="AUTOPKGTEST_TEMP_INSTANCE=autopkgtest-prepare-%i"
 RuntimeDirectory=%p
 RuntimeDirectoryPreserve=yes
+StandardOutput=journal+file:/var/log/autopkgtest-janitor/build-image-%i.log
+StandardError=journal+file:/var/log/autopkgtest-janitor/build-image-%i.log
 ExecStart=build-image-on-remote %i

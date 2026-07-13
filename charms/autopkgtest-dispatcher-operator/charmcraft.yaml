@@ -111,7 +111,16 @@ config:
       type: secret
       description: juju secret id holding the swift password
 
+charm-libs:
+  - lib: grafana_agent.cos_agent
+    version: "0"
+
 requires:
   amqp:
     interface: rabbitmq
     limit: 1
+
+provides:
+  cos-agent:
+    interface: cos_agent
+    scope: container

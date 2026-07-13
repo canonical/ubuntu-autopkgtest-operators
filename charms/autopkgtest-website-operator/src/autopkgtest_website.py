@@ -159,6 +159,7 @@ def configure(
             "remoteip",
             "rewrite",
             "ssl",
+            "status",
         ],
         check=True,
     )
