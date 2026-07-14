@@ -6,6 +6,28 @@ import subprocess
 import sys
 
 MAX_AGE_HOURS = 12
+TARGETS_PATH = "/etc/autopkgtest-janitor/targets.conf"
+
+
+def read_targets():
+    """Read the configured release and architecture targets."""
+    targets = {}
+    with open(TARGETS_PATH) as targets_file:
+        for line in targets_file:
+            name, values = line.strip().split("=", 1)
+            if name in {"ARCHES", "RELEASES"}:
+                targets[name] = set(values.split())
+
+    return targets["RELEASES"], targets["ARCHES"]
+
+
+def image_target(image):
+    """Return the release and architecture for an autopkgtest image."""
+    for alias in image["aliases"]:
+        parts = alias["name"].split("/")
+        if len(parts) in {4, 5} and (len(parts) == 4 or parts[4] == "vm"):
+            return alias["name"], parts[2], parts[3]
+    return None
 
 
 def main():
@@ -13,6 +35,7 @@ def main():
     print(f"Deleting instances older than {MAX_AGE_HOURS} hours")
 
     now = datetime.datetime.now(datetime.UTC)
+    releases, arches = read_targets()
     remotes = json.loads(subprocess.check_output(["lxc", "remote", "list", "-fjson"]))
     remotes = [r for r in remotes if r.startswith("remote-")]
 
@@ -58,6 +81,55 @@ def main():
                     )
                     errors = True
                     continue
+
+        try:
+            images = json.loads(
+                subprocess.check_output(
+                    [
+                        "lxc",
+                        "image",
+                        "list",
+                        "-fjson",
+                        remote + ":autopkgtest/ubuntu/",
+                    ]
+                )
+            )
+        except Exception as e:
+            print(
+                f"Error getting list of images from remote {remote}: {e}",
+                file=sys.stderr,
+            )
+            errors = True
+            continue
+
+        for image in images:
+            target = image_target(image)
+            if not target:
+                continue
+            alias, release, arch = target
+            if release in releases and arch in arches:
+                continue
+
+            print(f"Image {remote}:{alias} is not a configured target - deleting")
+            try:
+                subprocess.check_call(
+                    ["lxc", "image", "delete", f"{remote}:{alias}"],
+                    timeout=60,
+                )
+            except subprocess.CalledProcessError as e:
+                print(
+                    f"Error deleting {remote}:{alias}: {e}",
+                    file=sys.stderr,
+                )
+                errors = True
+                continue
+            except subprocess.TimeoutExpired as e:
+                print(
+                    f"Timeout deleting {remote}:{alias}: {e}",
+                    file=sys.stderr,
+                )
+                errors = True
+                continue
 
     if errors:
         print(
