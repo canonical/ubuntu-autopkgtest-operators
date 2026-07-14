@@ -141,10 +141,6 @@ def enable_image_builders(remote, releases):
             logger.info(f"Not creating images for {release}/{arch}")
             continue
 
-        # don't drown systemd
-        if i > 0:
-            time.sleep(3)
-
         timers = []
         services = []
         if release not in NO_CONTAINER_RELEASES:
@@ -167,7 +163,7 @@ def enable_image_builders(remote, releases):
         systemd.service_enable("--now", *timers)
 
         logger.info(f"Starting image builds for {release} on remote {remote}")
-        systemd.service_start(*services)
+        systemd.service_start("--no-block", *services)
 
 
 def configure_unprivileged_user():
