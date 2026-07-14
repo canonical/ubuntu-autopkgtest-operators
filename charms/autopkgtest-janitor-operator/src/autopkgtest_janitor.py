@@ -141,10 +141,6 @@ def enable_image_builders(remote, releases):
             logger.info(f"Not creating images for {release}/{arch}")
             continue
 
-        # don't drown systemd
-        if i > 0:
-            time.sleep(3)
-
         timers = []
         services = []
         if release not in NO_CONTAINER_RELEASES:
