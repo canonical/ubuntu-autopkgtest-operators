@@ -163,7 +163,7 @@ def enable_image_builders(remote, releases):
         systemd.service_enable("--now", *timers)
 
         logger.info(f"Starting image builds for {release} on remote {remote}")
-        systemd.service_start(*services)
+        systemd.service_start("--no-block", *services)
 
 
 def configure_unprivileged_user():
