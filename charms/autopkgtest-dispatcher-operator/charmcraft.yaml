@@ -80,7 +80,7 @@ config:
     default-worker-count:
       type: int
       description: Default number of workers to create for each remote.
-      default: 3
+      default: 2
     releases:
       type: string
       description: Space-separated of releases to run tests for
