@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 # Read all queues and drop duplicate or invalid messages.
 
+import argparse
 import configparser
 import json
 import logging
@@ -11,7 +12,6 @@ from pika.exceptions import AMQPError
 AMQP_CONTEXTS = ["ubuntu", "huge", "ppa", "upstream"]
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 def get_targets():
@@ -89,7 +89,7 @@ def queue_names():
                     yield f"debci-{context}-{release}-{arch}"
 
 
-def deduplicate_queue(amqp_conn, queue_name, seen):
+def deduplicate_queue(amqp_conn, queue_name, seen, dry_run=False):
     """Drop invalid and duplicate requests from one AMQP queue."""
     release, arch = queue_release_arch(queue_name)
     channel = amqp_conn.channel()
@@ -114,14 +114,18 @@ def deduplicate_queue(amqp_conn, queue_name, seen):
                 AttributeError,
             ) as e:
                 invalid += 1
-                logger.warning(f"Received invalid request {body}: {repr(e)}")
-                channel.basic_ack(delivery_tag=method.delivery_tag)
+                action = "Would drop" if dry_run else "Dropping"
+                logger.warning(f"{action} invalid request {body}: {repr(e)}")
+                if not dry_run:
+                    channel.basic_ack(delivery_tag=method.delivery_tag)
                 continue
 
             if key in seen:
                 dropped += 1
-                logger.info(f"Dropping duplicate request from {queue_name}: {key}")
-                channel.basic_ack(delivery_tag=method.delivery_tag)
+                action = "Would drop" if dry_run else "Dropping"
+                logger.info(f"{action} duplicate request from {queue_name}: {key}")
+                if not dry_run:
+                    channel.basic_ack(delivery_tag=method.delivery_tag)
                 continue
 
             kept += 1
@@ -133,31 +137,70 @@ def deduplicate_queue(amqp_conn, queue_name, seen):
     return kept, dropped, invalid
 
 
-def deduplicate_queues(amqp_conn):
+def deduplicate_queues(amqp_conn, dry_run=False):
     """Deduplicate all autopkgtest queues."""
     seen = set()
 
     for queue_name in queue_names():
         try:
-            kept, dropped, invalid = deduplicate_queue(amqp_conn, queue_name, seen)
+            kept, dropped, invalid = deduplicate_queue(
+                amqp_conn, queue_name, seen, dry_run
+            )
         except AMQPError:
             logger.warning(f"Failed reading data from queue {queue_name}")
             continue
 
-        logger.info(
-            "%s: kept %d request(s), dropped %d duplicate(s), dropped %d invalid request(s)",
-            queue_name,
-            kept,
-            dropped,
-            invalid,
-        )
+        if dry_run:
+            logger.info(
+                "%s: would keep %d request(s), would drop %d duplicate(s), "
+                "would drop %d invalid request(s)",
+                queue_name,
+                kept,
+                dropped,
+                invalid,
+            )
+        else:
+            logger.info(
+                "%s: kept %d request(s), dropped %d duplicate(s), "
+                "dropped %d invalid request(s)",
+                queue_name,
+                kept,
+                dropped,
+                invalid,
+            )
 
 
-if __name__ == "__main__":
+def main():
+    parser = argparse.ArgumentParser(
+        description="Drop duplicate and invalid requests from all AMQP queues."
+    )
+    parser.add_argument(
+        "-n",
+        "--dry-run",
+        action="store_true",
+        help="show what would be dropped without modifying the queues",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="additionally show requests that are kept",
+    )
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(asctime)s - %(message)s",
+    )
+
     amqp_conn = get_amqp_connection()
     logger.info("Connected to AMQP")
 
     try:
-        deduplicate_queues(amqp_conn)
+        deduplicate_queues(amqp_conn, args.dry_run)
     finally:
         amqp_conn.close()
+
+
+if __name__ == "__main__":
+    main()
