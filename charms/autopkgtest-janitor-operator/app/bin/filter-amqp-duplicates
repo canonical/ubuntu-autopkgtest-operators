@@ -192,6 +192,7 @@ def main():
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s - %(message)s",
     )
+    logging.getLogger("pika").setLevel(logging.ERROR)
 
     amqp_conn = get_amqp_connection()
     logger.info("Connected to AMQP")
