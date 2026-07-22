@@ -735,6 +735,9 @@ def request(channel, method, properties, body):
         if private:
             container = f"private-{container}"
 
+        logging.info(f"Acknowledging request {body}")
+        channel.basic_ack(delivery_tag=method.delivery_tag)
+
         # run autopkgtest
         if not dont_run:
             global running_test
@@ -929,9 +932,6 @@ def request(channel, method, properties, body):
         ),
     )
     complete_amqp.close()
-
-    logging.info(f"Acknowledging request {body}")
-    channel.basic_ack(delivery_tag=method.delivery_tag)
 
     running_test = False
 
