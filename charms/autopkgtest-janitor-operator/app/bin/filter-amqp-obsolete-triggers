@@ -1,0 +1,215 @@
+#!/usr/bin/python3
+# Filter out AMQP requests whose triggers are no longer in the -proposed pocket
+
+import argparse
+import configparser
+import json
+import logging
+import lzma
+import urllib.error
+import urllib.request
+
+import pika
+
+logger = logging.getLogger(__name__)
+
+# Archive mirror to fetch the Sources indices from. Change this to point at a
+# different (e.g. local) mirror. Standard Ubuntu archive layout is assumed:
+# <MIRROR>/dists/<release>-proposed/<component>/source/Sources.xz
+MIRROR = "https://archive.ubuntu.com/ubuntu"
+
+COMPONENTS = ["main", "universe", "multiverse", "restricted"]
+
+# Triggers that never appear in Sources and should be ignored when deciding
+# whether a request is obsolete.
+SYNTHETIC_TRIGGERS = ["migration-reference/0"]
+
+
+def get_amqp_connection():
+    cp = configparser.ConfigParser()
+    with open("/etc/autopkgtest-janitor/rabbitmq.cred") as f:
+        cp.read_string("[rabbit]\n" + f.read().replace('"', ""))
+    return pika.BlockingConnection(
+        parameters=pika.ConnectionParameters(
+            host=cp["rabbit"]["RABBIT_HOST"],
+            credentials=pika.PlainCredentials(
+                username=cp["rabbit"]["RABBIT_USER"],
+                password=cp["rabbit"]["RABBIT_PASSWORD"],
+            ),
+        ),
+    )
+
+
+def release_from_queue(queue_name):
+    """Extract the release from a queue name.
+
+    Queue names look like "debci-[secondary-]release-arch", so the release is
+    always the second-to-last dash-separated field.
+    """
+    return queue_name.split("-")[-2]
+
+
+def get_proposed_versions(release):
+    """Return the set of "package/version" pairs present in <release>-proposed.
+
+    Downloads and parses the Sources.xz index for every component. Components
+    that cannot be downloaded are logged and skipped.
+    """
+    versions = set()
+    for component in COMPONENTS:
+        url = f"{MIRROR}/dists/{release}-proposed/{component}/source/Sources.xz"
+        try:
+            with urllib.request.urlopen(url) as resp:
+                data = lzma.decompress(resp.read()).decode("UTF-8")
+        except (urllib.error.URLError, lzma.LZMAError) as e:
+            logger.warning("Could not fetch %s: %s", url, e)
+            continue
+        for paragraph in data.split("\n\n"):
+            package = version = None
+            for line in paragraph.splitlines():
+                if line.startswith("Package: "):
+                    package = line[len("Package: ") :]
+                elif line.startswith("Version: "):
+                    version = line[len("Version: ") :]
+            if package and version:
+                versions.add(f"{package}/{version}")
+    return versions
+
+
+def is_obsolete(body, proposed_versions):
+    r"""Return True if all of the request's triggers are missing from -proposed.
+
+    Queue items have the form "<package>\n<json params>", so the JSON is on the
+    last line. Synthetic triggers are ignored; a request is only dropped when
+    every non-synthetic trigger has been superseded.
+    """
+    try:
+        params = body.split("\n", 1)[1]
+        triggers = json.loads(params).get("triggers", [])
+    except (IndexError, json.JSONDecodeError, AttributeError):
+        logger.warning("Could not parse queue item: %s", body)
+        return False
+    triggers = [t for t in triggers if t not in SYNTHETIC_TRIGGERS]
+    if not triggers:
+        return False
+    return all(trigger not in proposed_versions for trigger in triggers)
+
+
+def filter_amqp(dry_run, amqp_con, queue_name, proposed_versions):
+    num_items_deleted = 0
+
+    channel = amqp_con.channel()
+
+    while True:
+        try:
+            method, _, body = channel.basic_get(queue_name)
+        except pika.exceptions.ChannelClosedByBroker:
+            logger.warning(f"Queue {queue_name} not found")
+            return None
+        if body is None:
+            break
+        body = body.decode("UTF-8")
+        logger.debug("queue item: %s (not deleting)", body)
+        if is_obsolete(body, proposed_versions):
+            if dry_run:
+                logger.info("queue item: %s (would delete)", body)
+            else:
+                logger.info("queue item: %s (deleting)", body)
+                channel.basic_ack(method.delivery_tag)
+                num_items_deleted += 1
+    channel.close()
+    logger.info("Removed %d items from %s", num_items_deleted, queue_name)
+    return num_items_deleted
+
+
+def get_targets():
+    """Read the target releases and architectures from targets.conf.
+
+    The file is in shell VAR=value format, e.g.:
+
+        ARCHES=armhf amd64 arm64
+        RELEASES=focal jammy noble
+    """
+    values = {}
+    with open("/etc/autopkgtest-janitor/targets.conf") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip().strip("\"'").split()
+    return values["RELEASES"], values["ARCHES"]
+
+
+def generate_queue_names():
+    releases, architectures = get_targets()
+    prefix = "debci"
+    secondaries = ["huge", None]
+    return [
+        "-".join(part for part in (prefix, secondary, release, arch) if part)
+        for secondary in secondaries
+        for release in releases
+        for arch in architectures
+    ]
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="""Filter queue based on the -proposed pocket
+
+This script drops test requests whose triggers are no longer present in the
+release's -proposed pocket. A trigger is a "package/version" pair; a request is
+removed only when all of its triggers have been superseded (i.e. none of those
+package versions is in -proposed anymore).
+
+The release is derived from the queue name, and the source indices for main,
+universe, multiverse and restricted are downloaded from the configured mirror.
+
+Credentials are read from /etc/autopkgtest-janitor/rabbitmq.cred.
+""",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
+    parser.add_argument(
+        "-n",
+        "--dry-run",
+        action="store_true",
+        help="only show the operations that would be performed",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="additionally show queue items that are not removed",
+    )
+    parser.add_argument(
+        "queue_name",
+        help="The name of the queue to filter. `all` is a valid value.",
+    )
+
+    args = parser.parse_args()
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG if args.verbose else logging.INFO)
+
+    queues = [args.queue_name] if args.queue_name != "all" else generate_queue_names()
+
+    versions_cache = {}
+    amqp_con = get_amqp_connection()
+    for this_queue in queues:
+        release = release_from_queue(this_queue)
+        if release not in versions_cache:
+            versions_cache[release] = get_proposed_versions(release)
+        proposed_versions = versions_cache[release]
+        if not proposed_versions:
+            logger.info("No proposed versions for %s, skipping %s", release, this_queue)
+            continue
+        num_deleted = filter_amqp(args.dry_run, amqp_con, this_queue, proposed_versions)
+        if num_deleted is None:
+            logger.info("Skipping %s", this_queue)
+    amqp_con.close()
+
+
+if __name__ == "__main__":
+    main()
