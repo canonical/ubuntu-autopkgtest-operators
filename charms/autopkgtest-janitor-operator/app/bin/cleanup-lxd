@@ -9,16 +9,15 @@ MAX_AGE_HOURS = 12
 TARGETS_PATH = "/etc/autopkgtest-janitor/targets.conf"
 
 
-def read_targets():
-    """Read the configured release and architecture targets."""
-    targets = {}
+def configured_releases():
+    """Read the configured release targets."""
     with open(TARGETS_PATH) as targets_file:
         for line in targets_file:
             name, values = line.strip().split("=", 1)
-            if name in {"ARCHES", "RELEASES"}:
-                targets[name] = set(values.split())
+            if name == "RELEASES":
+                return set(values.split())
 
-    return targets["RELEASES"], targets["ARCHES"]
+    raise ValueError(f"RELEASES not found in {TARGETS_PATH}")
 
 
 def image_target(image):
@@ -35,12 +34,13 @@ def main():
     print(f"Deleting instances older than {MAX_AGE_HOURS} hours")
 
     now = datetime.datetime.now(datetime.UTC)
-    releases, arches = read_targets()
+    releases = configured_releases()
     remotes = json.loads(subprocess.check_output(["lxc", "remote", "list", "-fjson"]))
     remotes = [r for r in remotes if r.startswith("remote-")]
 
     errors = False
     for remote in remotes:
+        remote_arch = remote.split("-")[1]
         try:
             instances = json.loads(
                 subprocess.check_output(["lxc", "list", "-fjson", remote + ":"])
@@ -107,7 +107,7 @@ def main():
             if not target:
                 continue
             alias, release, arch = target
-            if release in releases and arch in arches:
+            if arch != remote_arch or release in releases:
                 continue
 
             print(f"Image {remote}:{alias} is not a configured target - deleting")
