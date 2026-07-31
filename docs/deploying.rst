@@ -20,9 +20,9 @@ deployment scripts rely on `jq`. So you need the following:
 Set up Terraform environment on Canonical environments
 ------------------------------------------------------
 
-This documentation allows to deploy on Canonical ProdStack environment. For
-now, we use internal bastions to manage the environments, but on a mid-term
-basis, it might end-up in `JaaS`.
+This documentation describes how to deploy on the Canonical ProdStack environment. For
+now, we use internal bastions to manage the environments, but in the mid term
+it might end up in JaaS.
 
 For a deployment in another type of environment, there will be a need to
 configure properly `juju` with a `bootstrap` call and then ensure that
@@ -69,14 +69,14 @@ The `ingress-configurator` has a need for an external relation with the
 `admin/prod-machine-ingress-ps7.ingress-ps7-ubuntu-engineering-ubuntu-com`
 hosted on the `juju-controller-36-production-ps7`. On production environment,
 this is on the same controller so this is straightforward. On the staging
-environment, it's a cross-controller offer. Initially it was not working out of
-terraform, so a
+environment, it's a cross-controller offer. Initially this did not work via
+terraform, so we had to run the following manually:
 
 .. code-block::
 
-   juju integrate ingress-configurator:haproxy-route juju-controller-36-production-ps7:admin/prod-machine-ingress-ps7.ingress-ps7-ubuntu-engineering-ubuntu-com
+    juju integrate ingress-configurator:haproxy-route juju-controller-36-production-ps7:admin/prod-machine-ingress-ps7.ingress-ps7-ubuntu-engineering-ubuntu-com
 
-Was needed. A fix is waiting in `GitHub
+This was needed. A fix is pending in `GitHub
 <https://github.com/canonical/ubuntu-engineering-terraform-models/pull/729>`__
 
 The integrate command normally takes an app:endpoint app2:endpoint. When the
@@ -119,8 +119,8 @@ After some time, the juju status should look like
    lxd-remote/68   active    idle   83       10.151.164.213  8443/tcp
      aproxy/25     active    idle            10.151.164.213            Service ready on target proxy egress.ps7.internal:3128
 
-Note that creating the `VM` and `container` imges in the applications takes
-some time, don't expect to be able to run tests minute 0.
+Note that creating the `VM` and `container` images in the applications takes
+some time; don't expect to be able to run tests at minute 0.
 
 Configure
 ---------
@@ -128,7 +128,7 @@ Configure
 Now add each of the LXD remotes you would like to use as autopkgtest workers. If you are using the
 ``lxd-remote`` charm, you can use the dedicated action::
   $ juju run lxd-remote/<leader> get-client-token name=dispatcher
-  $ juju run lxd-remote/<leader>get-client-token name=janitor
+  $ juju run lxd-remote/<leader> get-client-token name=janitor
 
 Otherwise, you can generate the tokens manually from within the machine you want to use as your LXD remote.
 
