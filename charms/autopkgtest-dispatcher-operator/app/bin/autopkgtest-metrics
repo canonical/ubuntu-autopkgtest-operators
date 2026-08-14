@@ -1,11 +1,10 @@
 #!/usr/bin/python3
 """Autopkgtest Prometheus metrics exporter.
 
-Exposes four metric series on port 9101 (/metrics):
+Exposes three metric series on port 9101 (/metrics):
 
   autopkgtest_queue_size         Gauge  release, arch
   autopkgtest_exit_event_total   Counter arch, exit_status
-  autopkgtest_unit_status        Gauge  arch, status
   autopkgtest_lxd_status         Gauge  status
 """
 
@@ -75,12 +74,6 @@ exit_event = prometheus_client.Counter(
     "autopkgtest_exit_event",
     "Number of autopkgtest jobs that have exited",
     ["arch", "exit_status"],
-)
-
-unit_status = prometheus_client.Gauge(
-    "autopkgtest_unit_status",
-    "Count of autopkgtest worker systemd units by state",
-    ["arch", "status"],
 )
 
 lxd_status = prometheus_client.Gauge(
@@ -164,42 +157,6 @@ def poll_queue_sizes(connection, releases):
                 queue_size.labels(release=release, arch=arch, context=ctx_label).set(depth)
 
 
-def poll_unit_statuses():
-    """Update autopkgtest_unit_status from systemctl."""
-    try:
-        proc = subprocess.run(
-            [
-                "systemctl", "list-units",
-                "--plain", "--no-legend", "--no-pager",
-                "--type=service", "--all",
-                "autopkgtest-worker@remote-*.service",
-            ],
-            capture_output=True, text=True, check=True,
-        )
-    except subprocess.CalledProcessError:
-        logger.exception("systemctl list-units failed")
-        return
-
-    # Tally counts by (arch, active_state).
-    counts = {}
-    for line in proc.stdout.splitlines():
-        parts = line.split()
-        if not parts:
-            continue
-        unit_name = parts[0]          # e.g. autopkgtest-worker@remote-amd64-1-2.service
-        active_state = parts[2] if len(parts) > 2 else "unknown"
-        # Instance: remote-{arch}-{lxd_index}-{worker_index}
-        instance = unit_name.split("@", 1)[-1].removesuffix(".service")
-        instance_parts = instance.split("-")
-        if len(instance_parts) < 2:
-            continue
-        arch = instance_parts[1]  # always the second component
-        counts[(arch, active_state)] = counts.get((arch, active_state), 0) + 1
-
-    for (arch, state), count in counts.items():
-        unit_status.labels(arch=arch, status=state).set(count)
-
-
 def _probe_remote(remote):
     """Return (remote, True) if reachable, (remote, False) otherwise."""
     try:
@@ -254,7 +211,6 @@ def polling_loop():
             last_lxd_poll = 0.0
             while True:
                 poll_queue_sizes(connection, releases)
-                poll_unit_statuses()
                 if time.monotonic() - last_lxd_poll >= LXD_POLL_INTERVAL:
                     poll_lxd_statuses()
                     last_lxd_poll = time.monotonic()
