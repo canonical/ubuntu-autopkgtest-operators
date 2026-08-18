@@ -8,6 +8,7 @@ After=network-online.target
 [Service]
 User={{ user }}
 TimeoutStartSec=5min
+Environment=WORKER_INSTANCE=%i
 EnvironmentFile=-/etc/environment.d/proxy.conf
 EnvironmentFile={{ conf_directory }}/rabbitmq.cred
 EnvironmentFile={{ conf_directory }}/swift.cred
@@ -21,8 +22,8 @@ ExecStart=/bin/sh -ec '\
     name="$${dispatcher}-$${param}"; \
     exec /usr/local/bin/worker --config "{{ conf_directory }}/worker.conf" -v LXD_REMOTE="$$remote" -v NAME="$$name" -a "$$arch"'
 ExecReload=/bin/kill -HUP $MAINPID
-StandardOutput=journal+file:/var/log/autopkgtest-dispatcher/worker-%i.log
-StandardError=journal+file:/var/log/autopkgtest-dispatcher/worker-%i.log
+StandardOutput=journal
+StandardError=journal
 SuccessExitStatus=0 99 SIGTERM SIGHUP
 RestartSec=10min
 Restart=on-failure

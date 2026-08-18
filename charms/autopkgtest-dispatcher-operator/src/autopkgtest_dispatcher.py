@@ -41,7 +41,6 @@ DEB_DEPENDENCIES = [
 SNAP_DEPENDENCIES = [{"name": "lxd", "channel": "6/stable"}]
 
 CONF_DIRECTORY = Path("/etc/autopkgtest-dispatcher")
-LOG_DIR = Path("/var/log/autopkgtest-dispatcher")
 
 RABBITMQ_CREDS_PATH = CONF_DIRECTORY / "rabbitmq.cred"
 
@@ -178,24 +177,6 @@ def install(autopkgtest_branch, releases):
 
     logger.info("creating directories")
     CONF_DIRECTORY.mkdir(exist_ok=True)
-    LOG_DIR.mkdir(exist_ok=True)
-
-    logger.info("installing logrotate config")
-    with open("/etc/logrotate.d/autopkgtest-dispatcher", "w") as f:
-        f.write(
-            dedent(
-                f"""\
-                {LOG_DIR}/*.log {{
-                    daily
-                    rotate 7
-                    compress
-                    missingok
-                    copytruncate
-                    ifempty
-                }}
-                """
-            )
-        )
 
     logger.info("cloning repositories")
     for repo, branch, location in [
