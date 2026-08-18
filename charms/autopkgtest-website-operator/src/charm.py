@@ -30,7 +30,10 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             relation_name="ingress",
         )
 
-        self.cos_agent = COSAgentProvider(self)
+        self.cos_agent = COSAgentProvider(
+            self,
+            metrics_endpoints=[{"path": "/metrics", "port": 9117}],
+        )
 
         self._stored.set_default(
             installed=False,

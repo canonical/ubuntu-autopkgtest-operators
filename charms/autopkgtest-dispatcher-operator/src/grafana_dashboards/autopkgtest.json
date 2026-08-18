@@ -292,7 +292,7 @@
       "id": 7,
       "type": "timeseries",
       "title": "Cloud workers in active / error",
-      "description": "A script is run hourly to reset all the error units to active, so you can expect this to be noisy. Sourced from the opentelemetry-collector subordinate's node-exporter, not the autopkgtest-metrics exporter. Note: this panel does NOT respect the dashboard's \"Juju application\" filter above (its juju_application label is opentelemetry-collector, not ubuntu-autopkgtest-dispatcher) — leave that filter on \"All\" to see data here.",
+      "description": "Sourced from the opentelemetry-collector subordinate's node-exporterTo see data here, include the opentelemetry-collector application name in the \"Juju application\" filter above (or leave it on \"All\"), and leave \"Juju unit\" on \"All\" (this metric carries no juju_unit label).",
       "gridPos": {"h": 10, "w": 24, "x": 0, "y": 54},
       "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
       "fieldConfig": {
