@@ -35,9 +35,9 @@ First we get (if needed) the terraform models.
   git clone https://github.com/canonical/ubuntu-engineering-terraform-models
 
 The architecture of the `autopkgtest` deployment relies on an orchestrator
-model and multiple remotes (one per architecture) models. These models should
-be created and switched in between before running the different terraform
-playbooks.
+model and multiple "LXD remotes" (one per architecture) models. These models
+should be created and switched in between before running the different
+terraform plan.
 
 .. code-block::
 
