@@ -12,7 +12,6 @@ import concurrent.futures
 import configparser
 import json
 import logging
-import os
 import subprocess
 import threading
 import time
@@ -42,8 +41,14 @@ LXD_PROBE_MAX_WORKERS = 20
 # NOTE: this list is a maintenance point — update it when a new architecture is
 # added to the dispatcher.
 KNOWN_ARCHES = [
-    "amd64", "amd64v3", "i386", "arm64",
-    "armhf", "s390x", "ppc64el", "riscv64",
+    "amd64",
+    "amd64v3",
+    "i386",
+    "arm64",
+    "armhf",
+    "s390x",
+    "ppc64el",
+    "riscv64",
 ]
 
 # All queue context prefixes used by the dispatcher worker.
@@ -86,6 +91,7 @@ lxd_status = prometheus_client.Gauge(
 # --------------------------------------------------------------------------
 # Helpers
 # --------------------------------------------------------------------------
+
 
 def read_rabbitmq_creds(path=RABBITMQ_CRED_PATH):
     """Parse the rabbitmq.cred env-file and return (host, user, password)."""
@@ -140,6 +146,7 @@ def get_queue_depth(connection, queue_name):
 # Polling thread — queue sizes, unit statuses, LXD remote statuses
 # --------------------------------------------------------------------------
 
+
 def poll_queue_sizes(connection, releases):
     """Update autopkgtest_queue_size for all (release, arch, context) combinations."""
     for release in releases:
@@ -154,7 +161,9 @@ def poll_queue_sizes(connection, releases):
                 except Exception:
                     logger.exception("Error polling queue %s", queue_name)
                     continue
-                queue_size.labels(release=release, arch=arch, context=ctx_label).set(depth)
+                queue_size.labels(release=release, arch=arch, context=ctx_label).set(
+                    depth
+                )
 
 
 def _probe_remote(remote):
@@ -162,7 +171,8 @@ def _probe_remote(remote):
     try:
         result = subprocess.run(
             ["lxc", "info", f"{remote}:"],
-            capture_output=True, timeout=10,
+            capture_output=True,
+            timeout=10,
         )
         return remote, result.returncode == 0
     except subprocess.TimeoutExpired:
@@ -177,7 +187,9 @@ def poll_lxd_statuses():
     try:
         proc = subprocess.run(
             ["lxc", "remote", "list", "--format=json"],
-            capture_output=True, text=True, check=True,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         remotes = json.loads(proc.stdout)
     except Exception:
@@ -189,7 +201,9 @@ def poll_lxd_statuses():
 
     active_count = 0
     error_count = 0
-    with concurrent.futures.ThreadPoolExecutor(max_workers=LXD_PROBE_MAX_WORKERS) as executor:
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=LXD_PROBE_MAX_WORKERS
+    ) as executor:
         for _remote, reachable in executor.map(_probe_remote, worker_remotes):
             if reachable:
                 active_count += 1
@@ -201,7 +215,7 @@ def poll_lxd_statuses():
 
 
 def polling_loop():
-    """Main loop for the polling thread. Reconnects on AMQP failures."""
+    """Run the polling thread main loop, reconnecting on AMQP failures."""
     while True:
         try:
             host, user, password = read_rabbitmq_creds()
@@ -223,6 +237,7 @@ def polling_loop():
 # --------------------------------------------------------------------------
 # Fanout consumer thread — exit events
 # --------------------------------------------------------------------------
+
 
 def fanout_loop():
     """Subscribe to testcomplete.fanout and increment the exit event counter."""
@@ -268,6 +283,7 @@ def fanout_loop():
 # --------------------------------------------------------------------------
 # Entry point
 # --------------------------------------------------------------------------
+
 
 def main():
     # Disable the default process/Python metrics from prometheus_client.
