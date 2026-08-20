@@ -26,6 +26,8 @@ parts:
 charm-libs:
   - lib: traefik_k8s.ingress
     version: "2"
+  - lib: grafana_agent.cos_agent
+    version: "0"
 
 actions:
   set-alert:
@@ -88,3 +90,8 @@ requires:
   ingress:
     interface: ingress
     limit: 1
+
+provides:
+  cos-agent:
+    interface: cos_agent
+    scope: container

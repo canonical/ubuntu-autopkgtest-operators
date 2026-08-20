@@ -27,6 +27,7 @@ AUTOPKGTEST_PACKAGE_CONFIGS_LOCATION = Path(
 
 DEB_DEPENDENCIES = [
     "python3-pika",
+    "python3-prometheus-client",
     "python3-swiftclient",
     # autopkgtest dependencies
     "apt-utils",
@@ -199,6 +200,8 @@ def install(autopkgtest_branch, releases):
     logger.info("installing worker and tools")
     src_path = CHARM_APP_DATA / "bin"
     shutil.copy(src_path / "worker", WORKER_TOOLS_DEST)
+    shutil.copy(src_path / "autopkgtest-metrics", WORKER_TOOLS_DEST)
+    (WORKER_TOOLS_DEST / "autopkgtest-metrics").chmod(0o755)
 
     logger.info("writing worker config")
     write_worker_config(releases)
@@ -231,6 +234,8 @@ def install(autopkgtest_branch, releases):
     systemd.daemon_reload()
     if units_to_enable:
         systemd.service_enable("--now", *units_to_enable)
+    logger.info("enabling metrics service")
+    systemd.service_enable("autopkgtest-metrics.service")
 
 
 def start():
@@ -249,6 +254,7 @@ def configure(
     write_swift_config(swift_creds)
     write_rabbitmq_creds(amqp_hostname, amqp_username, amqp_password)
     update_autopkgtest(autopkgtest_branch)
+    systemd.service_restart("autopkgtest-metrics.service")
 
 
 def add_remote(arch: str, index: int, token: str):

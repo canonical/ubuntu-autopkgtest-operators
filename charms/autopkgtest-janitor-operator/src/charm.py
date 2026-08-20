@@ -8,6 +8,7 @@ import action_types
 import autopkgtest_janitor
 import config_types
 import ops
+from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from ops.framework import StoredState
 
 RABBITMQ_USERNAME = "janitor"
@@ -24,6 +25,8 @@ class AutopkgtestJanitorCharm(ops.CharmBase):
         self.typed_config = self.load_config(
             config_types.JanitorConfig, errors="blocked"
         )
+
+        self.cos_agent = COSAgentProvider(self)
 
         self._stored.set_default(
             remotes=set(),

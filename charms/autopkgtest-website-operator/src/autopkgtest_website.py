@@ -46,6 +46,7 @@ PACKAGES = [
     "amqp-tools",
     "git",
     "jq",
+    "prometheus-apache-exporter",
     "python3-distro-info",
     "python3-flask",
     "python3-flask-openid",
@@ -159,6 +160,7 @@ def configure(
             "remoteip",
             "rewrite",
             "ssl",
+            "status",
         ],
         check=True,
     )

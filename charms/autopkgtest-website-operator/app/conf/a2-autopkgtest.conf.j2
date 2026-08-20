@@ -2,6 +2,12 @@
   Require all granted
 </Directory>
 
+# mod_status endpoint restricted to localhost so only node-local scrapers can reach it.
+<Location /server-status>
+  SetHandler server-status
+  Require ip 127.0.0.1 ::1
+</Location>
+
 <VirtualHost *:{{ http_port }}>
   DocumentRoot {{ documentroot }}
 
@@ -13,6 +19,7 @@
   # (executing JavaScript) will set. Allow known CLI tooling through.
   ErrorDocument 429 "<script>document.cookie='not_a_crawler=1; path=/';location.reload();</script>"
   RewriteCond %{HTTP_USER_AGENT} !^(curl|Wget|Python-urllib|ubuntu/|GitHub-Hookshot) [NC]
+  RewriteCond %{REQUEST_URI} !^/server-status [NC]
   RewriteCond %{HTTP_COOKIE} !not_a_crawler=1 [NC]
   RewriteRule ^ - [R=429,L]
 
