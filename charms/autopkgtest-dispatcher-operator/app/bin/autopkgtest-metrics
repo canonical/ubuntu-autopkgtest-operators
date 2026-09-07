@@ -156,11 +156,7 @@ def poll_queue_sizes(connection, releases):
                 # Use the prefix without trailing dash as the label value;
                 # the empty prefix (regular queue) is labelled "default".
                 ctx_label = ctx.rstrip("-") if ctx else "default"
-                try:
-                    depth = get_queue_depth(connection, queue_name)
-                except Exception:
-                    logger.exception("Error polling queue %s", queue_name)
-                    continue
+                depth = get_queue_depth(connection, queue_name)
                 queue_size.labels(release=release, arch=arch, context=ctx_label).set(
                     depth
                 )
@@ -215,23 +211,30 @@ def poll_lxd_statuses():
 
 
 def polling_loop():
-    """Run the polling thread main loop, reconnecting on AMQP failures."""
+    """Run the AMQP polling thread main loop, reconnecting on AMQP failures."""
     while True:
         try:
             host, user, password = read_rabbitmq_creds()
             releases = read_releases()
             connection = amqp_connection(host, user, password)
             logger.info("Polling thread connected to RabbitMQ at %s", host)
-            last_lxd_poll = 0.0
             while True:
                 poll_queue_sizes(connection, releases)
-                if time.monotonic() - last_lxd_poll >= LXD_POLL_INTERVAL:
-                    poll_lxd_statuses()
-                    last_lxd_poll = time.monotonic()
-                time.sleep(POLL_INTERVAL)
+                connection.sleep(POLL_INTERVAL)
         except Exception:
             logger.exception("Polling loop error; reconnecting in 30s")
             time.sleep(30)
+
+
+def lxd_poll_loop():
+    """Run the LXD-remote-reachability polling thread main loop.
+
+    Independent of the AMQP polling loop/connection so that slow `lxc`
+    probing can never delay AMQP heartbeats (see `polling_loop`).
+    """
+    while True:
+        poll_lxd_statuses()
+        time.sleep(LXD_POLL_INTERVAL)
 
 
 # --------------------------------------------------------------------------
@@ -291,14 +294,15 @@ def main():
     prometheus_client.REGISTRY.unregister(prometheus_client.PLATFORM_COLLECTOR)
     prometheus_client.REGISTRY.unregister(prometheus_client.PROCESS_COLLECTOR)
 
-    logger.info("Starting autopkgtest metrics exporter on port %d", METRICS_PORT)
-    prometheus_client.start_http_server(METRICS_PORT)
+    logger.info("Starting autopkgtest metrics exporter on 127.0.0.1:%d", METRICS_PORT)
+    prometheus_client.start_http_server(METRICS_PORT, addr="127.0.0.1")
 
     # Pre-initialise lxd_status so the metric exists even before the first poll.
     lxd_status.labels(status="active").set(0)
     lxd_status.labels(status="error").set(0)
 
     threading.Thread(target=polling_loop, daemon=True).start()
+    threading.Thread(target=lxd_poll_loop, daemon=True).start()
     threading.Thread(target=fanout_loop, daemon=True).start()
 
     # Keep the main thread alive.
