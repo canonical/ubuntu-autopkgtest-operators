@@ -132,7 +132,7 @@ def update_autopkgtest(autopkgtest_branch):
     )
 
 
-def install(autopkgtest_branch, releases):
+def install(autopkgtest_branch, releases, juju_unit_name):
     """Install dispatcher."""
     if is_proxy_defined():
         logger.info("installing proxy environment file")
@@ -216,6 +216,7 @@ def install(autopkgtest_branch, releases):
     j2context = {
         "user": USER,
         "conf_directory": CONF_DIRECTORY,
+        "juju_unit_name": juju_unit_name,
         "rabbitmq_creds_path": RABBITMQ_CREDS_PATH,
         "autopkgtest_package_configs_location": AUTOPKGTEST_PACKAGE_CONFIGS_LOCATION,
     }
