@@ -5,7 +5,7 @@
 # mod_status endpoint restricted to localhost so only node-local scrapers can reach it.
 <Location /server-status>
   SetHandler server-status
-  Require ip 127.0.0.1 ::1
+  Require expr %{CONN_REMOTE_ADDR} -ipmatch '127.0.0.0/8' || %{CONN_REMOTE_ADDR} -ipmatch '::1'
 </Location>
 
 <VirtualHost *:{{ http_port }}>
