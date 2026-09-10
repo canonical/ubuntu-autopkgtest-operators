@@ -1,0 +1,16 @@
+[Unit]
+Description=autopkgtest metrics exporter
+Documentation=https://github.com/canonical/ubuntu-autopkgtest-operators
+ConditionFileNotEmpty={{ conf_directory }}/rabbitmq.cred
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User={{ user }}
+EnvironmentFile=-/etc/environment.d/proxy.conf
+ExecStart=/usr/local/bin/autopkgtest-metrics
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

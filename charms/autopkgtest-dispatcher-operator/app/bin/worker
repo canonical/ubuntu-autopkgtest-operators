@@ -1028,6 +1028,16 @@ def main():
 
     handlers = None
     if "INVOCATION_ID" in os.environ:
+        # Tag every journal entry with a per-worker-instance syslog identifier
+        # (e.g. "autopkgtest-worker-remote-amd64-1-1" instead of the generic
+        # "/usr/local/bin/worker" argv[0] default) so that log lines can be
+        # filtered/correlated by worker instance downstream (journalctl -t,
+        # or in Loki once forwarded via journald's ForwardToSyslog).
+        worker_instance = os.environ.get("WORKER_INSTANCE")
+        if worker_instance:
+            systemd_logging_handler._extra["SYSLOG_IDENTIFIER"] = (
+                f"autopkgtest-worker-{worker_instance}"
+            )
         handlers = [systemd_logging_handler]
     logging.basicConfig(
         level=(debug and logging.DEBUG or logging.INFO),

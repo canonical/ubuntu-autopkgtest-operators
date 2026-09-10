@@ -8,6 +8,7 @@ After=network-online.target
 [Service]
 User={{ user }}
 TimeoutStartSec=5min
+Environment=WORKER_INSTANCE=%i
 EnvironmentFile=-/etc/environment.d/proxy.conf
 EnvironmentFile={{ conf_directory }}/rabbitmq.cred
 EnvironmentFile={{ conf_directory }}/swift.cred
@@ -16,11 +17,13 @@ ExecStart=/bin/sh -ec '\
     remote="$${param%-*}"; \
     remote_base="$${remote%-*}"; \
     arch="$${remote_base#*-}"; \
-    juju_unit=$$(find /var/lib/juju/agents -maxdepth 1 -type d -name "unit-*" -printf %%f); \
+    juju_unit=$$(find /var/lib/juju/agents -maxdepth 1 -type d -name "unit-ubuntu-autopkgtest-dispatcher-*" -printf %%f); \
     dispatcher="$${juju_unit#unit-}"; \
     name="$${dispatcher}-$${param}"; \
     exec /usr/local/bin/worker --config "{{ conf_directory }}/worker.conf" -v LXD_REMOTE="$$remote" -v NAME="$$name" -a "$$arch"'
 ExecReload=/bin/kill -HUP $MAINPID
+StandardOutput=journal
+StandardError=journal
 SuccessExitStatus=0 99 SIGTERM SIGHUP
 RestartSec=10min
 Restart=on-failure
