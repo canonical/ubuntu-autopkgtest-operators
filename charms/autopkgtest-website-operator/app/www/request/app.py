@@ -4,9 +4,10 @@ import hmac
 import json
 import logging
 import os
-import pathlib
 import sys
 import traceback
+import urllib.error
+import urllib.request
 from collections import ChainMap
 from html import escape as _escape
 
@@ -14,9 +15,12 @@ from flask import Flask, redirect, request, session
 from flask_openid import OpenID
 from helpers.exceptions import WebControlException
 from helpers.utils import get_autopkgtest_cloud_conf, get_github_context, setup_key
+from launchpadlib.credentials import AccessToken, Credentials
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from request.submit import Submit
+
+LP_API = "https://api.launchpad.net"
 
 # map multiple GET vars to AMQP JSON request parameter list
 MULTI_ARGS = {"trigger": "triggers", "ppa": "ppas", "env": "env"}
@@ -111,23 +115,39 @@ def maybe_escape(value):
     return _escape(value) if value else value
 
 
-def get_api_keys():
-    """Get API keys.
+def identify_launchpad_user(oauth_header):
+    """Use launchpadlib to query for the owner of an oauth header.
 
-    API keys is a json file like this:
-    {
-        "user1": "user1s-apikey",
-        "user2": "user2s-apikey",
-    }.
+    Returns the user's nickname, or None if the header does not work.
     """
+    if not oauth_header:
+        return None
+
     try:
-        api_keys = json.loads(
-            pathlib.Path("/home/ubuntu/external-web-requests-api-keys.json").read_text()
-        )
-    except Exception as e:
-        logging.warning("Failed to read API keys: %s", e)
-        api_keys = {}
-    return api_keys
+        consumer_key, token_key, token_secret = oauth_header.rsplit(":", 2)
+    except ValueError:
+        # header malformed
+        return None
+
+    credentials = Credentials(
+        consumer_name=consumer_key,
+        access_token=AccessToken(token_key, token_secret),
+    )
+    credentials.oauth_realm = LP_API
+
+    url = LP_API + "/devel/people/+me"
+    headers = {}
+    credentials.authorizeRequest(url, "GET", None, headers)
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as f:  # noqa: S310
+            person = json.loads(f.read().decode())
+    except (urllib.error.HTTPError, urllib.error.URLError, ValueError):
+        # header invalid or LP error
+        return None
+
+    name = person.get("name")
+    return name
 
 
 # Initialize app
@@ -154,19 +174,19 @@ def index_root():
     session.permanent = True
     session["next"] = maybe_escape(request.url)
     nick = maybe_escape(session.get("nickname"))
-    if "X-Api-Key" in request.cookies:
-        key_user, api_key = request.cookies.get("X-Api-Key").split(":")
-        request_creds_sha1 = hmac.new(
-            key_user.encode(), api_key.encode(), "sha1"
-        ).hexdigest()
-        api_keys = get_api_keys()
-        for user, user_key in api_keys.items():
-            iter_creds_sha1 = hmac.new(
-                user.encode(), user_key.encode(), "sha1"
-            ).hexdigest()
-            if hmac.compare_digest(request_creds_sha1, iter_creds_sha1):
-                nick = key_user
-                session.update(nickname=key_user)
+    # accept credentials either as a header or as a cookie
+    lp_oauth = request.headers.get("X-Launchpad-OAuth") or request.cookies.get(
+        "X-Launchpad-OAuth"
+    )
+    if lp_oauth:
+        lp_user = identify_launchpad_user(lp_oauth)
+        if lp_user:
+            nick = lp_user
+            session.update(nickname=lp_user)
+        else:
+            # this causes a request to fail if LP is down but that is fine
+            # because we would fail when trying to validate_distro_request anyway
+            return invalid("Invalid Launchpad OAuth credentials", 403)
 
     params = {maybe_escape(k): maybe_escape(v) for k, v in request.args.items()}
     # convert multiple GET args into lists
