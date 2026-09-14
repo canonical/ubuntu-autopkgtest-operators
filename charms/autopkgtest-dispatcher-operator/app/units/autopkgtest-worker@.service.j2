@@ -16,9 +16,7 @@ ExecStart=/bin/sh -ec '\
     remote="$${param%-*}"; \
     remote_base="$${remote%-*}"; \
     arch="$${remote_base#*-}"; \
-    juju_unit=$$(find /var/lib/juju/agents -maxdepth 1 -type d -name "unit-*" -printf %%f); \
-    dispatcher="$${juju_unit#unit-}"; \
-    name="$${dispatcher}-$${param}"; \
+    name="{{ juju_unit_name }}-$${param}"; \
     exec /usr/local/bin/worker --config "{{ conf_directory }}/worker.conf" -v LXD_REMOTE="$$remote" -v NAME="$$name" -a "$$arch"'
 ExecReload=/bin/kill -HUP $MAINPID
 SuccessExitStatus=0 99 SIGTERM SIGHUP
