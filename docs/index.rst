@@ -11,4 +11,5 @@ Ubuntu. Ubuntu's instances can be viewed `here
     administration
     webcontrol
     deploying
+    riscv64_setup
     docs
