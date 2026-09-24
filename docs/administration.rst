@@ -85,6 +85,73 @@ If this doesn't happen for any reason, you can::
 
 where ``<unit>`` is the charm shown in ``juju status``.
 
+Removing LXD remotes
+--------------------
+
+In the ``ubuntu-engineering-terraform-models`` repository, reduce ``n_remotes`` in
+``models/ps7/ubuntu-engineering/autopkgtest/prod-autopkgtest-remotes-<arch>-ps7/main.tf``.
+Submit a GitHub pull request and merge it.
+
+NOTE: All remote VMs must be reachable before applying the change. Juju chooses
+which VMs to remove, so a down or paused VM can cause the removal to hang.
+Record the current units so you can identify which ones were removed afterwards.
+
+Switch to the appropriate remotes Juju environment, pull the updated repository,
+and enter the plan directory. Initialise Terraform and review the plan::
+
+  terraform init -upgrade
+  terraform plan -var local_run=true
+
+If the plan is correct, apply it and wait for Juju to finish removing the VMs::
+
+  terraform apply -var local_run=true
+
+Note the removed remote leader indices. For example, removing ``lxd-remote/36``
+and ``lxd-remote/37`` means indices ``36`` and ``37``.
+
+Switch to the orchestration environment. On every dispatcher unit, set the worker
+count to zero for each removed remote. For amd64 remotes, do this for both
+``amd64`` and ``i386`` workers. The following example removes indices 36 and 37;
+replace the dispatcher unit list, indices, and architectures as appropriate::
+
+  dispatchers="<dispatcher-unit> <dispatcher-unit>"
+  leaders="36 37"
+  arches="amd64 i386"
+  for dispatcher in $dispatchers; do
+    for leader in $leaders; do
+      for arch in $arches; do
+        juju run "$dispatcher" set-worker-count arch="$arch" count=0 index="$leader"
+      done
+    done
+  done
+
+Once all worker counts are updated, reconcile the workers on every dispatcher::
+
+  for dispatcher in $dispatchers; do
+    juju run "$dispatcher" reconcile-worker-units
+  done
+
+Once reconciliation has completed successfully on all dispatchers, remove their
+remote entries, again including ``i386`` for amd64 remotes::
+
+  for dispatcher in $dispatchers; do
+    for leader in $leaders; do
+      for arch in $arches; do
+        juju run "$dispatcher" remove-remote arch="$arch" index="$leader"
+      done
+    done
+  done
+
+After all dispatcher actions have succeeded, remove the remotes from the single
+janitor unit. The janitor manages LXD hosts rather than per-architecture worker
+remotes, so for amd64 only use ``arch=amd64``, not ``arch=i386``::
+
+  for leader in $leaders; do
+    juju run janitor/leader remove-remote arch=amd64 index="$leader"
+  done
+
+For other architectures, replace ``amd64`` with the remote architecture.
+
 Updating autopkgtest
 ---------------------------------
 The dispatcher and janitor applications have
