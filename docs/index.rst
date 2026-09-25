@@ -12,3 +12,4 @@ Ubuntu. Ubuntu's instances can be viewed `here
     webcontrol
     deploying
     docs
+    github
