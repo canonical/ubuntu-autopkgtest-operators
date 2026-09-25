@@ -837,7 +837,7 @@ def package_release_arch(package, release, arch, _=None):
                         url="",
                         show_retry=False,
                         all_proposed="",
-                        run_id="N/A",
+                        run_id="",
                     ),
                 )
     except Exception:
@@ -885,7 +885,7 @@ def package_release_arch(package, release, arch, _=None):
                             url="",
                             show_retry=False,
                             all_proposed="",
-                            run_id="N/A",
+                            run_id="",
                         ),
                     )
     except Exception:
