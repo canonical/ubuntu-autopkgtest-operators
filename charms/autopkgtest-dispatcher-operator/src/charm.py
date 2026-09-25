@@ -59,7 +59,9 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
         """Install the workload on the machine."""
         self.unit.status = ops.MaintenanceStatus("installing workload")
         autopkgtest_dispatcher.install(
-            self.typed_config.autopkgtest_git_branch, self.typed_config.releases
+            self.typed_config.autopkgtest_git_branch,
+            self.typed_config.releases,
+            self.unit.name.replace("/", "-"),
         )
 
         self._stored.installed = True
