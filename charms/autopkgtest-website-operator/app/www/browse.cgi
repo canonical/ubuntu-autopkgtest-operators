@@ -1103,7 +1103,7 @@ def display_running_log():
     release = flask.request.args["release"]
     arch = flask.request.args["arch"]
     try:
-        _, duration, logtail = get_running_jobs()[package][runhash][release][arch]
+        params, duration, logtail = get_running_jobs()[package][runhash][release][arch]
     except KeyError:
         # the run is over (or unknown): its results page takes over
         return flask.redirect(
@@ -1117,6 +1117,7 @@ def display_running_log():
         package=package,
         release=release,
         arch=arch,
+        triggers=" ".join(params.get("triggers", [])),
         duration=duration,
         logtail=logtail,
         title_suffix=f"- {package}/{release}/{arch}",

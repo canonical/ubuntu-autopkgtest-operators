@@ -4,6 +4,7 @@
 
 {% block content %}
   <h1>{{ package }} / {{ release }} / {{ arch }}</h1>
+  <p>Triggers: {{ triggers }}</p>
   <p>
     Running for {{ duration//3600 }}h {{ duration % 3600//60 }}m {{ duration % 60 }}s
     ({{ duration }}s)
