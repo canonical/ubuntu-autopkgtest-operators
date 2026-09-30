@@ -60,6 +60,41 @@
   {% endif %}
 {%- endmacro %}
 
+{% macro running_job_details(package, release, arch, params, duration, logtail) -%}
+  <table class="table table-sm">
+    <tr>
+      <th>Package:</th>
+      <td>{{ package }}</td>
+    </tr>
+    <tr>
+      <th>Release:</th>
+      <td>{{ release }}</td>
+    </tr>
+    <tr>
+      <th>Architecture:</th>
+      <td>{{ arch }}</td>
+    </tr>
+    {% for param, v in params.items() %}
+      {% if param == "requester" %}
+        <tr>
+          <th>{{ param|capitalize }}:</th>
+          <td>{{ render_requester(v) }}</td>
+        </tr>
+      {% else %}
+        <tr>
+          <th>{{ param|capitalize }}:</th>
+          <td>{{ v }}</td>
+        </tr>
+      {% endif %}
+    {% endfor %}
+    <tr>
+      <th>Running for:</th>
+      <td>{{ duration//3600 }}h {{ duration % 3600//60 }}m {{ duration % 60 }}s ({{ duration }}s)</td>
+    </tr>
+  </table>
+  <pre class="bg-body-secondary p-2 border rounded"><code>{{ logtail }}</code></pre>
+{%- endmacro %}
+
 {% macro display_running_job(package, info) -%}
   {% for runhash, relinfo in info.items() %}
     {% for release, archinfo in relinfo.items() %}
@@ -67,38 +102,7 @@
         <p>
           <a href="{{ url_for('display_running_log', package=package, runhash=runhash, release=release, arch=arch) }}">live log</a>
         </p>
-        <table class="table table-sm">
-          <tr>
-            <th>Package:</th>
-            <td>{{ package }}</td>
-          </tr>
-          <tr>
-            <th>Release:</th>
-            <td>{{ release }}</td>
-          </tr>
-          <tr>
-            <th>Architecture:</th>
-            <td>{{ arch }}</td>
-          </tr>
-          {% for param, v in params.items() %}
-            {% if param == "requester" %}
-              <tr>
-                <th>{{ param|capitalize }}:</th>
-                <td>{{ render_requester(v) }}</td>
-              </tr>
-            {% else %}
-              <tr>
-                <th>{{ param|capitalize }}:</th>
-                <td>{{ v }}</td>
-              </tr>
-            {% endif %}
-          {% endfor %}
-          <tr>
-            <th>Running for:</th>
-            <td>{{ duration//3600 }}h {{ duration % 3600//60 }}m {{ duration % 60 }}s ({{ duration }}s)</td>
-          </tr>
-        </table>
-        <pre class="bg-body-secondary p-2 border rounded"><code>{{ logtail }}</code></pre>
+        {{ running_job_details(package, release, arch, params, duration, logtail) }}
       {% endfor %}
     {% endfor %}
     <hr>

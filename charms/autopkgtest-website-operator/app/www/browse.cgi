@@ -1117,7 +1117,7 @@ def display_running_log():
         package=package,
         release=release,
         arch=arch,
-        triggers=" ".join(params.get("triggers", [])),
+        params=params,
         duration=duration,
         logtail=logtail,
         title_suffix=f"- {package}/{release}/{arch}",
