@@ -369,7 +369,7 @@ def get_queued_for_user(user: str):
 def get_running_for_user(user: str):
     running_tests = []
     for package, running_hash in get_running_jobs().items():
-        for runhash, running in running_hash.items():
+        for _, running in running_hash.items():
             for release, vals in running.items():
                 for arch, list_of_running_items in vals.items():
                     if len(list_of_running_items) < 1:
@@ -394,7 +394,6 @@ def get_running_for_user(user: str):
                                 package=package,
                                 release=release,
                                 arch=arch,
-                                runhash=runhash,
                             ),
                         )
     return running_tests
