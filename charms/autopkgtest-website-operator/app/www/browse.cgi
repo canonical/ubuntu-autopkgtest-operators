@@ -1106,7 +1106,12 @@ def display_running_log():
     try:
         _, duration, logtail = get_running_jobs()[package][runhash][release][arch]
     except KeyError:
-        raise NotFound("running test", f"{package}/{release}/{arch}") from None
+        # the run is over (or unknown): its results page takes over
+        return flask.redirect(
+            flask.url_for(
+                "package_release_arch", package=package, release=release, arch=arch
+            )
+        )
 
     return render(
         "browse-running-log.html",
