@@ -1,0 +1,11 @@
+{% extends "browse-layout.html" %}
+{% import "macros.html" as macros %}
+
+{% block extra_head %}
+  <meta http-equiv="refresh" content="30">
+{% endblock extra_head %}
+
+{% block content %}
+  <h1>{{ package }} / {{ release }} / {{ arch }}</h1>
+  {{ macros.running_job_details(package, release, arch, params, duration, logtail) }}
+{% endblock content %}

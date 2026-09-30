@@ -60,42 +60,49 @@
   {% endif %}
 {%- endmacro %}
 
+{% macro running_job_details(package, release, arch, params, duration, logtail) -%}
+  <table class="table table-sm">
+    <tr>
+      <th>Package:</th>
+      <td>{{ package }}</td>
+    </tr>
+    <tr>
+      <th>Release:</th>
+      <td>{{ release }}</td>
+    </tr>
+    <tr>
+      <th>Architecture:</th>
+      <td>{{ arch }}</td>
+    </tr>
+    {% for param, v in params.items() %}
+      {% if param == "requester" %}
+        <tr>
+          <th>{{ param|capitalize }}:</th>
+          <td>{{ render_requester(v) }}</td>
+        </tr>
+      {% else %}
+        <tr>
+          <th>{{ param|capitalize }}:</th>
+          <td>{{ v }}</td>
+        </tr>
+      {% endif %}
+    {% endfor %}
+    <tr>
+      <th>Running for:</th>
+      <td>{{ duration//3600 }}h {{ duration % 3600//60 }}m {{ duration % 60 }}s ({{ duration }}s)</td>
+    </tr>
+  </table>
+  <pre class="bg-body-secondary p-2 border rounded"><code>{{ logtail }}</code></pre>
+{%- endmacro %}
+
 {% macro display_running_job(package, info) -%}
   {% for runhash, relinfo in info.items() %}
     {% for release, archinfo in relinfo.items() %}
       {% for arch, (params, duration, logtail) in archinfo.items() %}
-        <table class="table table-sm">
-          <tr>
-            <th>Package:</th>
-            <td>{{ package }}</td>
-          </tr>
-          <tr>
-            <th>Release:</th>
-            <td>{{ release }}</td>
-          </tr>
-          <tr>
-            <th>Architecture:</th>
-            <td>{{ arch }}</td>
-          </tr>
-          {% for param, v in params.items() %}
-            {% if param == "requester" %}
-              <tr>
-                <th>{{ param|capitalize }}:</th>
-                <td>{{ render_requester(v) }}</td>
-              </tr>
-            {% else %}
-              <tr>
-                <th>{{ param|capitalize }}:</th>
-                <td>{{ v }}</td>
-              </tr>
-            {% endif %}
-          {% endfor %}
-          <tr>
-            <th>Running for:</th>
-            <td>{{ duration//3600 }}h {{ duration % 3600//60 }}m {{ duration % 60 }}s ({{ duration }}s)</td>
-          </tr>
-        </table>
-        <pre class="bg-body-secondary p-2 border rounded"><code>{{ logtail }}</code></pre>
+        <p>
+          <a href="{{ url_for('display_running_log', package=package, runhash=runhash, release=release, arch=arch) }}">log tail</a>
+        </p>
+        {{ running_job_details(package, release, arch, params, duration, logtail) }}
       {% endfor %}
     {% endfor %}
     <hr>
@@ -169,7 +176,7 @@
   <td></td>
 {%- endmacro %}
 
-{% macro results_table_core(version, triggers, env, date, duration, requester, code, url, show_retry, all_proposed, run_id, package, release, arch) -%}
+{% macro results_table_core(version, triggers, env, date, duration, requester, code, url, show_retry, all_proposed, run_id, package, release, arch, runhash="") -%}
   <td>{{ version }}</td>
   <td>{{ triggers }}</td>
   <td>{{ env }}</td>
@@ -178,19 +185,23 @@
   <td>{{ render_requester(requester) }}</td>
   <td class="nowrap">
     {{ status_icon(code) }}
-    {% if run_id %}
+    {% if code == "running" %}
+      <a href="{{ url_for('display_running_log', package=package, runhash=runhash, release=release, arch=arch) }}">{{ code }}</a>
+    {% elif run_id %}
       <a href="{{ url_for('display_run_summary', release=release, arch=arch, package=package, run_id=run_id) }}">{{ code }}</a>
     {% else %}
       {{ code }}
     {% endif %}
   </td>
   <td class="nowrap">
-    {% if run_id %}
+    {% if run_id and url %}
       <!-- Reinstantiate once all logs all logs are copied to new swift
       <a href="{{ url_for('display_run_summary', release=release, arch=arch, package=package, run_id=run_id) }}/log">log</a>
       (<a href="{{ url }}/log.gz">raw</a>)&emsp;<a href="{{ url }}/artifacts.tar.gz">artifacts</a>
       -->
       <a href="{{ url }}/log.gz">log</a>&emsp;<a href="{{ url }}/artifacts.tar.gz">artifacts</a>
+    {% elif code == "running" %}
+      <a href="{{ url_for('display_running_log', package=package, runhash=runhash, release=release, arch=arch) }}">log tail</a>
     {% endif %}
   </td>
   <td class="nowrap">

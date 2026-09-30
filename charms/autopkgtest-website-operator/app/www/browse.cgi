@@ -821,7 +821,7 @@ def package_release_arch(package, release, arch, _=None):
 
     # Add running jobs if any
     try:
-        for _, running_jobs in get_running_jobs().get(package, {}).items():
+        for runhash, running_jobs in get_running_jobs().get(package, {}).items():
             job = running_jobs.get(release, {}).get(arch, {})
             if job:
                 results.insert(
@@ -837,7 +837,8 @@ def package_release_arch(package, release, arch, _=None):
                         url="",
                         show_retry=False,
                         all_proposed="",
-                        run_id="N/A",
+                        run_id="",
+                        runhash=runhash,
                     ),
                 )
     except Exception:
@@ -885,7 +886,7 @@ def package_release_arch(package, release, arch, _=None):
                             url="",
                             show_retry=False,
                             all_proposed="",
-                            run_id="N/A",
+                            run_id="",
                         ),
                     )
     except Exception:
@@ -1092,6 +1093,34 @@ def running():
         queues_lengths=queues_lengths,
         running=running_info,
         running_count=running_count,
+    )
+
+
+@app.route("/running/log")
+def display_running_log():
+    package = flask.request.args["package"]
+    runhash = flask.request.args["runhash"]
+    release = flask.request.args["release"]
+    arch = flask.request.args["arch"]
+    try:
+        params, duration, logtail = get_running_jobs()[package][runhash][release][arch]
+    except KeyError:
+        # the run is over (or unknown): its results page takes over
+        return flask.redirect(
+            flask.url_for(
+                "package_release_arch", package=package, release=release, arch=arch
+            )
+        )
+
+    return render(
+        "browse-running-log.html",
+        package=package,
+        release=release,
+        arch=arch,
+        params=params,
+        duration=duration,
+        logtail=logtail,
+        title_suffix=f"- {package}/{release}/{arch}",
     )
 
 
