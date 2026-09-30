@@ -180,14 +180,14 @@
     {{ status_icon(code) }}
     {% if code == "running" %}
       <a href="{{ url_for("running") }}#pkg-{{ package }}">{{ code }}</a>
-    {% elif run_id and run_id != "N/A" %}
+    {% elif run_id %}
       <a href="{{ url_for('display_run_summary', release=release, arch=arch, package=package, run_id=run_id) }}">{{ code }}</a>
     {% else %}
       {{ code }}
     {% endif %}
   </td>
   <td class="nowrap">
-    {% if run_id and run_id != "N/A" and url %}
+    {% if run_id and url %}
       <!-- Reinstantiate once all logs all logs are copied to new swift
       <a href="{{ url_for('display_run_summary', release=release, arch=arch, package=package, run_id=run_id) }}/log">log</a>
       (<a href="{{ url }}/log.gz">raw</a>)&emsp;<a href="{{ url }}/artifacts.tar.gz">artifacts</a>
