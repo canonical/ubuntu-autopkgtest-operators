@@ -141,7 +141,7 @@ Once all remotes are configured you can check the resulting worker config::
 
 Which should show you the target number of systemd units that will be spawned per worker. You can
 change this number with::
-  $ juju run dispatcher/leader set-worker-count arch=<worker_arch> count=<unit_count>
+  $ juju run dispatcher/leader set-worker-count arch=<worker_arch> count=<unit_count> index=<remote_leader>
 
 The default number of workers is stored in the config value ``default-worker-count``. Any changes
 to this value will affect remotes added afterwards.
