@@ -100,7 +100,7 @@
     {% for release, archinfo in relinfo.items() %}
       {% for arch, (params, duration, logtail) in archinfo.items() %}
         <p>
-          <a href="{{ url_for('display_running_log', package=package, runhash=runhash, release=release, arch=arch) }}">live log</a>
+          <a href="{{ url_for('display_running_log', package=package, runhash=runhash, release=release, arch=arch) }}">log tail</a>
         </p>
         {{ running_job_details(package, release, arch, params, duration, logtail) }}
       {% endfor %}
@@ -201,7 +201,7 @@
       -->
       <a href="{{ url }}/log.gz">log</a>&emsp;<a href="{{ url }}/artifacts.tar.gz">artifacts</a>
     {% elif code == "running" %}
-      <a href="{{ url_for('display_running_log', package=package, runhash=runhash, release=release, arch=arch) }}">live log</a>
+      <a href="{{ url_for('display_running_log', package=package, runhash=runhash, release=release, arch=arch) }}">log tail</a>
     {% endif %}
   </td>
   <td class="nowrap">
