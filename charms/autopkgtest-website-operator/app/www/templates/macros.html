@@ -64,6 +64,9 @@
   {% for runhash, relinfo in info.items() %}
     {% for release, archinfo in relinfo.items() %}
       {% for arch, (params, duration, logtail) in archinfo.items() %}
+        <p>
+          <a href="{{ url_for('display_running_log', package=package, runhash=runhash, release=release, arch=arch) }}">live log</a>
+        </p>
         <table class="table table-sm">
           <tr>
             <th>Package:</th>
@@ -169,7 +172,7 @@
   <td></td>
 {%- endmacro %}
 
-{% macro results_table_core(version, triggers, env, date, duration, requester, code, url, show_retry, all_proposed, run_id, package, release, arch) -%}
+{% macro results_table_core(version, triggers, env, date, duration, requester, code, url, show_retry, all_proposed, run_id, package, release, arch, runhash="") -%}
   <td>{{ version }}</td>
   <td>{{ triggers }}</td>
   <td>{{ env }}</td>
@@ -194,7 +197,7 @@
       -->
       <a href="{{ url }}/log.gz">log</a>&emsp;<a href="{{ url }}/artifacts.tar.gz">artifacts</a>
     {% elif code == "running" %}
-      <a href="{{ url_for("running") }}#pkg-{{ package }}">live log</a>
+      <a href="{{ url_for('display_running_log', package=package, runhash=runhash, release=release, arch=arch) }}">live log</a>
     {% endif %}
   </td>
   <td class="nowrap">

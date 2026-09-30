@@ -1,0 +1,14 @@
+{% extends "browse-layout.html" %}
+
+{% block extra_head %}
+  <meta http-equiv="refresh" content="30">
+{% endblock %}
+
+{% block content %}
+  <h1>{{ package }} / {{ release }} / {{ arch }}</h1>
+  <p>
+    Running for {{ duration//3600 }}h {{ duration % 3600//60 }}m {{ duration % 60 }}s
+    ({{ duration }}s)
+  </p>
+  <pre class="bg-body-secondary p-2 border rounded"><code>{{ logtail }}</code></pre>
+{% endblock content %}

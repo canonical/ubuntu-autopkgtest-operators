@@ -369,7 +369,7 @@ def get_queued_for_user(user: str):
 def get_running_for_user(user: str):
     running_tests = []
     for package, running_hash in get_running_jobs().items():
-        for _, running in running_hash.items():
+        for runhash, running in running_hash.items():
             for release, vals in running.items():
                 for arch, list_of_running_items in vals.items():
                     if len(list_of_running_items) < 1:
@@ -394,6 +394,7 @@ def get_running_for_user(user: str):
                                 package=package,
                                 release=release,
                                 arch=arch,
+                                runhash=runhash,
                             ),
                         )
     return running_tests
@@ -821,7 +822,7 @@ def package_release_arch(package, release, arch, _=None):
 
     # Add running jobs if any
     try:
-        for _, running_jobs in get_running_jobs().get(package, {}).items():
+        for runhash, running_jobs in get_running_jobs().get(package, {}).items():
             job = running_jobs.get(release, {}).get(arch, {})
             if job:
                 results.insert(
@@ -838,6 +839,7 @@ def package_release_arch(package, release, arch, _=None):
                         show_retry=False,
                         all_proposed="",
                         run_id="",
+                        runhash=runhash,
                     ),
                 )
     except Exception:
@@ -1092,6 +1094,28 @@ def running():
         queues_lengths=queues_lengths,
         running=running_info,
         running_count=running_count,
+    )
+
+
+@app.route("/running/log")
+def display_running_log():
+    package = flask.request.args["package"]
+    runhash = flask.request.args["runhash"]
+    release = flask.request.args["release"]
+    arch = flask.request.args["arch"]
+    try:
+        _, duration, logtail = get_running_jobs()[package][runhash][release][arch]
+    except KeyError:
+        raise NotFound("running test", f"{package}/{release}/{arch}") from None
+
+    return render(
+        "browse-running-log.html",
+        package=package,
+        release=release,
+        arch=arch,
+        duration=duration,
+        logtail=logtail,
+        title_suffix=f"- {package}/{release}/{arch}",
     )
 
 
