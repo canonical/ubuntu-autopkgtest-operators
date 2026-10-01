@@ -1,0 +1,90 @@
+#cloud-config
+
+apt:
+  http_proxy: http://<egress-proxy-host>:3128/
+  https_proxy: http://<egress-proxy-host>:3128/
+
+package_update: true
+package_upgrade: true
+
+snap:
+  commands:
+    00: ["set", "system", "proxy.http=http://<egress-proxy-host>:3128"]
+    01: ["set", "system", "proxy.https=http://<egress-proxy-host>:3128"]
+    02: ["install", "lxd", "--channel=6/edge"]
+
+mounts:
+  # Disable auto-mounting the ephemeral partition.
+  - ["ephemeral0"]
+
+write_files:
+  - path: /etc/cron.hourly/restart-stuck-lxd
+    permissions: '0755'
+    content: |
+      #!/bin/sh
+      exec >/dev/null 2>&1
+      if ! timeout 1m lxc ls; then
+          timeout 10m snap restart lxd || reboot
+          sleep 10
+          timeout 1m lxc ls || reboot
+      fi
+  - path: /root/lxd-preseed.yaml
+    permissions: '0644'
+    content: |
+      storage_pools:
+        - name: default
+          driver: btrfs
+          config:
+            source: /dev/disk/by-partlabel/ephemeral-lxd
+            # default mount options: user_subvol_rm_allowed
+            btrfs.mount_options: user_subvol_rm_allowed,noatime,commit=180
+      networks:
+        # A simple bridge is sufficient: autopkgtest does not need
+        # instances on different cluster members to reach one another.
+        - name: lxdbr0
+          type: bridge
+      profiles:
+        - name: default
+          description: LXD profile for autopkgtest
+          devices:
+            root:
+              path: /
+              pool: default
+              type: disk
+            eth0:
+              name: eth0
+              network: lxdbr0
+              type: nic
+          config:
+            security.nesting: true
+      config:
+        core.https_address: "[::]:8443"
+        core.proxy_http: http://<egress-proxy-host>:3128
+        core.proxy_https: http://<egress-proxy-host>:3128
+        core.proxy_ignore_hosts: "<internal-cidr-1>,<internal-ip-1>,<internal-ip-2>,<internal-ip-3>,<internal-cidr-2>,<internal-cidr-3>,127.0.0.1,<additional-ip-1>,<additional-ip-2>,<additional-ip-3>,::1,localhost"
+        images.remote_cache_expiry: 1
+        images.auto_update_cached: false
+
+# Device names and the cloud-init ephemeral0 alias are not reliable.
+# Use the filesystem label supplied by OpenStack to locate the disk.
+runcmd:
+  - |
+    (
+    set -eux
+    set -- /dev/disk/by-label/ephemeral*
+    ebd=$1
+    test -L "$ebd" || exit 1
+    ebd=$(realpath "$ebd")
+    sgdisk -o "$ebd"
+    sgdisk -n 1:0:+32G -t 1:8200 -c 1:ephemeral-swap "$ebd"
+    sgdisk -n 2:0:0 -c 2:ephemeral-lxd "$ebd"
+    partprobe
+    udevadm settle
+    test -L /dev/disk/by-partlabel/ephemeral-swap || exit 1
+    test -L /dev/disk/by-partlabel/ephemeral-lxd || exit 1
+    mkswap -L swap /dev/disk/by-partlabel/ephemeral-swap
+    echo "LABEL=swap none swap sw 0 0" >> /etc/fstab
+    swapon -a
+    wipefs -a /dev/disk/by-partlabel/ephemeral-lxd
+    )
+  - lxd init --preseed </root/lxd-preseed.yaml

@@ -39,8 +39,8 @@ must be able to reach the remotes on TCP port 8443.
 Prepare cloud-init user data
 ---------------------------
 
-Save the following as ``riscv-userdata.yaml`` in the provisioning environment,
-replacing the proxy hostname before creating the VMs.
+Copy :download:`riscv-userdata.yaml <riscv64/riscv-userdata.yaml>` to the
+provisioning environment, replacing the proxy hostname before creating the VMs.
 
 .. warning::
 
@@ -51,98 +51,9 @@ replacing the proxy hostname before creating the VMs.
    and flavor. Do not run this disk preparation against storage containing
    data you need to keep.
 
-.. code-block:: yaml
-
-   #cloud-config
-
-   apt:
-     http_proxy: http://<egress-proxy-host>:3128/
-     https_proxy: http://<egress-proxy-host>:3128/
-
-   package_update: true
-   package_upgrade: true
-
-   snap:
-     commands:
-       00: ["set", "system", "proxy.http=http://<egress-proxy-host>:3128"]
-       01: ["set", "system", "proxy.https=http://<egress-proxy-host>:3128"]
-       02: ["install", "lxd", "--channel=6/edge"]
-
-   mounts:
-     # Disable auto-mounting the ephemeral partition.
-     - [ "ephemeral0" ]
-
-   write_files:
-     - path: /etc/cron.hourly/restart-stuck-lxd
-       permissions: '0755'
-       content: |
-         #!/bin/sh
-         exec >/dev/null 2>&1
-         if ! timeout 1m lxc ls; then
-             timeout 10m snap restart lxd || reboot
-             sleep 10
-             timeout 1m lxc ls || reboot
-         fi
-     - path: /root/lxd-preseed.yaml
-       permissions: '0644'
-       content: |
-         storage_pools:
-           - name: default
-             driver: btrfs
-             config:
-               source: /dev/disk/by-partlabel/ephemeral-lxd
-               # default mount options: user_subvol_rm_allowed
-               btrfs.mount_options: user_subvol_rm_allowed,noatime,commit=180
-         networks:
-           # A simple bridge is sufficient: autopkgtest does not need
-           # instances on different cluster members to reach one another.
-           - name: lxdbr0
-             type: bridge
-         profiles:
-           - name: default
-             description: LXD profile for autopkgtest
-             devices:
-               root:
-                 path: /
-                 pool: default
-                 type: disk
-               eth0:
-                 name: eth0
-                 network: lxdbr0
-                 type: nic
-             config:
-               security.nesting: true
-         config:
-           core.https_address: "[::]:8443"
-           core.proxy_http: http://<egress-proxy-host>:3128
-           core.proxy_https: http://<egress-proxy-host>:3128
-           core.proxy_ignore_hosts: "<internal-cidr-1>,<internal-ip-1>,<internal-ip-2>,<internal-ip-3>,<internal-cidr-2>,<internal-cidr-3>,127.0.0.1,<additional-ip-1>,<additional-ip-2>,<additional-ip-3>,::1,localhost"
-           images.remote_cache_expiry: 1
-           images.auto_update_cached: false
-
-   # Device names and the cloud-init ephemeral0 alias are not reliable.
-   # Use the filesystem label supplied by OpenStack to locate the disk.
-   runcmd:
-     - |
-       (
-       set -eux
-       set -- /dev/disk/by-label/ephemeral*
-       ebd=$1
-       test -L "$ebd" || exit 1
-       ebd=$(realpath "$ebd")
-       sgdisk -o "$ebd"
-       sgdisk -n 1:0:+32G -t 1:8200 -c 1:ephemeral-swap "$ebd"
-       sgdisk -n 2:0:0 -c 2:ephemeral-lxd "$ebd"
-       partprobe
-       udevadm settle
-       test -L /dev/disk/by-partlabel/ephemeral-swap || exit 1
-       test -L /dev/disk/by-partlabel/ephemeral-lxd || exit 1
-       mkswap -L swap /dev/disk/by-partlabel/ephemeral-swap
-       echo "LABEL=swap none swap sw 0 0" >> /etc/fstab
-       swapon -a
-       wipefs -a /dev/disk/by-partlabel/ephemeral-lxd
-       )
-     - lxd init --preseed </root/lxd-preseed.yaml
+.. literalinclude:: riscv64/riscv-userdata.yaml
+   :language: yaml
+   :caption: riscv-userdata.yaml
 
 The cloud-config installs LXD from ``6/edge`` and splits the ephemeral disk into
 32 GiB of swap and a Btrfs partition occupying the remaining space for LXD.
@@ -174,29 +85,14 @@ settings. After applying them, the image build completed successfully.
 Create the VMs
 --------------
 
-From the prepared OpenStack provisioning environment, run the following script
-with ``riscv-userdata.yaml`` in the current directory. Replace the placeholders
+From the prepared OpenStack provisioning environment, deploy and run the
+:download:`deploy-vms.sh <riscv64/deploy-vms.sh>` script with
+``riscv-userdata.yaml`` in the current directory. Replace the placeholders
 first.
 
-.. code-block:: sh
-
-   #!/bin/sh
-
-   set -eu
-
-   # Select the U-Boot image explicitly. Image names may not be unique.
-   image='<image-id>'
-
-   for i in $(seq -w 01 12); do
-       openstack --os-compute-api-version 2.67 server create \
-           --block-device "source_type=image,uuid=$image,destination_type=volume,volume_size=200,volume_type=Ceph_NVMe,boot_index=0,delete_on_termination=true" \
-           --flavor '<riscv64-flavor>' \
-           --nic 'net-id=<network-id>' \
-           --key-name '<key-name>' \
-           --security-group default \
-           --user-data riscv-userdata.yaml \
-           "autopkgtest-remote-$i"
-   done
+.. literalinclude:: riscv64/deploy-vms.sh
+   :language: sh
+   :caption: deploy-vms.sh
 
 This creates 12 VMs named ``autopkgtest-remote-01`` through
 ``autopkgtest-remote-12``, each with a 200 GiB boot volume on ``Ceph_NVMe``.
@@ -259,8 +155,9 @@ Register remotes in batches
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Instead of copying tokens individually, prepare a file named ``ip`` containing
-the VM IP addresses, one per line. Run the following script from an environment
-with SSH access to all those VMs and permission to run ``lxc`` there.
+the VM IP addresses, one per line. Run :download:`trust_and_generate_commands.sh
+<riscv64/trust_and_generate_commands.sh>` from an environment with SSH access
+to all those VMs and permission to run ``lxc`` there.
 
 By default, the script retrieves existing unused tokens for the janitor and
 dispatchers and generates the corresponding commands to run in the
@@ -276,75 +173,9 @@ with a single token listing per host.
    are independent of the remote indexes derived from VM hostnames. If only
    some targets need registration, keep only those entries in ``targets``.
 
-Save the script as ``trust_and_generate_commands.sh``:
-
-.. code-block:: sh
-
-   #!/bin/sh
-
-   # Adapt dispatcher unit numbers to the orchestrator deployment.
-   targets="janitor/leader dispatcher/10 dispatcher/11 dispatcher/12"
-
-   case "$#:${1:-}" in
-       0:|1:--apply-trust) ;;
-       *)
-           printf 'Usage: %s [--apply-trust]\n' "$0" >&2
-           exit 2
-           ;;
-   esac
-
-   trust_name() {
-       case "$1" in
-           janitor/leader) printf 'janitor\n' ;;
-           dispatcher/*) printf 'dispatcher-%s\n' "${1#*/}" ;;
-           *)
-               printf 'unsupported target: %s\n' "$1" >&2
-               return 1
-               ;;
-       esac
-   }
-
-   for host in $(cat ip); do
-       hostname="$(ssh "$host" hostname)" || continue
-       index="$(printf '%s\n' "$hostname" | awk -F '-' '{print $3 + 0}')"
-
-       if [ "${1:-}" = "--apply-trust" ]; then
-           for target in $targets; do
-               name="$(trust_name "$target")" || exit 2
-               if ! ssh "$host" "lxc config trust add --name $name" >/dev/null; then
-                   printf 'failed to create %s token for %s\n' "$name" "$host" >&2
-                   continue 2
-               fi
-           done
-       fi
-
-       output="$(ssh "$host" lxc config trust list-tokens -c nt -f csv)" ||
-           continue
-
-       for target in $targets; do
-           name="$(trust_name "$target")" || exit 2
-
-           token="$(printf '%s\n' "$output" |
-               awk -F ',' -v name="$name" '
-                   $1 == name { token = $NF; count++ }
-                   END {
-                       if (count > 1) exit 1
-                       if (count == 1) print token
-                   }
-               ')" || {
-                   printf 'multiple tokens for %s on %s\n' "$name" "$host" >&2
-                   continue
-               }
-
-           if [ -z "$token" ]; then
-               printf 'no token for %s on %s\n' "$name" "$host" >&2
-               continue
-           fi
-
-           printf 'juju run %s add-remote arch=riscv64 index=%s token=%s\n' \
-               "$target" "$index" "$token"
-       done
-   done
+.. literalinclude:: riscv64/trust_and_generate_commands.sh
+   :language: sh
+   :caption: trust_and_generate_commands.sh
 
 The index comes from the third field of hostnames such as
 ``autopkgtest-remote-08``. Adding zero in ``awk`` converts it to decimal,
@@ -398,23 +229,16 @@ Start the workers
 Wait for the required images to finish building before starting workers.
 In the orchestrator environment, configure two workers per remote on each
 of ``dispatcher/10`` and ``dispatcher/11``, for remote indexes ``1`` through
-``12``, then reconcile their worker units:
+``12``, then reconcile their worker units. This can be done using
+:download:`enable_workers.sh <riscv64/enable_workers.sh>`:
 
-.. code-block:: sh
+.. literalinclude:: riscv64/enable_workers.sh
+   :language: sh
+   :caption: enable_workers.sh
 
-   #!/bin/sh
-   set -eu
+.. warning::
 
-   for unit in 10 11; do
-       for index in $(seq 1 12); do
-           juju run "dispatcher/$unit" set-worker-count \
-               arch=riscv64 count=2 index="$index"
-       done
-   done
-
-   for unit in 10 11; do
-       juju run "dispatcher/$unit" reconcile-worker-units
-   done
+   Remember to check and adapt the leaders.
 
 Use explicit unit numbers here rather than ``dispatcher/leader`` so that
 both intended dispatchers receive the actions. As with registration, adapt
