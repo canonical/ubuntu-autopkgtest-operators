@@ -1,3 +1,8 @@
+.. GitHub renders this file without Sphinx: hide Sphinx-only directives
+   (literalinclude) there rather than showing them as raw text.
+
+.. github display off
+
 Setting up riscv64 remotes manually
 ==================================
 
@@ -39,7 +44,7 @@ must be able to reach the remotes on TCP port 8443.
 Prepare cloud-init user data
 ---------------------------
 
-Copy :download:`riscv-userdata.yaml <riscv64/riscv-userdata.yaml>` to the
+Copy `riscv-userdata.yaml <riscv64/riscv-userdata.yaml>`__ to the
 provisioning environment, replacing the proxy hostname before creating the VMs.
 
 .. warning::
@@ -73,8 +78,9 @@ LXD also needs its own proxy configuration: the APT, snap and shell proxy
 settings do not replace ``core.proxy_http``, ``core.proxy_https`` and
 ``core.proxy_ignore_hosts``. Replace the hostname, CIDR and IP placeholders
 with the values for your environment before using the preseed. The ignore
-list above preserves the structure of the deployment's exclusions, with
-internal addresses anonymized and loopback entries left unchanged.
+list in ``riscv-userdata.yaml`` preserves the structure of the deployment's
+exclusions, with internal addresses anonymized and loopback entries left
+unchanged.
 
 These LXD proxy settings were found to be missing while investigating failed
 image builds, including a manual build. If the remote has already been
@@ -86,9 +92,8 @@ Create the VMs
 --------------
 
 From the prepared OpenStack provisioning environment, deploy and run the
-:download:`deploy-vms.sh <riscv64/deploy-vms.sh>` script with
-``riscv-userdata.yaml`` in the current directory. Replace the placeholders
-first.
+`deploy-vms.sh <riscv64/deploy-vms.sh>`__ script with ``riscv-userdata.yaml``
+in the current directory. Replace the placeholders first.
 
 .. literalinclude:: riscv64/deploy-vms.sh
    :language: sh
@@ -131,10 +136,9 @@ register that remote:
 
    juju run janitor/leader add-remote arch=riscv64 index=<remote_leader> token=<token>
 
-Replace ``<remote_leader>`` with the index identifying the remote (the
-``leader_de_la_remote`` value used during the deployment), and ``<token>``
-with the token generated on that remote. For these manually provisioned
-remotes, use the numeric hostname suffix without leading zeros:
+Replace ``<remote_leader>`` with the index identifying the remote, and
+``<token>`` with the token generated on that remote. For these manually
+provisioned remotes, use the numeric hostname suffix without leading zeros:
 ``autopkgtest-remote-08`` has index ``8``.
 
 Repeat token generation and registration for each remote. The janitor should
@@ -155,8 +159,8 @@ Register remotes in batches
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Instead of copying tokens individually, prepare a file named ``ip`` containing
-the VM IP addresses, one per line. Run :download:`trust_and_generate_commands.sh
-<riscv64/trust_and_generate_commands.sh>` from an environment with SSH access
+the VM IP addresses, one per line. Run `trust_and_generate_commands.sh
+<riscv64/trust_and_generate_commands.sh>`__ from an environment with SSH access
 to all those VMs and permission to run ``lxc`` there.
 
 By default, the script retrieves existing unused tokens for the janitor and
@@ -230,7 +234,7 @@ Wait for the required images to finish building before starting workers.
 In the orchestrator environment, configure two workers per remote on each
 of ``dispatcher/10`` and ``dispatcher/11``, for remote indexes ``1`` through
 ``12``, then reconcile their worker units. This can be done using
-:download:`enable_workers.sh <riscv64/enable_workers.sh>`:
+`enable_workers.sh <riscv64/enable_workers.sh>`__:
 
 .. literalinclude:: riscv64/enable_workers.sh
    :language: sh
@@ -238,7 +242,8 @@ of ``dispatcher/10`` and ``dispatcher/11``, for remote indexes ``1`` through
 
 .. warning::
 
-   Remember to check and adapt the leaders.
+   Remember to check and adapt the leaders in the script depending on your
+   setup.
 
 Use explicit unit numbers here rather than ``dispatcher/leader`` so that
 both intended dispatchers receive the actions. As with registration, adapt
@@ -265,9 +270,9 @@ Here, ``<remote_leader>`` is the remote index used during registration and
 
 During this deployment, these services failed, and a manual build failed too.
 Investigation identified missing LXD proxy settings, now included in the
-preseed above. A race condition was initially suspected but has not been
-confirmed. After configuring the LXD proxy, the image build completed
-successfully.
+preseed of ``riscv-userdata.yaml``. A race condition was initially suspected
+but has not been confirmed. After configuring the LXD proxy, the image build
+completed successfully.
 
 Run an image build manually
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
