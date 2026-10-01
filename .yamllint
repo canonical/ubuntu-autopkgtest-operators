@@ -1,11 +1,18 @@
 extends: default
 
 rules:
+  comments:
+    ignore:
+      # cloud-init requires a literal "#cloud-config" first line
+      - "docs/riscv64/riscv-userdata.yaml"
   document-start: disable
   indentation:
     spaces: 2
   line-length:
     max: 180
+    ignore:
+      # The no-proxy list is kept on one line, as deployed
+      - "docs/riscv64/riscv-userdata.yaml"
   truthy:
     ignore:
       # "on:" syntax causes false positives
