@@ -47,15 +47,12 @@ Prepare cloud-init user data
 Copy `riscv-userdata.yaml <riscv64/riscv-userdata.yaml>`__ to the
 provisioning environment, replacing the proxy hostname before creating the VMs.
 
-.. admonition:: ⚠️ Warning
-   :class: warning
-
-   This configuration erases and repartitions the ephemeral disk. It identifies
-   that disk through an existing filesystem label matching ``ephemeral*``,
-   expecting OpenStack to expose the ephemeral storage as an ext4 filesystem
-   labelled ``ephemeral0``. Verify that this assumption holds for your image
-   and flavor. Do not run this disk preparation against storage containing
-   data you need to keep.
+**Warning:** This configuration erases and repartitions the ephemeral disk. It identifies
+that disk through an existing filesystem label matching ``ephemeral*``,
+expecting OpenStack to expose the ephemeral storage as an ext4 filesystem
+labelled ``ephemeral0``. Verify that this assumption holds for your image
+and flavor. Do not run this disk preparation against storage containing
+data you need to keep.
 
 .. literalinclude:: riscv64/riscv-userdata.yaml
    :language: yaml
@@ -125,11 +122,8 @@ On each remote, as ``ubuntu`` (or ``root``, both work), generate a trust token:
 
 Copy the generated token for use in the next step.
 
-.. admonition:: ⚠️ Warning
-   :class: warning
-
-   Trust tokens are sensitive. Do not commit them to documentation or source
-   control, or paste them into shared session notes.
+**Warning:** Trust tokens are sensitive. Do not commit them to documentation or source
+control, or paste them into shared session notes.
 
 In the orchestrator environment, with the orchestrator Juju model selected,
 register that remote:
@@ -171,14 +165,11 @@ orchestrator environment. Pass ``--apply-trust`` to create the tokens first.
 Token creation and command generation use separate loops over the targets,
 with a single token listing per host.
 
-.. admonition:: ❗ Important
-   :class: important
-
-   Dispatcher unit numbers ``10``, ``11`` and ``12`` are specific to this
-   deployment, not fixed identifiers. Check ``juju status`` in the orchestrator
-   model and adapt ``targets`` before running the script. These unit numbers
-   are independent of the remote indexes derived from VM hostnames. If only
-   some targets need registration, keep only those entries in ``targets``.
+**Warning:** Dispatcher unit numbers ``10``, ``11`` and ``12`` are specific to this
+deployment, not fixed identifiers. Check ``juju status`` in the orchestrator
+model and adapt ``targets`` before running the script. These unit numbers
+are independent of the remote indexes derived from VM hostnames. If only
+some targets need registration, keep only those entries in ``targets``.
 
 .. literalinclude:: riscv64/trust_and_generate_commands.sh
    :language: sh
@@ -225,11 +216,8 @@ Juju model selected, run:
 
    sh commands
 
-.. admonition:: ⚠️ Warning
-   :class: warning
-
-   The ``commands`` file contains trust tokens. Keep it private, do not commit
-   or share it, and remove all copies once registration is complete.
+**Warning:** The ``commands`` file contains trust tokens. Keep it private, do
+not commit or share it, and remove all copies once registration is complete.
 
 Start the workers
 -----------------
@@ -244,11 +232,8 @@ of ``dispatcher/10`` and ``dispatcher/11``, for remote indexes ``1`` through
    :language: sh
    :caption: enable_workers.sh
 
-.. admonition:: ⚠️ Warning
-   :class: warning
-
-   Remember to check and adapt the leaders in the script depending on your
-   setup.
+**Note:** Remember to check and adapt the leaders in the script depending on your
+setup.
 
 Use explicit unit numbers here rather than ``dispatcher/leader`` so that
 both intended dispatchers receive the actions. As with registration, adapt
@@ -344,11 +329,8 @@ per-user LXD client configuration. The direct invocation does not reproduce
 systemd's runtime directory,
 notification handling or timeouts.
 
-.. admonition:: ⚠️ Warning
-   :class: warning
-
-   Shell tracing can reveal sensitive values. Redact credentials and tokens
-   before sharing its output.
+**Warning:** Shell tracing can reveal sensitive values. Redact credentials and tokens
+before sharing its output.
 
 This invocation is a diagnostic step. It also failed during this deployment,
 leading to the discovery of the missing LXD proxy settings described above.
