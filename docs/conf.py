@@ -5,6 +5,9 @@
 # list see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+import shutil
+from pathlib import Path
+
 # -- Path setup --------------------------------------------------------------
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -50,3 +53,20 @@ html_theme = "alabaster"
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
+
+
+# -- Build hooks -------------------------------------------------------------
+
+
+def copy_riscv64_files(app, exception):
+    """Publish riscv64/ next to the HTML pages so relative links resolve."""
+    if exception is None and app.builder.format == "html":
+        shutil.copytree(
+            Path(app.srcdir, "riscv64"),
+            Path(app.outdir, "riscv64"),
+            dirs_exist_ok=True,
+        )
+
+
+def setup(app):
+    app.connect("build-finished", copy_riscv64_files)
