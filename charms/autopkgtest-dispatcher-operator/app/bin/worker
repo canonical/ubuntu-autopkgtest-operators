@@ -15,6 +15,7 @@ import logging
 import os
 import random
 import re
+import shlex
 import shutil
 import signal
 import socket
@@ -23,6 +24,7 @@ import sys
 import tempfile
 import time
 
+import distro_info
 import pika
 import swiftclient
 import systemd.journal
@@ -269,6 +271,55 @@ def i386_foreign_series(series):
     return series not in series_has_native_i386
 
 
+def kernel_setup_commands(source, release):
+    """Install the preferred kernel for a linux-meta trigger."""
+    kernel = source.replace("linux-meta", "linux", 1)
+    flavor = source.removeprefix("linux-meta")
+    commands = []
+
+    # Legacy binary package names contain the Ubuntu release, not always the
+    # kernel version used in the source package name.
+    if flavor.startswith("-hwe") or any(
+        flavor.startswith(f"-oem-{n}") for n in range(5, 10)
+    ):
+        versions = [
+            r.version
+            for r in distro_info.UbuntuDistroInfo().get_all(result="object")
+            if r.series == release
+        ]
+        if versions:
+            ubuntu_version = versions[0].strip(" LTS")
+            if flavor.startswith("-hwe"):
+                flavor = flavor.replace("-hwe", "-hwe-" + ubuntu_version, 1)
+            else:
+                flavor = "-oem-" + ubuntu_version
+
+    kernel = re.escape(kernel)
+    flavor = re.escape(flavor)
+
+    commands.append(
+        " || ".join(
+            [
+                f"apt-get install -y {shlex.quote(f'^kernel-testing--{kernel}--full--preferred$')}",
+                f"apt-get install -y {shlex.quote(f'^linux-image{flavor}$')} "
+                f"{shlex.quote(f'^linux-headers{flavor}$')}",
+                f"apt-get install -y {shlex.quote(f'^linux-image-generic{flavor}$')} "
+                f"{shlex.quote(f'^linux-headers-generic{flavor}$')}",
+            ]
+        )
+    )
+    commands.append(
+        " || ".join(
+            [
+                f"apt-get install -y {shlex.quote(f'^kernel-testing--{kernel}--modules-extra--preferred$')}",
+                f"apt-get install -y {shlex.quote(f'^linux-modules-extra{flavor}$')}",
+                ":",
+            ]
+        )
+    )
+    return commands
+
+
 def subst(s, big_package, vm_package, release, architecture):
     subst = {
         "RELEASE": release,
@@ -500,20 +551,36 @@ def request(channel, method, properties, body):
         params,
     )
 
+    kernel_source = next(
+        (
+            t.split("/", 1)[0]
+            for t in params.get("triggers", [])
+            if t.startswith("linux-meta")
+        ),
+        None,
+    )
+
     # build autopkgtest command line
     work_dir = tempfile.mkdtemp(prefix="autopkgtest-work.")
 
     try:
         out_dir = os.path.join(work_dir, "out")
-        if (
+        unsupported_release_arch = (
             release.lower() in ARCH_RELEASE_RESTRICTION_MAPPING
             and architecture not in ARCH_RELEASE_RESTRICTION_MAPPING[release.lower()]
-        ):
+        )
+        unsupported_kernel_arch = (
+            kernel_source is not None and architecture not in VM_ARCHES
+        )
+        if unsupported_release_arch or unsupported_kernel_arch:
             os.makedirs(out_dir)
             # these will be written later on
             code = 99
             duration = 0
-            errormessage = f"Only running {','.join(ARCH_RELEASE_RESTRICTION_MAPPING[release.lower()])} tests for release: {release.lower()}, test requests {architecture}"
+            if unsupported_release_arch:
+                errormessage = f"Only running {','.join(ARCH_RELEASE_RESTRICTION_MAPPING[release.lower()])} tests for release: {release.lower()}, test requests {architecture}"
+            else:
+                errormessage = f"Cannot test kernel trigger {kernel_source} on {architecture}: VM testbeds are not supported for this architecture"
             logging.info(errormessage)
             # fake a log file
             with open(os.path.join(out_dir, "log"), "w") as log:
@@ -556,9 +623,9 @@ def request(channel, method, properties, body):
             pkgname, architecture, release, big_packages
         )
         vm_pkg = (
-            request_matches_per_package(pkgname, architecture, release, vm_packages)
-            and architecture in VM_ARCHES
-        )
+            kernel_source is not None
+            or request_matches_per_package(pkgname, architecture, release, vm_packages)
+        ) and architecture in VM_ARCHES
 
         autopkgtest_checkout = cfg.get("autopkgtest", "checkout_dir").strip()
         if autopkgtest_checkout:
@@ -597,6 +664,12 @@ def request(channel, method, properties, body):
                 architecture,
             )
             argv += ["--setup-commands", c]
+
+        if kernel_source is not None and vm_pkg:
+            # autopkgtest reboots after setup commands that change /boot, so
+            # these install the triggered kernel before any tests are run.
+            for command in kernel_setup_commands(kernel_source, release):
+                argv += ["--setup-commands", command]
 
         if "ppas" in params and params["ppas"]:
             for ppa in params["ppas"]:
