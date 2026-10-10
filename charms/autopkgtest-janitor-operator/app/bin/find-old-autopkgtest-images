@@ -1,0 +1,64 @@
+#!/usr/bin/python3
+"""Flag stale LXD images on prefixed remotes.
+
+Usage:
+    find-old-autopkgtest-images [MAX_AGE_HOURS]
+"""
+
+import datetime as dt
+import json
+import subprocess
+import sys
+
+REMOTE_PREFIX = "remote-"
+IMAGE_PREFIX = "autopkgtest/ubuntu/"
+MAX_IMAGE_AGE = 3 * 86400
+
+
+def _lxc_json(args: list[str]):
+    """Run `lxc <args> --format json` and return parsed JSON."""
+    proc = subprocess.run(
+        ["lxc", *args, "--format", "json"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=10,
+    )
+    return json.loads(proc.stdout)
+
+
+def main(max_age: float = MAX_IMAGE_AGE):
+    """Print images older than MAX_IMAGE_AGE on prefixed remotes."""
+    now = dt.datetime.now(dt.UTC)
+    remotes = sorted(
+        n for n in _lxc_json(["remote", "list"]) if n.startswith(REMOTE_PREFIX)
+    )
+    for remote in remotes:
+        try:
+            images = _lxc_json(["image", "list", f"{remote}:"])
+        except subprocess.CalledProcessError as exc:
+            print(f"lxc failed on {remote}: {exc.stderr.strip()}")
+            continue
+        except subprocess.TimeoutExpired as exc:
+            print(f"timeout on {remote}, executing: {' '.join(exc.cmd)}")
+
+        for image in images:
+            alias = next(
+                (
+                    a["name"]
+                    for a in image["aliases"]
+                    if a["name"].startswith(IMAGE_PREFIX)
+                ),
+                None,
+            )
+            if not alias:
+                continue
+            uploaded = image["uploaded_at"]
+            age = (now - dt.datetime.fromisoformat(uploaded)).total_seconds()
+            if age > max_age:
+                print(f"{age / 86400:5.1f}d  {remote}:{alias}")
+
+
+if __name__ == "__main__":
+    max_age = float(sys.argv[1]) * 3600 if len(sys.argv) > 1 else MAX_IMAGE_AGE
+    main(max_age)
