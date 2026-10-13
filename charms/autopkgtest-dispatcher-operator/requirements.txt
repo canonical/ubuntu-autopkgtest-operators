@@ -1,5 +1,6 @@
 charmlibs-apt~=1.0
 charmlibs-snap~=1.0
 charmlibs-systemd~=1.0
+cosl>=0.0.50
 ops~=3.2
 pydantic~=2.11
