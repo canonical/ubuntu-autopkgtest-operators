@@ -15,6 +15,7 @@ from flask import (
     session,
 )
 from flask_openid import OpenID
+from helpers.exceptions import LaunchpadUnavailable
 from helpers.utils import setup_key, swift_connect
 from request.submit import Submit
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -68,10 +69,15 @@ def validate_user_path(connection, container, nick, path):
         (code, response) = Submit.lp_request(f"~{entity}/participants", {})
         if code != 200:
             logging.error(f"Unable to validate user {nick} ({code})")
-            return False
-        for e in response.get("entries", []):
-            if e.get("name") == nick:
-                return True
+            raise LaunchpadUnavailable()
+        try:
+            if not isinstance(response["entries"], list):
+                raise LaunchpadUnavailable()
+            for e in response["entries"]:
+                if e["name"] == nick:
+                    return True
+        except (KeyError, TypeError) as e:
+            raise LaunchpadUnavailable() from e
     return False
 
 
@@ -91,6 +97,11 @@ connection = swift_connect()
 #
 # Flask routes
 #
+
+
+@app.errorhandler(LaunchpadUnavailable)
+def launchpad_unavailable(error):
+    return render_template_string(HTML, content=str(error)), error.exit_code()
 
 
 @app.route("/", methods=["GET"])

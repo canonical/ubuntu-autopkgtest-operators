@@ -11,8 +11,9 @@ import re
 import urllib.parse
 import urllib.request
 from datetime import UTC, datetime, timedelta
+from http.client import HTTPException
 from time import time
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 import pika
 from helpers.cache import KeyValueCache
@@ -20,6 +21,7 @@ from helpers.exceptions import (
     BadRequest,
     ForbiddenRequest,
     InvalidArgs,
+    LaunchpadUnavailable,
     NotFound,
     RequestInQueue,
     RequestRunning,
@@ -39,6 +41,8 @@ GIT = re.compile(r"^https?://[a-zA-Z0-9._/~+-]+(#[a-zA-Z0-9._/-]+)?$")
 ALLOWED_USERS_PERPACKAGE = {"snapcraft": ["snappy-m-o"]}
 
 ALLOWED_USER_CACHE_TIME = timedelta(hours=3)
+
+LP_TIMEOUT = 60
 
 
 class Submit:
@@ -317,8 +321,10 @@ class Submit:
         logging.debug(
             "is_valid_ppa(%s): code %u, response %s", ppa, code, repr(response)
         )
-        if code < 200 or code >= 300:
+        if code == 404:
             return None
+        if code != 200:
+            raise LaunchpadUnavailable()
         if response.get("name") == name:
             return True
 
@@ -347,8 +353,8 @@ class Submit:
         if version is not None:
             req["version"] = json.dumps(version)
         (code, response) = self.lp_request(obj, req)
-        if code < 200 or code >= 300:
-            return None
+        if code != 200:
+            raise LaunchpadUnavailable()
         logging.debug(
             "is_valid_package_version(%s, %s, %s): code %u, response %s",
             release,
@@ -385,7 +391,11 @@ class Submit:
             code,
             repr(response),
         )
-        return code >= 200 and code < 300
+        if code == 403:
+            return False
+        if code != 200 or response is not True:
+            raise LaunchpadUnavailable()
+        return True
 
     def in_allowed_team(self, person):
         """Check if person is allowed to queue tests."""
@@ -401,7 +411,9 @@ class Submit:
         # In the case someone is in more than 300 teams, and the first
         # 300 teams are alphabetically before "autopkgtest-requestors",
         # the following will fail.
-        _, response = self.lp_request(f"~{person}/super_teams?ws.size=300", {})
+        code, response = self.lp_request(f"~{person}/super_teams?ws.size=300", {})
+        if code != 200:
+            raise LaunchpadUnavailable()
         entries = response.get("entries")
         for e in entries:
             for team in self.config["web"]["allowed_requestors"].split(","):
@@ -417,30 +429,39 @@ class Submit:
         Request https://api.launchpad.net/1.0/<obj>?<query>.
 
         Return (code, json), where json is defined for successful codes
-        (200 <= code < 300) and None otherwise.
+        (200 <= code < 300) and None for non-transient client errors. Raise
+        LaunchpadUnavailable for dependency failures.
         """
-        url = LP + obj + "?" + urllib.parse.urlencode(query)
+        url = urllib.parse.urljoin(LP, obj)
+        if not url.startswith(LP):
+            raise LaunchpadUnavailable()
+        if query:
+            url += ("&" if "?" in url else "?") + urllib.parse.urlencode(query)
         try:
-            with urllib.request.urlopen(url, timeout=60) as req:
+            with urllib.request.urlopen(url, timeout=LP_TIMEOUT) as req:
                 code = req.getcode()
-                if code >= 300:
-                    logging.error("URL %s failed with code %u", req.geturl(), code)
-                    return (code, None)
                 response = req.read()
         except HTTPError as e:
             logging.error("%s failed with %u: %s\n%s", url, e.code, e.reason, e.headers)
+            if e.code in (408, 429) or not 400 <= e.code < 500:
+                raise LaunchpadUnavailable() from e
             return (e.code, None)
+        except (URLError, OSError, HTTPException) as e:
+            logging.warning("Launchpad request failed: %s: %s", url, e)
+            raise LaunchpadUnavailable() from e
 
         try:
             response = json.loads(response.decode("UTF-8"))
-        except (UnicodeDecodeError, ValueError) as e:
+            if query.get("ws.op") != "checkUpload" and not isinstance(response, dict):
+                raise ValueError("Unexpected Launchpad response")
+        except ValueError as e:
             logging.error(
                 "URL %s gave invalid response %s: %s",
                 req.geturl(),
                 response,
                 str(e),
             )
-            return (500, None)
+            raise LaunchpadUnavailable() from e
         logging.debug("lp_request %s succeeded: %s", url, response)
         return (code, response)
 
