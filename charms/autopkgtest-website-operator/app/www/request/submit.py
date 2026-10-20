@@ -349,6 +349,7 @@ class Submit:
             "distro_series": json.dumps(LP + "ubuntu/" + release),
             "status": "Published",
             "exact_match": "true",
+            "ws.size": "1",
         }
         if version is not None:
             req["version"] = json.dumps(version)
@@ -363,10 +364,18 @@ class Submit:
             code,
             repr(response),
         )
-        if response.get("total_size", 0) > 0:
-            return response["entries"][0]["component_name"]
-        else:
-            return None
+        try:
+            entries = response["entries"]
+            if not isinstance(entries, list):
+                raise LaunchpadUnavailable()
+            if not entries:
+                return None
+            component = entries[0]["component_name"]
+            if not isinstance(component, str) or not component:
+                raise LaunchpadUnavailable()
+            return component
+        except (KeyError, TypeError) as e:
+            raise LaunchpadUnavailable() from e
 
     def can_upload(self, person, release, component, package):
         """Check if person can upload package into Ubuntu release."""
