@@ -21,6 +21,14 @@ class WebControlException(Exception):
         return self._code
 
 
+class LaunchpadUnavailable(WebControlException):
+    def __init__(self):
+        super().__init__(
+            "Launchpad validation is temporarily unavailable. Please try again later.",
+            503,
+        )
+
+
 class RequestInQueue(WebControlException):
     def __init__(self, release, package, arch, triggers):
         super().__init__(
