@@ -85,7 +85,7 @@ class Submit:
 
         self.migration_reference_all_proposed_check(triggers, kwargs)
 
-        can_upload_any_trigger = False
+        upload_targets = []
 
         try:
             if kwargs["all-proposed"] != "1":
@@ -145,11 +145,7 @@ class Submit:
                     raise BadRequest(
                         f"{trigger} is not published in PPA {ppas[-1]} {release}"
                     )
-                # PPAs don't have components, so we need to determine it from the
-                # Ubuntu archive
-                trigsrc_component = (
-                    self.is_valid_package_version(release, trigsrc, None) or "main"
-                )
+                trigsrc_component = None
             else:
                 trigsrc_component = self.is_valid_package_version(
                     release, trigsrc, trigver
@@ -157,27 +153,30 @@ class Submit:
                 if not trigsrc_component:
                     raise BadRequest(f"{trigger} is not published in {release}")
 
-            can_upload_any_trigger = can_upload_any_trigger or self.can_upload(
-                requester, release, trigsrc_component, trigsrc
-            )
+            upload_targets.append((trigsrc, trigsrc_component))
 
-        if ppas:
-            package_component = (
-                self.is_valid_package_version(release, package, None) or "main"
-            )
-        else:
-            package_component = self.is_valid_package_version(release, package, None)
-            if not package_component:
-                raise BadRequest(f"{package} is not published in {release}")
+        component = (
+            self.is_valid_package_version(release, package, None) if not ppas else None
+        )
+        if not component and not ppas:
+            raise BadRequest(f"{package} is not published in {release}")
+        upload_targets.append((package, component))
 
-        # verify that requester can upload package or trigsrc
-        if (
-            not self.can_upload(requester, release, package_component, package)
-            and not can_upload_any_trigger
-            and requester not in ALLOWED_USERS_PERPACKAGE.get(package, [])
-            and not self.in_allowed_team(requester)
-        ):
-            raise ForbiddenRequest(package, ",".join(triggers))
+        if requester in ALLOWED_USERS_PERPACKAGE.get(
+            package, []
+        ) or self.cached_allowed_user(requester):
+            return
+        for source, component in dict.fromkeys(upload_targets):
+            component = (
+                component
+                or self.is_valid_package_version(release, source, None)
+                or "main"
+            )
+            if self.can_upload(requester, release, component, source):
+                return
+        if self.in_allowed_team(requester):
+            return
+        raise ForbiddenRequest(package, ",".join(triggers))
 
     def validate_git_request(self, release, arch, package, ppas=[], env=[], **kwargs):
         """Validate parameters for an upstream git test request.
@@ -419,8 +418,6 @@ class Submit:
 
     def in_allowed_team(self, person):
         """Check if person is allowed to queue tests."""
-        if self.cached_allowed_user(person):
-            return True
         obj, query = f"~{person}/super_teams", {"ws.size": "300"}
         while True:
             code, response = self.cached_lp_request(obj, query)
