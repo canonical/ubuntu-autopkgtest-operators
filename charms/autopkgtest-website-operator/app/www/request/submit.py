@@ -78,11 +78,11 @@ class Submit:
 
         'ppas' is a list of 'team/ppaname' strings.
 
+        'arch' is an architecture or a list of architectures.
+
         Raise ValueError with error message if the request is invalid,
         otherwise return.
         """
-        self.is_request_queued_or_running(release, arch, package, triggers)
-
         self.migration_reference_all_proposed_check(triggers, kwargs)
 
         upload_targets = []
@@ -105,8 +105,13 @@ class Submit:
 
         if release not in self.release_arches:
             raise NotFound("release", release)
-        if arch not in self.release_arches[release]:
-            raise NotFound("arch", arch)
+        arches = [arch] if isinstance(arch, str) else arch
+        if not arches:
+            raise BadRequest("Must specify at least one architecture")
+        for architecture in arches:
+            if architecture not in self.release_arches[release]:
+                raise NotFound("arch", architecture)
+            self.is_request_queued_or_running(release, architecture, package, triggers)
         for ppa in ppas:
             if not self.is_valid_ppa(ppa):
                 raise NotFound("ppa", ppa)

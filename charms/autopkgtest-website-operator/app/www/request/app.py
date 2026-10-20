@@ -273,18 +273,18 @@ def index_root():
         if list(params.keys()) == ["/login", "requester"]:
             return redirect("/")
 
-        arches = [a for a in request.args.getlist("arch")]
+        arches = list(dict.fromkeys(request.args.getlist("arch")))
+        params["arch"] = arches
+        try:
+            s.validate_args(params)
+            s.validate_distro_request(**params)
+        except WebControlException as e:
+            return invalid(e, e.exit_code())
 
         result_urls = []
         for arch in arches:
             request_params = dict(params)
             request_params["arch"] = arch
-            try:
-                s.validate_args(request_params)
-                s.validate_distro_request(**request_params)
-            except WebControlException as e:
-                return invalid(e, e.exit_code())
-
             if request_params.get("ppas"):
                 s.send_amqp_request(context="ppa", **request_params)
             else:
