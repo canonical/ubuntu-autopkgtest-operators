@@ -59,11 +59,7 @@ class Submit:
         }
 
     def migration_reference_all_proposed_check(self, triggers, kwargs):
-        if (
-            "migration-reference/0" in triggers
-            and "all-proposed" in kwargs.keys()
-            and int(kwargs["all-proposed"]) == 1
-        ):
+        if "migration-reference/0" in triggers and kwargs.get("all-proposed") == "1":
             raise BadRequest(
                 "migration-reference/0 and all-proposed=1 are not compatible arguments."
             )
@@ -80,28 +76,18 @@ class Submit:
 
         'arch' is an architecture or a list of architectures.
 
-        Raise ValueError with error message if the request is invalid,
+        Raise WebControlException with error message if the request is invalid,
         otherwise return.
         """
         self.migration_reference_all_proposed_check(triggers, kwargs)
-
-        upload_targets = []
-
-        try:
-            if kwargs["all-proposed"] != "1":
-                raise ValueError("Invalid all-proposed value")
-            del kwargs["all-proposed"]
-        except KeyError:
-            pass
-        try:
-            if not kwargs["readable-by"]:
-                raise ValueError("Invalid readable-by value")
-            del kwargs["readable-by"]
-        except KeyError:
-            pass
+        if "all-proposed" in kwargs and kwargs["all-proposed"] != "1":
+            raise BadRequest("Invalid all-proposed value")
+        if "readable-by" in kwargs and not kwargs["readable-by"]:
+            raise BadRequest("Invalid readable-by value")
         # no other kwargs supported
-        if kwargs:
-            raise ValueError(f"Invalid argument {list(kwargs)[0]}")
+        for key in kwargs:
+            if key not in {"all-proposed", "readable-by"}:
+                raise BadRequest(f"Invalid argument {key}")
 
         if release not in self.release_arches:
             raise NotFound("release", release)
@@ -111,10 +97,8 @@ class Submit:
         for architecture in arches:
             if architecture not in self.release_arches[release]:
                 raise NotFound("arch", architecture)
-            self.is_request_queued_or_running(release, architecture, package, triggers)
-        for ppa in ppas:
-            if not self.is_valid_ppa(ppa):
-                raise NotFound("ppa", ppa)
+        if not NAME.fullmatch(package):
+            raise BadRequest("Malformed package name")
 
         if "migration-reference/0" in triggers:
             if len(triggers) != 1:
@@ -123,15 +107,13 @@ class Submit:
                 )
             if ppas:
                 raise BadRequest("Cannot use PPAs with migration-reference/0")
-            if "all-proposed" in kwargs:
-                raise BadRequest('Cannot use "all-proposed" with migration-reference/0')
         for trigger in triggers:
             try:
                 trigsrc, trigver = trigger.split("/")
             except ValueError as e:
                 raise BadRequest("Malformed trigger, must be srcpackage/version") from e
             # Debian Policy 5.6.1 and 5.6.12
-            if not NAME.match(trigsrc) or not VERSION.match(trigver):
+            if not NAME.fullmatch(trigsrc) or not VERSION.fullmatch(trigver):
                 raise BadRequest(f"Malformed trigger: {trigsrc}\nversion: {trigver}")
 
             # The raspi kernel can't be tested with autopkgtest. It doesn't
@@ -139,13 +121,22 @@ class Submit:
             if trigsrc.startswith("linux-meta-raspi"):
                 raise BadRequest("The raspi kernel can't be tested with autopkgtest.")
 
+        for architecture in arches:
+            self.is_request_queued_or_running(release, architecture, package, triggers)
+        for ppa in ppas:
+            if not self.is_valid_ppa(ppa):
+                raise NotFound("ppa", ppa)
+
+        upload_targets = []
+        for trigger in triggers:
+            trigsrc, trigver = trigger.split("/")
             # Special snowflake
             if trigger in ("qemu-efi-noacpi/0", "migration-reference/0"):
                 continue
 
             if ppas:
                 if not self.is_valid_package_version(
-                    release, trigsrc, trigver, ppas and ppas[-1] or None
+                    release, trigsrc, trigver, ppas[-1]
                 ):
                     raise BadRequest(
                         f"{trigger} is not published in PPA {ppas[-1]} {release}"
@@ -204,10 +195,6 @@ class Submit:
                 else:
                     triggers.append(env_var.split("=")[1])
 
-        self.is_request_queued_or_running(
-            release, arch, package, triggers, kwargs, git=True
-        )
-
         self.migration_reference_all_proposed_check(triggers, kwargs)
 
         if release not in self.release_arches:
@@ -220,9 +207,6 @@ class Submit:
             raise BadRequest(
                 "Must specify at least one PPA (to associate results with)"
             )
-        for ppa in ppas:
-            if not self.is_valid_ppa(ppa):
-                raise NotFound("ppa", ppa)
         for e in env:
             if not ENV.match(e):
                 raise BadRequest(f'Invalid environment variable format "{e}"')
@@ -238,6 +222,13 @@ class Submit:
             raise BadRequest(
                 "Unsupported arguments: {}".format(" ".join(unsupported_keys))
             )
+
+        self.is_request_queued_or_running(
+            release, arch, package, triggers, kwargs, git=True
+        )
+        for ppa in ppas:
+            if not self.is_valid_ppa(ppa):
+                raise NotFound("ppa", ppa)
 
     def send_amqp_request(self, release, arch, package, context=None, **params):
         """Send autopkgtest AMQP request."""
