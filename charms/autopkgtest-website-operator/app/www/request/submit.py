@@ -48,6 +48,7 @@ LP_TIMEOUT = 60
 class Submit:
     def __init__(self):
         self.config = get_autopkgtest_cloud_conf()
+        self.lp_cache = {}
 
         self.release_arches = get_release_arches()
         logging.debug(f"Valid arches per release: {self.release_arches}")
@@ -310,7 +311,7 @@ class Submit:
         if not NAME.match(team) or not NAME.match(name):
             return None
         # https://launchpad.net/+apidoc/1.0.html#person-getPPAByName
-        (code, response) = self.lp_request(
+        (code, response) = self.cached_lp_request(
             "~" + team,
             {
                 "ws.op": "getPPAByName",
@@ -353,7 +354,7 @@ class Submit:
         }
         if version is not None:
             req["version"] = json.dumps(version)
-        (code, response) = self.lp_request(obj, req)
+        (code, response) = self.cached_lp_request(obj, req)
         if code != 200:
             raise LaunchpadUnavailable()
         logging.debug(
@@ -380,7 +381,7 @@ class Submit:
     def can_upload(self, person, release, component, package):
         """Check if person can upload package into Ubuntu release."""
         # https://launchpad.net/+apidoc/1.0.html#archive-checkUpload
-        (code, response) = self.lp_request(
+        (code, response) = self.cached_lp_request(
             "ubuntu/+archive/primary",
             {
                 "ws.op": "checkUpload",
@@ -420,7 +421,7 @@ class Submit:
         allowed = set(self.config["web"]["allowed_requestors"].split(","))
         obj, query = f"~{person}/super_teams", {"ws.size": "300"}
         while True:
-            code, response = self.lp_request(obj, query)
+            code, response = self.cached_lp_request(obj, query)
             if code != 200:
                 raise LaunchpadUnavailable()
             if not isinstance(response.get("entries"), list):
@@ -435,6 +436,13 @@ class Submit:
             if not next_page:
                 return False
             obj, query = next_page, {}
+
+    def cached_lp_request(self, obj, query):
+        """Reuse identical lookups only within this submission."""
+        key = (obj, tuple(sorted(query.items())))
+        if key not in self.lp_cache:
+            self.lp_cache[key] = self.lp_request(obj, query)
+        return self.lp_cache[key]
 
     @classmethod
     def lp_request(cls, obj, query):
