@@ -408,19 +408,24 @@ class Submit:
             else:
                 self.allowed_user_cache.delete(person)
 
-        # In the case someone is in more than 300 teams, and the first
-        # 300 teams are alphabetically before "autopkgtest-requestors",
-        # the following will fail.
-        code, response = self.lp_request(f"~{person}/super_teams?ws.size=300", {})
-        if code != 200:
-            raise LaunchpadUnavailable()
-        entries = response.get("entries")
-        for e in entries:
-            for team in self.config["web"]["allowed_requestors"].split(","):
-                if team == e["name"]:
+        allowed = set(self.config["web"]["allowed_requestors"].split(","))
+        obj, query = f"~{person}/super_teams", {"ws.size": "300"}
+        while True:
+            code, response = self.lp_request(obj, query)
+            if code != 200:
+                raise LaunchpadUnavailable()
+            if not isinstance(response.get("entries"), list):
+                raise LaunchpadUnavailable()
+            try:
+                if any(entry["name"] in allowed for entry in response["entries"]):
                     self.allowed_user_cache.set(person, time())
                     return True
-        return False
+            except (KeyError, TypeError) as e:
+                raise LaunchpadUnavailable() from e
+            next_page = response.get("next_collection_link")
+            if not next_page:
+                return False
+            obj, query = next_page, {}
 
     @classmethod
     def lp_request(cls, obj, query):
