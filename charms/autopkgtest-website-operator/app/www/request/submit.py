@@ -10,7 +10,7 @@ import os
 import re
 import urllib.parse
 import urllib.request
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from http.client import HTTPException
 from time import time
 from urllib.error import HTTPError, URLError
@@ -40,7 +40,7 @@ GIT = re.compile(r"^https?://[a-zA-Z0-9._/~+-]+(#[a-zA-Z0-9._/-]+)?$")
 # not teams
 ALLOWED_USERS_PERPACKAGE = {"snapcraft": ["snappy-m-o"]}
 
-ALLOWED_USER_CACHE_TIME = timedelta(hours=3)
+ALLOWED_USER_CACHE_TIME = 3 * 60 * 60
 
 LP_TIMEOUT = 60
 
@@ -54,9 +54,9 @@ class Submit:
         logging.debug(f"Valid arches per release: {self.release_arches}")
 
         self.allowed_user_cache = KeyValueCache("/dev/shm/autopkgtest_users.json")
-
-    def clear_cache(self):
-        self.allowed_user_cache.clear()
+        self.allowed_teams = {
+            team.strip() for team in self.config["web"]["allowed_requestors"].split(",")
+        }
 
     def migration_reference_all_proposed_check(self, triggers, kwargs):
         if (
@@ -407,18 +407,20 @@ class Submit:
             raise LaunchpadUnavailable()
         return True
 
+    def allowed_user_cache_key(self, person):
+        return json.dumps([person, sorted(self.allowed_teams)])
+
+    def cached_allowed_user(self, person):
+        timestamp = self.allowed_user_cache.get(self.allowed_user_cache_key(person))
+        try:
+            return 0 <= time() - float(timestamp) <= ALLOWED_USER_CACHE_TIME
+        except (TypeError, ValueError, OverflowError):
+            return False
+
     def in_allowed_team(self, person):
         """Check if person is allowed to queue tests."""
-        cached_entry = self.allowed_user_cache.get(person)
-        if cached_entry is not None:
-            cached_entry = datetime.fromtimestamp(float(cached_entry))
-            cache_age = datetime.now() - cached_entry
-            if cache_age <= ALLOWED_USER_CACHE_TIME:
-                return True
-            else:
-                self.allowed_user_cache.delete(person)
-
-        allowed = set(self.config["web"]["allowed_requestors"].split(","))
+        if self.cached_allowed_user(person):
+            return True
         obj, query = f"~{person}/super_teams", {"ws.size": "300"}
         while True:
             code, response = self.cached_lp_request(obj, query)
@@ -427,8 +429,12 @@ class Submit:
             if not isinstance(response.get("entries"), list):
                 raise LaunchpadUnavailable()
             try:
-                if any(entry["name"] in allowed for entry in response["entries"]):
-                    self.allowed_user_cache.set(person, time())
+                if any(
+                    entry["name"] in self.allowed_teams for entry in response["entries"]
+                ):
+                    self.allowed_user_cache.set(
+                        self.allowed_user_cache_key(person), time()
+                    )
                     return True
             except (KeyError, TypeError) as e:
                 raise LaunchpadUnavailable() from e
