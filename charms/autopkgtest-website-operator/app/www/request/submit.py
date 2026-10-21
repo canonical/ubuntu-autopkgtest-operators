@@ -37,9 +37,6 @@ ENV = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]+=[a-zA-Z0-9.:~/ -=]*$")
 # URL and optional branch name
 GIT = re.compile(r"^https?://[a-zA-Z0-9._/~+-]+(#[a-zA-Z0-9._/-]+)?$")
 
-# not teams
-ALLOWED_USERS_PERPACKAGE = {"snapcraft": ["snappy-m-o"]}
-
 ALLOWED_USER_CACHE_TIME = 3 * 60 * 60
 
 LP_TIMEOUT = 60
@@ -158,9 +155,7 @@ class Submit:
             raise BadRequest(f"{package} is not published in {release}")
         upload_targets.append((package, component))
 
-        if requester in ALLOWED_USERS_PERPACKAGE.get(
-            package, []
-        ) or self.cached_allowed_user(requester):
+        if self.cached_allowed_user(requester):
             return
         for source, component in dict.fromkeys(upload_targets):
             component = (
