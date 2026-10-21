@@ -148,11 +148,12 @@ class Submit:
 
             upload_targets.append((trigsrc, trigsrc_component))
 
-        component = (
-            self.is_valid_package_version(release, package, None) if not ppas else None
-        )
-        if not component and not ppas:
-            raise BadRequest(f"{package} is not published in {release}")
+        if ppas:
+            component = None
+        else:
+            component = self.is_valid_package_version(release, package, None)
+            if not component:
+                raise BadRequest(f"{package} is not published in {release}")
         upload_targets.append((package, component))
 
         if self.cached_allowed_user(requester):
