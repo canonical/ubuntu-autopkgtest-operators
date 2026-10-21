@@ -190,8 +190,6 @@ class Submit:
                 else:
                     triggers.append(env_var.split("=")[1])
 
-        self.migration_reference_all_proposed_check(triggers, kwargs)
-
         if release not in self.release_arches:
             raise NotFound("release", release)
         if arch not in self.release_arches[release]:
