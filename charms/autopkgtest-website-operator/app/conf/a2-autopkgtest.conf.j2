@@ -28,6 +28,9 @@
   # robots.txt for disallowing bots
   Alias /robots.txt {{ documentroot }}/static/robots.txt
 
+  # Serve static files without starting CGI.
+  Alias /static/ {{ documentroot }}/static/
+
   # egress forward proxy settings
   {%- if https_proxy %}
   SetEnv HTTPS_PROXY "{{ https_proxy }}"
