@@ -319,10 +319,9 @@ class Submit:
         )
         if code == 404:
             return None
-        if code != 200:
+        if code != 200 or response.get("name") != name:
             raise LaunchpadUnavailable()
-        if response.get("name") == name:
-            return True
+        return True
 
     def is_valid_package_version(self, release, package, version, ppa=None):
         """Check if package/version exists in the given release.
