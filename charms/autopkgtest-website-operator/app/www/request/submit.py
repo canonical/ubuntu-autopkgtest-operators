@@ -37,7 +37,7 @@ ENV = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]+=[a-zA-Z0-9.:~/ -=]*$")
 # URL and optional branch name
 GIT = re.compile(r"^https?://[a-zA-Z0-9._/~+-]+(#[a-zA-Z0-9._/-]+)?$")
 
-ALLOWED_USER_CACHE_TIME = 3 * 60 * 60
+ALLOWED_USER_CACHE_TIME = 6 * 60 * 60
 
 LP_TIMEOUT = 60
 
