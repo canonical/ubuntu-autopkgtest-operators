@@ -46,6 +46,9 @@ def db_connect():
             "CREATE UNIQUE INDEX IF NOT EXISTS test_package_uix ON test("
             "  package, release, arch)"
         )
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS test_release_arch_ix ON test(release, arch)"
+        )
         c.execute("CREATE INDEX IF NOT EXISTS result_run_ix ON result(  run_id desc)")
         # /user/<username> page benefits greatly from this idx
         # Prior to idx, this page would take ~90s to load, down to ~5s.
