@@ -56,7 +56,7 @@ class Submit:
         }
 
     def validate_distro_request(
-        self, release, arch, package, triggers, requester, ppas=[], **kwargs
+        self, release, arch, package, triggers, requester, ppas=(), **kwargs
     ):
         """Validate package and triggers for a distro test request.
 
@@ -167,7 +167,7 @@ class Submit:
             return
         raise ForbiddenRequest(package, ",".join(triggers))
 
-    def validate_git_request(self, release, arch, package, ppas=[], env=[], **kwargs):
+    def validate_git_request(self, release, arch, package, ppas=(), env=(), **kwargs):
         """Validate parameters for an upstream git test request.
 
         Supported kwargs:
@@ -609,11 +609,17 @@ class Submit:
         req_series,
         req_arch,
         req_package,
-        req_triggers=[],
-        kwargs={},
-        ppas=[],
+        req_triggers=None,
+        kwargs=None,
+        ppas=None,
         git=False,
     ):
+        if req_triggers is None:
+            req_triggers = []
+        if kwargs is None:
+            kwargs = {}
+        if ppas is None:
+            ppas = []
         if self.is_test_running(
             req_series, req_arch, req_package, req_triggers, kwargs, ppas, git
         ):
