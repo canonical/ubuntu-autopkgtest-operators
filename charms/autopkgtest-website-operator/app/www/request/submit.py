@@ -55,12 +55,6 @@ class Submit:
             team.strip() for team in self.config["web"]["allowed_requestors"].split(",")
         }
 
-    def migration_reference_all_proposed_check(self, triggers, kwargs):
-        if "migration-reference/0" in triggers and kwargs.get("all-proposed") == "1":
-            raise BadRequest(
-                "migration-reference/0 and all-proposed=1 are not compatible arguments."
-            )
-
     def validate_distro_request(
         self, release, arch, package, triggers, requester, ppas=[], **kwargs
     ):
@@ -76,7 +70,10 @@ class Submit:
         Raise WebControlException with error message if the request is invalid,
         otherwise return.
         """
-        self.migration_reference_all_proposed_check(triggers, kwargs)
+        if "migration-reference/0" in triggers and kwargs.get("all-proposed") == "1":
+            raise BadRequest(
+                "migration-reference/0 and all-proposed=1 are not compatible arguments."
+            )
         if "all-proposed" in kwargs and kwargs["all-proposed"] != "1":
             raise BadRequest("Invalid all-proposed value")
         if "readable-by" in kwargs and not kwargs["readable-by"]:
