@@ -93,10 +93,11 @@ def invalid(inv_exception, code=400):
     else:
         html = ""
     message = str(inv_exception)
+    prefix = "Request failed" if code >= 500 else "You submitted an invalid request"
     if "\n" not in message:
-        html += f"<p>You submitted an invalid request: {maybe_escape(str(message))}</p>"
+        html += f"<p>{prefix}: {maybe_escape(str(message))}</p>"
     else:
-        html += "<p>You submitted an invalid request: </p>"
+        html += f"<p>{prefix}: </p>"
         list_of_messages = message.split("\n")
         for msg in list_of_messages:
             html += "<p>" + maybe_escape(str(msg)) + "</p>"
