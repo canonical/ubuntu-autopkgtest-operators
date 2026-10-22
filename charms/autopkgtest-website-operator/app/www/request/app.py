@@ -6,7 +6,6 @@ import logging
 import os
 import pathlib
 import traceback
-from collections import ChainMap
 from html import escape as _escape
 
 from flask import Flask, redirect, request, session
@@ -298,9 +297,9 @@ def index_root():
                 ROW.format(key, val) for key, val in sorted(display_params.items())
             )
         )
-        return HTML.format(LOGOUT + success).format(**ChainMap(session, display_params))
+        return HTML.format(LOGOUT.format(**session) + success)
     else:
-        return HTML.format(LOGIN).format(**session), 403
+        return HTML.format(LOGIN.format(**session)), 403
 
 
 @app.route("/login", methods=["GET", "POST"])
