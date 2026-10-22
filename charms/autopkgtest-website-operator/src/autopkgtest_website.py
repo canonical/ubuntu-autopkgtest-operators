@@ -49,6 +49,7 @@ PACKAGES = [
     "python3-distro-info",
     "python3-flask",
     "python3-flask-openid",
+    "python3-launchpadlib",
     "python3-pika",
     "python3-pygit2",
     "python3-swiftclient",
