@@ -8,15 +8,14 @@ class KeyValueCache:
     def __init__(self, cache_path):
         self.path = cache_path
 
-    @staticmethod
-    def _read(file):
+    def _read(self, file):
         try:
             data = json.loads(file.read() or "{}")
             if not isinstance(data, dict):
                 raise ValueError("Expected a cache dictionary")
             return data
         except ValueError as e:
-            logging.warning("Ignoring invalid cache %s: %s", file.name, e)
+            logging.warning("Ignoring invalid cache %s: %s", self.path, e)
             return {}
 
     def get(self, key):
