@@ -186,6 +186,22 @@ class DistroRequestTests(AppTestBase):
 class GitHubRequestTests(AppTestBase):
     """Test GitHub test requests (via PSK signatures)."""
 
+    def setUp(self):
+        super().setUp()
+        config = patch(
+            "request.app.get_autopkgtest_cloud_conf",
+            return_value={
+                "github": {
+                    "secrets": "/ignored/github-secrets.json",
+                    "status_credentials": os.path.expanduser(
+                        "~/github-status-credentials.txt"
+                    ),
+                }
+            },
+        )
+        config.start()
+        self.addCleanup(config.stop)
+
     @patch(
         "request.app.open",
         mock_open(None, '{"hi": "1111111111111111111111111111111111111111"}'),
