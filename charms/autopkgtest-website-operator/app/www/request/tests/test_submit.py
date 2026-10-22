@@ -11,8 +11,6 @@ from unittest.mock import MagicMock, patch
 from distro_info import UbuntuDistroInfo
 from helpers.exceptions import (
     BadRequest,
-    RequestInQueue,
-    RequestRunning,
     WebControlException,
 )
 
@@ -451,44 +449,6 @@ class DistroRequestValidationTests(SubmitTestBase):
         )
         self.assertEqual(mock_urlopen.call_count, 7)
 
-    @patch("request.submit.Submit.is_test_in_queue")
-    def test_already_queued(self, mock_is_test_in_queue):
-        """Test request is rejected if already queued."""
-        is_test_in_queue_cm = MagicMock()
-        is_test_in_queue_cm.__enter__.return_value = is_test_in_queue_cm
-        is_test_in_queue_cm.is_test_in_queue.side_effect = RequestInQueue(
-            "testy", "blue", "C51", "ab/1.2"
-        )
-        mock_is_test_in_queue.return_value = is_test_in_queue_cm
-
-        with self.assertRaises(WebControlException) as cme:
-            self.submit.validate_distro_request(
-                "testy", "C51", "blue", ["ab/1.2"], "joe"
-            )
-        self.assertEqual(
-            "Test already queued:\nrelease: testy\npkg: blue\narch: C51\ntriggers: ab/1.2",
-            str(cme.exception),
-        )
-
-    @patch("request.submit.Submit.is_test_running")
-    def test_already_running(self, mock_is_test_running):
-        """Test request is rejected if already running."""
-        is_test_running_cm = MagicMock()
-        is_test_running_cm.__enter__.return_value = is_test_running_cm
-        is_test_running_cm.is_test_running.side_effect = RequestRunning(
-            "testy", "blue", "C51", "ab/1.2"
-        )
-        mock_is_test_running.return_value = is_test_running_cm
-
-        with self.assertRaises(WebControlException) as cme:
-            self.submit.validate_distro_request(
-                "testy", "C51", "blue", ["ab/1.2"], "joe"
-            )
-        self.assertEqual(
-            "Test already running:\nrelease: testy\npkg: blue\narch: C51\ntriggers: ab/1.2",
-            str(cme.exception),
-        )
-
     def test_migration_reference_all_proposed_combo(self):
         """Tests when a test request has migration-reference/0 + all-proposed=1 in the request args."""
         with self.assertRaises(BadRequest) as cme:
@@ -616,64 +576,6 @@ class GitRequestValidationTests(SubmitTestBase):
                 },
             )
         self.assertEqual(str(cme.exception), "Malformed testname")
-
-    @patch("request.submit.Submit.is_valid_ppa")
-    @patch("request.submit.Submit.is_test_running")
-    def test_git_request_running(self, is_valid_ppa, mock_is_test_running):
-        """Test request is rejected if already running."""
-        is_valid_ppa.return_value = True
-
-        is_test_running_cm = MagicMock()
-        is_test_running_cm.__enter__.return_value = is_test_running_cm
-        is_test_running_cm.is_test_running.side_effect = RequestRunning(
-            "testy", "blue", "C51", "ab/1.2"
-        )
-        mock_is_test_running.return_value = is_test_running_cm
-
-        with self.assertRaises(WebControlException) as cme:
-            self.submit.validate_git_request(
-                "testy",
-                "C51",
-                "ab",
-                **{
-                    "build-git": "http://x.com/proj",
-                    "env": ["STATUS_URL=https://api.github.com/proj/123deadbeef"],
-                    "ppas": ["a/b"],
-                },
-            )
-        self.assertIn(
-            "Test already running:\nrelease: testy\npkg: ab\narch: C51\ntriggers:",
-            str(cme.exception),
-        )
-
-    @patch("request.submit.Submit.is_valid_ppa")
-    @patch("request.submit.Submit.is_test_in_queue")
-    def test_git_already_queued(self, is_valid_ppa, mock_is_test_in_queue):
-        """Test request is rejected if already queued."""
-        is_valid_ppa.return_value = True
-
-        is_test_in_queue_cm = MagicMock()
-        is_test_in_queue_cm.__enter__.return_value = is_test_in_queue_cm
-        is_test_in_queue_cm.is_test_in_queue.side_effect = RequestInQueue(
-            "testy", "blue", "C51", "ab/1.2"
-        )
-        mock_is_test_in_queue.return_value = is_test_in_queue_cm
-
-        with self.assertRaises(WebControlException) as cme:
-            self.submit.validate_git_request(
-                "testy",
-                "C51",
-                "ab",
-                **{
-                    "build-git": "http://x.com/proj",
-                    "env": ["STATUS_URL=https://api.github.com/proj/123deadbeef"],
-                    "ppas": ["a/b"],
-                },
-            )
-        self.assertIn(
-            "Test already queued:\nrelease: testy\npkg: ab\narch: C51\ntriggers:",
-            str(cme.exception),
-        )
 
     @patch("request.submit.Submit.is_valid_ppa")
     def test_valid(self, is_valid_ppa):

@@ -6,7 +6,6 @@ Author: Martin Pitt <martin.pitt@ubuntu.com>
 import base64
 import json
 import logging
-import os
 import re
 import urllib.parse
 import urllib.request
@@ -23,8 +22,6 @@ from helpers.exceptions import (
     InvalidArgs,
     LaunchpadUnavailable,
     NotFound,
-    RequestInQueue,
-    RequestRunning,
 )
 from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf, get_release_arches
 
@@ -115,8 +112,6 @@ class Submit:
             if trigsrc.startswith("linux-meta-raspi"):
                 raise BadRequest("The raspi kernel can't be tested with autopkgtest.")
 
-        for architecture in arches:
-            self.is_request_queued_or_running(release, architecture, package, triggers)
         for ppa in ppas:
             if not self.is_valid_ppa(ppa):
                 raise NotFound("ppa", ppa)
@@ -179,15 +174,6 @@ class Submit:
         Raise ValueError with error message if the request is invalid,
         otherwise return.
         """
-        triggers = []
-        for env_var in env:
-            if "trigger" in env_var:
-                if "," in env_var:
-                    for trig in env_var.split("=")[1].split(","):
-                        triggers.append(trig)
-                else:
-                    triggers.append(env_var.split("=")[1])
-
         if release not in self.release_arches:
             raise NotFound("release", release)
         if arch not in self.release_arches[release]:
@@ -214,9 +200,6 @@ class Submit:
                 "Unsupported arguments: {}".format(" ".join(unsupported_keys))
             )
 
-        self.is_request_queued_or_running(
-            release, arch, package, triggers, kwargs, git=True
-        )
         for ppa in ppas:
             if not self.is_valid_ppa(ppa):
                 raise NotFound("ppa", ppa)
@@ -475,160 +458,6 @@ class Submit:
             raise LaunchpadUnavailable() from e
         logging.debug("lp_request %s succeeded: %s", url, response)
         return (code, response)
-
-    def is_test_running(
-        self,
-        req_series,
-        req_arch,
-        req_package,
-        req_triggers,
-        kwargs,
-        ppas,
-        git,
-    ):
-        if not os.path.isfile(self.config["web"]["running_cache"]):
-            return False
-        data = {}
-        with open(self.config["web"]["running_cache"]) as f:
-            data = json.load(f)
-        if data == {}:
-            return False
-        for pkg in data:
-            if pkg != req_package:
-                continue
-            for submitted in data[pkg]:
-                releases = data[pkg][submitted].keys()
-                for release in data[pkg][submitted]:
-                    architectures = data[pkg][submitted][release].keys()
-                    for arch in architectures:
-                        triggers = data[pkg][submitted][release][arch][0].get(
-                            "triggers", []
-                        )
-                        running_all_proposed = "all-proposed_1" in submitted
-                        req_all_proposed = "all-proposed" in kwargs.keys()
-                        git_same = False
-                        if git and "build-git" in submitted:
-                            build_git_url = data[pkg][submitted][release][arch][0].get(
-                                "build-git", []
-                            )
-                            ppas_running = data[pkg][submitted][release][arch][0].get(
-                                "ppas", []
-                            )
-                            env = data[pkg][submitted][release][arch][0].get("env", [])
-                            if (
-                                kwargs.get("build-git", "") == build_git_url
-                                and ppas_running == ppas
-                                and (set(kwargs.get("env", [])) == set(env))
-                            ):
-                                git_same = True
-                        if (
-                            req_arch in architectures
-                            and req_series in releases
-                            and req_package == pkg
-                            and sorted(triggers) == sorted(req_triggers)
-                            and (running_all_proposed == req_all_proposed)
-                            and (not git or git_same)
-                        ):
-                            return True
-        return False
-
-    def is_test_in_queue(
-        self,
-        req_series,
-        req_arch,
-        req_package,
-        req_triggers,
-        kwargs,
-        ppas,
-        git,
-    ):
-        if not os.path.isfile(self.config["web"]["amqp_queue_cache"]):
-            return False
-        data = {}
-        with open(self.config["web"]["amqp_queue_cache"]) as f:
-            data = json.load(f)
-        data = data["queues"]
-        this_test = {
-            "release": req_series,
-            "arch": req_arch,
-            "package": req_package,
-            "triggers": sorted(req_triggers),
-        }
-        for test_type in data:
-            # Because the huge queue is huge it is possible some tests won't
-            # run for quite some time. To shortcut the wait developers should
-            # have the ability to request the same items run in the "normal"
-            # queue which will execute sooner.
-            if test_type == "huge":
-                continue
-            for release in data[test_type]:
-                for arch in data[test_type][release]:
-                    packages = data[test_type][release][arch]
-                    if req_package not in packages:
-                        continue
-                    if packages["size"] != 0:
-                        for req in packages["requests"]:
-                            pkg = req[: req.find("{")].rstrip()
-                            try:
-                                details = json.loads(req[req.find("{") :])
-                            except json.decoder.JSONDecodeError:
-                                return False
-                            triggers = details.get("triggers", [])
-                            running_all_proposed = (
-                                "all-proposed"
-                                in data[test_type][release][arch]["requests"]
-                            )
-                            req_all_proposed = "all-proposed" in kwargs.keys()
-                            test = {
-                                "release": release,
-                                "arch": arch,
-                                "package": pkg,
-                                "triggers": sorted(triggers),
-                            }
-                            git_same = False
-                            if git and "build-git" in details:
-                                build_git_url = details.get("build-git", [])
-                                ppas_queued = details.get("ppas", [])
-                                env = details.get("env", [])
-                                if (
-                                    kwargs.get("build-git", "") == build_git_url
-                                    and ppas_queued == ppas
-                                    and (set(kwargs.get("env", [])) == set(env))
-                                ):
-                                    git_same = True
-                            if (
-                                test == this_test
-                                and running_all_proposed != req_all_proposed
-                                and (not git or git_same)
-                            ):
-                                return True
-        return False
-
-    def is_request_queued_or_running(
-        self,
-        req_series,
-        req_arch,
-        req_package,
-        req_triggers=None,
-        kwargs=None,
-        ppas=None,
-        git=False,
-    ):
-        if req_triggers is None:
-            req_triggers = []
-        if kwargs is None:
-            kwargs = {}
-        if ppas is None:
-            ppas = []
-        if self.is_test_running(
-            req_series, req_arch, req_package, req_triggers, kwargs, ppas, git
-        ):
-            raise RequestRunning(req_series, req_package, req_arch, req_triggers)
-
-        if self.is_test_in_queue(
-            req_series, req_arch, req_package, req_triggers, kwargs, ppas, git
-        ):
-            raise RequestInQueue(req_series, req_package, req_arch, req_triggers)
 
     def validate_args(self, parameters):
         base = ["arch", "release", "package", "triggers"]

@@ -29,26 +29,6 @@ class LaunchpadUnavailable(WebControlException):
         )
 
 
-class RequestInQueue(WebControlException):
-    def __init__(self, release, package, arch, triggers):
-        super().__init__(
-            "Test already queued:\nrelease: {}\npkg: {}\narch: {}\ntriggers: {}".format(
-                release, package, arch, ", ".join(triggers)
-            ),
-            403,
-        )
-
-
-class RequestRunning(WebControlException):
-    def __init__(self, release, package, arch, triggers):
-        super().__init__(
-            "Test already running:\nrelease: {}\npkg: {}\narch: {}\ntriggers: {}".format(
-                release, package, arch, ", ".join(triggers)
-            ),
-            403,
-        )
-
-
 class BadRequest(WebControlException):
     def __init__(self, msg=None):
         if msg is None:
