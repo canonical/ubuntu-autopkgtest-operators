@@ -373,6 +373,8 @@ class Submit:
         )
         if code == 403:  # checkUpload: uploading is not permitted.
             return False
+        if code == 404:  # checkUpload: unknown source package name.
+            raise NotFound("package", package)
         if code != 200 or response is not True:
             raise LaunchpadError(
                 "Unexpected response to a Launchpad upload permission check."

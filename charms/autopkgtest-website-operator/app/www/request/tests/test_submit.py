@@ -425,6 +425,17 @@ class DistroRequestValidationTests(SubmitTestBase):
         )
         self.assertEqual(mock_urlopen.call_count, 4)
 
+    @patch("request.submit.urllib.request.urlopen")
+    def test_can_upload_unknown_package(self, mock_urlopen):
+        """Package unknown to Launchpad (only reachable in PPA requests)."""
+        mock_urlopen.side_effect = HTTPError(
+            "http://mock.launchpad.net", 404, "Not Found", {}, None
+        )
+        with self.assertRaises(WebControlException) as cme:
+            self.submit.can_upload("joe", "testy", "main", "blue")
+        self.assertEqual(str(cme.exception), "package blue not found")
+        self.assertEqual(cme.exception.exit_code(), 404)
+
     def test_migration_reference_all_proposed_combo(self):
         """Tests when a test request has migration-reference/0 + all-proposed=1 in the request args."""
         with self.assertRaises(BadRequest) as cme:
