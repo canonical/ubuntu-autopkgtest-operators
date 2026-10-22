@@ -4,6 +4,7 @@ Test all things related verifying input arguments and sending AMQP requests.
 """
 
 import json
+from time import time
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError
@@ -370,6 +371,32 @@ class DistroRequestValidationTests(SubmitTestBase):
 
         self.submit.validate_distro_request("testy", "C51", "blue", ["ab/1.2"], "joe")
         self.assertEqual(mock_urlopen.call_count, 5)
+
+    @patch("request.submit.urllib.request.urlopen")
+    def test_validate_distro_cached_user(self, mock_urlopen):
+        """Recently allowed requester skips the upload and team checks."""
+        # mock Launchpad response: published sources, upload allowed
+        cm = MagicMock()
+        cm.__enter__.return_value = cm
+        cm.getcode.return_value = 200
+        cm.read.side_effect = [
+            b'{"entries": [{"component_name": "main"}]}',
+            b'{"entries": [{"component_name": "main"}]}',
+            b"true",
+        ]
+        cm.return_value = cm
+        mock_urlopen.return_value = cm
+
+        self.submit.allowed_user_cache.get.return_value = time()
+        self.submit.validate_distro_request("testy", "C51", "blue", ["ab/1.2"], "joe")
+        self.assertEqual(mock_urlopen.call_count, 2)
+
+        # expired entry: checkUpload again (source lookups are reused)
+        self.submit.allowed_user_cache.get.return_value = (
+            time() - request.submit.ALLOWED_USER_CACHE_TIME - 1
+        )
+        self.submit.validate_distro_request("testy", "C51", "blue", ["ab/1.2"], "joe")
+        self.assertEqual(mock_urlopen.call_count, 3)
 
     @patch("request.submit.urllib.request.urlopen")
     def test_ppa_ok(self, mock_urlopen):
