@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import pathlib
-import sys
 import traceback
 from collections import ChainMap
 from html import escape as _escape
@@ -219,8 +218,6 @@ def index_root():
                     github_params["number"],
                 )
             s.validate_git_request(**params)
-        except WebControlException as e:
-            return invalid(e, e.exit_code())
         except KeyError as e:
             return invalid(f"Missing field in JSON data: {e}")
 
@@ -275,11 +272,8 @@ def index_root():
 
         arches = list(dict.fromkeys(request.args.getlist("arch")))
         params["arch"] = arches
-        try:
-            s.validate_args(params)
-            s.validate_distro_request(**params)
-        except WebControlException as e:
-            return invalid(e, e.exit_code())
+        s.validate_args(params)
+        s.validate_distro_request(**params)
 
         context = "ppa" if params.get("ppas") else None
         result_urls = []
@@ -340,26 +334,22 @@ def logout():
     return redirect(oid.get_next_url())
 
 
+@app.errorhandler(WebControlException)
+def web_control_exception_handler(error):
+    return invalid(error, error.exit_code())
+
+
 @app.errorhandler(Exception)
 def all_exception_handler(error):
-    # If the exception doesn't have the exit_code method, it's not an expected
-    # exception defined in helpers/exceptions.py
-    try:
-        return invalid(error, error.exit_code())
-    except Exception:
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        traceback.print_exception(exc_type, exc_value, exc_traceback)
-        return (
-            HTML.format(
-                (
-                    "<p>A server error has occurred. Traceback:</p> <pre>{}</pre>".format(
-                        "\n".join(
-                            traceback.format_exception(
-                                exc_type, exc_value, exc_traceback
-                            )
-                        )
-                    )
-                ),
-            ),
-            500,
-        )
+    logging.error(
+        "Unhandled request exception",
+        exc_info=(type(error), error, error.__traceback__),
+    )
+    return (
+        HTML.format(
+            "<p>A server error has occurred. Traceback:</p> <pre>{}</pre>".format(
+                "\n".join(traceback.format_exception(error))
+            )
+        ),
+        500,
+    )
