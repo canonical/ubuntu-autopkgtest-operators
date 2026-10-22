@@ -277,7 +277,7 @@ class Submit:
     def is_valid_ppa(self, ppa):
         """Check if a ppa exists."""
         team, _, name = ppa.partition("/")
-        if not NAME.match(team) or not NAME.match(name):
+        if not NAME.fullmatch(team) or not NAME.fullmatch(name):
             return False
         # https://launchpad.net/+apidoc/1.0.html#person-getPPAByName
         (code, response) = self.cached_lp_request(

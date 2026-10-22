@@ -142,6 +142,7 @@ class DistroRequestValidationTests(SubmitTestBase):
                 "testy", "C51", "foo", ["ab/1.2"], "joe", ["b~ad/ppa"]
             )
         self.assertEqual(str(cme.exception), "ppa b~ad/ppa not found")
+        self.assertFalse(self.submit.is_valid_ppa("bad\n/ppa"))
         self.assertEqual(mock_urlopen.call_count, 0)
 
         # mock Launchpad response: missing PPA, then a valid PPA
