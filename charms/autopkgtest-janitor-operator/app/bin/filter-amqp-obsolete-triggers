@@ -26,7 +26,7 @@ SYNTHETIC_TRIGGERS = ["migration-reference/0"]
 
 
 def get_amqp_connection():
-    cp = configparser.ConfigParser()
+    cp = configparser.ConfigParser(interpolation=None)
     with open("/etc/autopkgtest-janitor/rabbitmq.cred") as f:
         cp.read_string("[rabbit]\n" + f.read().replace('"', ""))
     return pika.BlockingConnection(
