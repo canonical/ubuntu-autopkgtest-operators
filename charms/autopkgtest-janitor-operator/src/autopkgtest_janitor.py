@@ -323,6 +323,9 @@ def install(autopkgtest_branch):
     shutil.copy(src_dir / "cleanup-lxd", CHARM_TOOLS_DEST)
     shutil.copy(src_dir / "build-image-on-remote", CHARM_TOOLS_DEST)
     shutil.copy(src_dir / "filter-amqp-dupes-upstream", CHARM_TOOLS_DEST)
+    shutil.copy(src_dir / "filter-amqp", CHARM_TOOLS_DEST)
+    shutil.copy(src_dir / "filter-amqp-duplicates", CHARM_TOOLS_DEST)
+    shutil.copy(src_dir / "filter-amqp-obsolete-triggers", CHARM_TOOLS_DEST)
 
     logger.info("cloning autopkgtest repository")
     shutil.rmtree(AUTOPKGTEST_LOCATION, ignore_errors=True)
