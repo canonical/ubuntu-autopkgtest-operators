@@ -6,6 +6,7 @@ Test all things related verifying input arguments and sending AMQP requests.
 import json
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError
 
 from helpers.exceptions import (
     BadRequest,
@@ -146,11 +147,12 @@ class DistroRequestValidationTests(SubmitTestBase):
         # mock Launchpad response: missing PPA, then a valid PPA
         cm = MagicMock()
         cm.__enter__.return_value = cm
-        cm.getcode.return_value = 404
+        cm.getcode.return_value = 200
         cm.geturl.return_value = "http://mock.launchpad.net"
-        cm.read.side_effect = [b"{}", b'{"name": "there"}', b"not { json}", b"{}"]
+        cm.read.side_effect = [b'{"name": "there"}', b"not { json}"]
         cm.return_value = cm
-        mock_urlopen.return_value = cm
+        missing_ppa = HTTPError("http://mock.launchpad.net", 404, "Not Found", {}, None)
+        mock_urlopen.side_effect = [missing_ppa, cm, cm, missing_ppa]
 
         with self.assertRaises(WebControlException) as cme:
             self.submit.validate_distro_request(
@@ -160,7 +162,6 @@ class DistroRequestValidationTests(SubmitTestBase):
         self.assertEqual(mock_urlopen.call_count, 1)
 
         # success
-        cm.getcode.return_value = 200
         self.assertTrue(self.submit.is_valid_ppa("hi/there"))
 
         # broken JSON response
@@ -170,7 +171,6 @@ class DistroRequestValidationTests(SubmitTestBase):
             )
 
         # same, but entirely failing query -- let's be on the safe side
-        cm.getcode.return_value = 404
         with self.assertRaises(WebControlException) as cme:
             self.submit.validate_distro_request(
                 "testy", "C51", "foo", ["ab/1.2"], "joe", ["bro/ken"]
@@ -209,13 +209,14 @@ class DistroRequestValidationTests(SubmitTestBase):
 
         # same, but entirely failing query -- let's be on the safe side
         self.submit.lp_cache.clear()
-        cm.getcode.return_value = 404
-        cm.read.side_effect = [b"{}"]
+        mock_urlopen.side_effect = HTTPError(
+            "http://mock.launchpad.net", 404, "Not Found", {}, None
+        )
         with self.assertRaises(WebControlException) as cme:
             self.submit.validate_distro_request(
                 "testy", "C51", "blue", ["ab/1.2"], "joe"
             )
-        self.assertEqual(cme.exception.exit_code(), 503)
+        self.assertEqual(cme.exception.exit_code(), 500)
 
     @patch("request.submit.urllib.request.urlopen")
     def test_bad_package_ppa(self, mock_urlopen):
@@ -285,16 +286,15 @@ class DistroRequestValidationTests(SubmitTestBase):
         # source/version, upload not allowed
         cm = MagicMock()
         cm.__enter__.return_value = cm
-        cm.getcode.side_effect = [200, 200, 403, 403, 200]
+        cm.getcode.return_value = 200
         cm.read.side_effect = [
             b'{"entries": [{"component_name": "main"}]}',
             b'{"entries": [{"component_name": "main"}]}',
-            b"false",
-            b"false",
             b'{"entries": []}',
         ]
         cm.return_value = cm
-        mock_urlopen.return_value = cm
+        denied = HTTPError("http://mock.launchpad.net", 403, "Forbidden", {}, None)
+        mock_urlopen.side_effect = [cm, cm, denied, denied, cm]
 
         with self.assertRaises(WebControlException) as cme:
             self.submit.validate_distro_request(
@@ -357,16 +357,15 @@ class DistroRequestValidationTests(SubmitTestBase):
         # mock Launchpad response: published sources, denied uploads, allowed team
         cm = MagicMock()
         cm.__enter__.return_value = cm
-        cm.getcode.side_effect = [200, 200, 403, 403, 200]
+        cm.getcode.return_value = 200
         cm.read.side_effect = [
             b'{"entries": [{"component_name": "main"}]}',
             b'{"entries": [{"component_name": "main"}]}',
-            b"false",
-            b"false",
             b'{"entries": [{"name": "list"}]}',
         ]
         cm.return_value = cm
-        mock_urlopen.return_value = cm
+        denied = HTTPError("http://mock.launchpad.net", 403, "Forbidden", {}, None)
+        mock_urlopen.side_effect = [cm, cm, denied, denied, cm]
 
         self.submit.validate_distro_request("testy", "C51", "blue", ["ab/1.2"], "joe")
         self.assertEqual(mock_urlopen.call_count, 5)
@@ -442,13 +441,9 @@ class GitRequestValidationTests(SubmitTestBase):
     @patch("request.submit.urllib.request.urlopen")
     def test_unknown_ppa(self, mock_urlopen):
         # mock Launchpad response: PPA not found
-        cm = MagicMock()
-        cm.__enter__.return_value = cm
-        cm.getcode.return_value = 404
-        cm.geturl.return_value = "http://mock.launchpad.net"
-        cm.read.return_value = b"{}"
-        cm.return_value = cm
-        mock_urlopen.return_value = cm
+        mock_urlopen.side_effect = HTTPError(
+            "http://mock.launchpad.net", 404, "Not Found", {}, None
+        )
 
         with self.assertRaises(WebControlException) as cme:
             self.submit.validate_git_request(

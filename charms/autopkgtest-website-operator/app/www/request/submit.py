@@ -20,6 +20,7 @@ from helpers.exceptions import (
     BadRequest,
     ForbiddenRequest,
     InvalidArgs,
+    LaunchpadError,
     LaunchpadUnavailable,
     NotFound,
 )
@@ -290,10 +291,10 @@ class Submit:
         logging.debug(
             "is_valid_ppa(%s): code %u, response %s", ppa, code, repr(response)
         )
-        if code == 404:
+        if code == 404:  # getPPAByName: owner or PPA not found.
             return False
         if code != 200 or response.get("name") != name:
-            raise LaunchpadUnavailable()
+            raise LaunchpadError("Unexpected response to a Launchpad PPA lookup.")
         return True
 
     def get_published_source_component(self, release, package, version, ppa=None):
@@ -321,7 +322,9 @@ class Submit:
             req["version"] = json.dumps(version)
         (code, response) = self.cached_lp_request(obj, req)
         if code != 200:
-            raise LaunchpadUnavailable()
+            raise LaunchpadError(
+                "Unexpected response to a Launchpad source publication lookup."
+            )
         logging.debug(
             "get_published_source_component(%s, %s, %s): code %u, response %s",
             release,
@@ -333,15 +336,17 @@ class Submit:
         try:
             entries = response["entries"]
             if not isinstance(entries, list):
-                raise LaunchpadUnavailable()
+                raise ValueError("Expected a list of source publications")
             if not entries:
                 return None
             component = entries[0]["component_name"]
             if not isinstance(component, str) or not component:
-                raise LaunchpadUnavailable()
+                raise ValueError("Expected a non-empty component name")
             return component
-        except (KeyError, TypeError) as e:
-            raise LaunchpadUnavailable() from e
+        except (KeyError, TypeError, ValueError) as e:
+            raise LaunchpadError(
+                "Unexpected response to a Launchpad source publication lookup."
+            ) from e
 
     def can_upload(self, person, release, component, package):
         """Check if person can upload package into Ubuntu release."""
@@ -366,10 +371,12 @@ class Submit:
             code,
             repr(response),
         )
-        if code == 403:
+        if code == 403:  # checkUpload: uploading is not permitted.
             return False
         if code != 200 or response is not True:
-            raise LaunchpadUnavailable()
+            raise LaunchpadError(
+                "Unexpected response to a Launchpad upload permission check."
+            )
         return True
 
     def allowed_user_cache_key(self, person):
@@ -388,10 +395,12 @@ class Submit:
         while True:
             code, response = self.cached_lp_request(obj, query)
             if code != 200:
-                raise LaunchpadUnavailable()
-            if not isinstance(response.get("entries"), list):
-                raise LaunchpadUnavailable()
+                raise LaunchpadError(
+                    "Unexpected response to a Launchpad team membership lookup."
+                )
             try:
+                if not isinstance(response.get("entries"), list):
+                    raise ValueError("Expected a list of teams")
                 if any(
                     entry["name"] in self.allowed_teams for entry in response["entries"]
                 ):
@@ -399,8 +408,10 @@ class Submit:
                         self.allowed_user_cache_key(person), time()
                     )
                     return True
-            except (KeyError, TypeError) as e:
-                raise LaunchpadUnavailable() from e
+            except (KeyError, TypeError, ValueError) as e:
+                raise LaunchpadError(
+                    "Unexpected response to a Launchpad team membership lookup."
+                ) from e
             next_page = response.get("next_collection_link")
             if not next_page:
                 return False
@@ -419,13 +430,17 @@ class Submit:
 
         Request https://api.launchpad.net/1.0/<obj>?<query>.
 
-        Return (code, json), where json is defined for successful codes
-        (200 <= code < 300) and None for non-transient client errors. Raise
-        LaunchpadUnavailable for dependency failures.
+        Return (code, json) for successful responses, or (code, None) for
+        client errors other than timeouts and rate limiting. Callers handle
+        expected client errors according to the operation's semantics.
+
+        Raise LaunchpadUnavailable for transport failures, server errors,
+        timeouts, or rate limiting. Raise LaunchpadError for other unexpected
+        responses, without assuming which side caused the failure.
         """
         url = urllib.parse.urljoin(LP, obj)
         if not url.startswith(LP):
-            raise LaunchpadUnavailable()
+            raise LaunchpadError("Unexpected URL during a Launchpad request.")
         if query:
             url += ("&" if "?" in url else "?") + urllib.parse.urlencode(query)
         try:
@@ -434,12 +449,24 @@ class Submit:
                 response = req.read()
         except HTTPError as e:
             logging.error("%s failed with %u: %s\n%s", url, e.code, e.reason, e.headers)
-            if e.code in (408, 429) or not 400 <= e.code < 500:
+            # Upstream server errors, timeouts, and rate limiting prevent us
+            # from completing the request. Return our own 503, not their code.
+            if e.code >= 500 or e.code in (
+                408,  # Request Timeout
+                429,  # Too Many Requests
+            ):
                 raise LaunchpadUnavailable() from e
-            return (e.code, None)
+            if 400 <= e.code < 500:
+                # The caller decides whether this is an expected outcome.
+                return (e.code, None)
+            raise LaunchpadError("Unexpected HTTP status from Launchpad.") from e
         except (URLError, OSError, HTTPException) as e:
             logging.warning("Launchpad request failed: %s: %s", url, e)
             raise LaunchpadUnavailable() from e
+
+        if code != 200:
+            logging.error("Unexpected HTTP status %s from %s", code, url)
+            raise LaunchpadError("Unexpected HTTP status from Launchpad.")
 
         try:
             response = json.loads(response.decode("UTF-8"))
@@ -452,7 +479,9 @@ class Submit:
                 response,
                 str(e),
             )
-            raise LaunchpadUnavailable() from e
+            raise LaunchpadError(
+                "Unexpected response during a Launchpad request."
+            ) from e
         logging.debug("lp_request %s succeeded: %s", url, response)
         return (code, response)
 
