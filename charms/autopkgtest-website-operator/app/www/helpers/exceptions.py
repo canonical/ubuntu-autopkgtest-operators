@@ -37,11 +37,6 @@ class BadRequest(WebControlException):
             super().__init__(msg, 400)
 
 
-class Unauthorized(WebControlException):
-    def __init__(self):
-        super().__init__("Authorization failure", 401)
-
-
 class ForbiddenRequest(WebControlException):
     def __init__(self, package, trigger):
         super().__init__(
@@ -66,14 +61,6 @@ class NotFound(WebControlException):
                 f"{element_name} {element} {msg}",
                 404,
             )
-
-
-class TooManyRequests(WebControlException):
-    def __init__(self, requester):
-        super().__init__(
-            f"You, {requester}, have requested too many tests. Please try again later.",
-            429,
-        )
 
 
 class InvalidArgs(WebControlException):
