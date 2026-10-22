@@ -124,7 +124,7 @@ class Submit:
                 continue
 
             if ppas:
-                if not self.is_valid_package_version(
+                if not self.get_published_source_component(
                     release, trigsrc, trigver, ppas[-1]
                 ):
                     raise BadRequest(
@@ -132,7 +132,7 @@ class Submit:
                     )
                 trigsrc_component = None
             else:
-                trigsrc_component = self.is_valid_package_version(
+                trigsrc_component = self.get_published_source_component(
                     release, trigsrc, trigver
                 )
                 if not trigsrc_component:
@@ -143,7 +143,7 @@ class Submit:
         if ppas:
             component = None
         else:
-            component = self.is_valid_package_version(release, package, None)
+            component = self.get_published_source_component(release, package, None)
             if not component:
                 raise BadRequest(f"{package} is not published in {release}")
         upload_targets.append((package, component))
@@ -153,7 +153,7 @@ class Submit:
         for source, component in upload_targets:
             component = (
                 component
-                or self.is_valid_package_version(release, source, None)
+                or self.get_published_source_component(release, source, None)
                 or "main"
             )
             if self.can_upload(requester, release, component, source):
@@ -296,14 +296,12 @@ class Submit:
             raise LaunchpadUnavailable()
         return True
 
-    def is_valid_package_version(self, release, package, version, ppa=None):
-        """Check if package/version exists in the given release.
+    def get_published_source_component(self, release, package, version, ppa=None):
+        """Return the component of a published source, or None if absent.
 
         Use this for validating trigger packages. This queries the Launchpad
         REST API. Check given ppa (team/name), or the main Ubuntu archive if
         this is None.
-
-        Return the component name if package/version exists, otherwise None.
         """
         # https://launchpad.net/+apidoc/1.0.html#archive-getPublishedSources
         if ppa:
@@ -325,7 +323,7 @@ class Submit:
         if code != 200:
             raise LaunchpadUnavailable()
         logging.debug(
-            "is_valid_package_version(%s, %s, %s): code %u, response %s",
+            "get_published_source_component(%s, %s, %s): code %u, response %s",
             release,
             package,
             version,
