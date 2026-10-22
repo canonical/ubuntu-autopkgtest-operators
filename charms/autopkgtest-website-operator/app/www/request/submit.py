@@ -171,7 +171,7 @@ class Submit:
         - 'env' is a list of 'key=value' strings.
         - 'testname' is a string.
 
-        Raise ValueError with error message if the request is invalid,
+        Raise WebControlException with an error message if the request is invalid,
         otherwise return.
         """
         if release not in self.release_arches:
@@ -277,7 +277,7 @@ class Submit:
         """Check if a ppa exists."""
         team, _, name = ppa.partition("/")
         if not NAME.match(team) or not NAME.match(name):
-            return None
+            return False
         # https://launchpad.net/+apidoc/1.0.html#person-getPPAByName
         (code, response) = self.cached_lp_request(
             "~" + team,
@@ -291,7 +291,7 @@ class Submit:
             "is_valid_ppa(%s): code %u, response %s", ppa, code, repr(response)
         )
         if code == 404:
-            return None
+            return False
         if code != 200 or response.get("name") != name:
             raise LaunchpadUnavailable()
         return True
