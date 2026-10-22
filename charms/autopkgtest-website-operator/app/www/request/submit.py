@@ -205,11 +205,9 @@ class Submit:
                 raise NotFound("ppa", ppa)
 
     def send_amqp_request(self, release, arch, package, context=None, **params):
-        """Send autopkgtest AMQP request."""
-        if context:
-            queue = f"debci-{context}-{release}-{arch}"
-        else:
-            queue = f"debci-{release}-{arch}"
+        """Submit jobs for one or more architectures over one AMQP connection."""
+        arches = [arch] if isinstance(arch, str) else arch
+        queue_prefix = f"debci-{context}-{release}" if context else f"debci-{release}"
 
         params["submit-time"] = datetime.strftime(
             datetime.now().astimezone(UTC), "%Y-%m-%d %H:%M:%S%z"
@@ -217,14 +215,15 @@ class Submit:
         body = f"{package}\n{json.dumps(params, sort_keys=True)}"
         with amqp_connect() as amqp_con:
             with amqp_con.channel() as ch:
-                ch.basic_publish(
-                    exchange="",
-                    routing_key=queue,
-                    body=body,
-                    properties=pika.BasicProperties(
-                        delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
-                    ),
-                )
+                for architecture in arches:
+                    ch.basic_publish(
+                        exchange="",
+                        routing_key=f"{queue_prefix}-{architecture}",
+                        body=body,
+                        properties=pika.BasicProperties(
+                            delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
+                        ),
+                    )
 
     @classmethod
     def post_json(cls, url, data, auth_file, project):

@@ -276,18 +276,15 @@ def index_root():
         s.validate_distro_request(**params)
 
         context = "ppa" if params.get("ppas") else None
+        s.send_amqp_request(context=context, **params)
         result_urls = []
-        for arch in arches:
-            request_params = dict(params)
-            request_params["arch"] = arch
-            s.send_amqp_request(context=context, **request_params)
-
-            if context is None:
+        if context is None:
+            for arch in arches:
                 url = os.path.join(
                     request.host_url,
                     "packages",
-                    request_params["package"],
-                    request_params["release"],
+                    params["package"],
+                    params["release"],
                     arch,
                 )
                 result_urls.append(f'<a href="{url}">{url}</a>')
