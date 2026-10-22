@@ -41,7 +41,7 @@ LP_TIMEOUT = 60
 
 class Submit:
     def __init__(self):
-        self.config = get_autopkgtest_cloud_conf()
+        config = get_autopkgtest_cloud_conf()
         self.lp_cache = {}
 
         self.release_arches = get_release_arches()
@@ -49,7 +49,7 @@ class Submit:
 
         self.allowed_user_cache = KeyValueCache("/dev/shm/autopkgtest_users.json")
         self.allowed_teams = {
-            team.strip() for team in self.config["web"]["allowed_requestors"].split(",")
+            team.strip() for team in config["web"]["allowed_requestors"].split(",")
         }
 
     def validate_distro_request(
@@ -150,7 +150,7 @@ class Submit:
 
         if self.cached_allowed_user(requester):
             return
-        for source, component in dict.fromkeys(upload_targets):
+        for source, component in upload_targets:
             component = (
                 component
                 or self.is_valid_package_version(release, source, None)

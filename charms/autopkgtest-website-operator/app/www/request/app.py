@@ -281,16 +281,14 @@ def index_root():
         except WebControlException as e:
             return invalid(e, e.exit_code())
 
+        context = "ppa" if params.get("ppas") else None
         result_urls = []
         for arch in arches:
             request_params = dict(params)
             request_params["arch"] = arch
-            if request_params.get("ppas"):
-                s.send_amqp_request(context="ppa", **request_params)
-            else:
-                s.send_amqp_request(**request_params)
+            s.send_amqp_request(context=context, **request_params)
 
-            if not request_params.get("ppas"):
+            if context is None:
                 url = os.path.join(
                     request.host_url,
                     "packages",
