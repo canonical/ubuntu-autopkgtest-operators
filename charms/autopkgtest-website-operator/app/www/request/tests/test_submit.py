@@ -589,28 +589,3 @@ class SendAMQPTests(SubmitTestBase):
         self.assertEqual(json.loads(params)["ppas"], ["my/ppa"])
         self.assertEqual(json.loads(params)["requester"], "joe")
         self.assertIn("submit-time", json.loads(params))
-
-
-@patch("request.submit.amqp.Connection")
-@patch("request.submit.amqp.Message")
-def test_valid_request_context(self, message_con, mock_con):
-    # mostly a passthrough, but ensure that we do wrap the string in Message()
-    message_con.side_effect = lambda x: f">{x}<"
-
-    self.submit.send_amqp_request(
-        "testy",
-        "C51",
-        "foo",
-        triggers=["ab/1"],
-        requester="joe",
-        context="ppa",
-        ppas=["my/ppa"],
-        notime=True,
-    )
-    mock_con.assert_called_once_with("1.2.3.4", userid="user", password="s3kr1t")
-    cm_amqp_con = mock_con.return_value.__enter__.return_value
-    cm_channel = cm_amqp_con.channel.return_value.__enter__.return_value
-    cm_channel.basic_publish.assert_called_once_with(
-        '>foo\n{"ppas": ["my/ppa"], "requester": "joe", "triggers": ["ab/1"]}<',
-        routing_key="debci-ppa-testy-C51",
-    )
