@@ -3,12 +3,10 @@
 Test all things related verifying input arguments and sending AMQP requests.
 """
 
-import re
-import sqlite3
+import json
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
-from distro_info import UbuntuDistroInfo
 from helpers.exceptions import (
     BadRequest,
     WebControlException,
@@ -20,56 +18,36 @@ import request.submit
 class SubmitTestBase(TestCase):
     """Common setup of tests of Submit class."""
 
-    @patch("request.submit.sqlite3")
+    @patch(
+        "request.submit.get_release_arches",
+        return_value={"testy": ["6510", "C51"], "grumpy": ["hexium"]},
+    )
+    @patch("request.submit.KeyValueCache")
     @patch(
         "request.submit.get_autopkgtest_cloud_conf",
         MagicMock(
             return_value={
-                "amqp": {"uri": "amqp://user:s3kr1t@1.2.3.4"},
-                "web": {
-                    "database": "/ignored",
-                    "database_public": "/ignored",
-                    "running_cache": "/ignored",
-                    "amqp_queue_cache": "/ignored",
-                    "allowed_requestors": "list,of,groups,but,ignored",
-                },
-                "autopkgtest": {"releases": "testy grumpy"},
+                "web": {"allowed_requestors": "list,of,groups,but,ignored"},
             }
         ),
     )
-    def setUp(self, mock_sqlite):
-        test_db = sqlite3.connect(":memory:")
-        test_db.execute(
-            "CREATE TABLE test ("
-            "  id INTEGER PRIMARY KEY, "
-            "  release CHAR[20], "
-            "  arch CHAR[20], "
-            "  package char[120])"
-        )
-        test_db.execute("INSERT INTO test values(null, 'testy', '6510', 'blue')")
-        test_db.execute("INSERT INTO test values(null, 'testy', 'C51', 'blue')")
-        test_db.execute("INSERT INTO test values(null, 'grumpy', 'hexium', 'green')")
-        test_db.commit()
-        mock_sqlite.connect.return_value = test_db
-
+    def setUp(self, mock_cache, _mock_arches):
+        mock_cache.return_value.get.return_value = None
         self.submit = request.submit.Submit()
-        self.submit.clear_cache()  # clear cache between tests
-        self.submit.releases.add("testy")
 
 
 class DistroRequestValidationTests(SubmitTestBase):
     """Test verification of distribution test requests."""
 
     def test_init(self):
-        """Read debci configuration."""
-        distro_info = UbuntuDistroInfo()
-        releases = set(distro_info.supported() + distro_info.supported_esm())
-        releases.add("testy")
-        self.assertEqual(self.submit.releases, releases)
-        self.assertEqual(self.submit.architectures, {"6510", "C51", "hexium"})
-        self.assertIn("web", self.submit.config)
-        self.assertIn("amqp", self.submit.config)
-        self.assertIn("allowed_requestors", self.submit.config["web"])
+        """Read available releases and architectures."""
+        self.assertEqual(
+            self.submit.release_arches,
+            {"testy": ["6510", "C51"], "grumpy": ["hexium"]},
+        )
+        self.assertEqual(
+            self.submit.allowed_teams, {"list", "of", "groups", "but", "ignored"}
+        )
 
     def test_bad_release(self):
         """Unknown release."""
@@ -91,10 +69,8 @@ class DistroRequestValidationTests(SubmitTestBase):
         cm.getcode.return_value = 200
         cm.geturl.return_value = "http://mock.launchpad.net"
         cm.read.side_effect = [
+            b'{"entries": [{"component_name": "main"}]}',
             b'{"entries": []}',
-            b'{"total_size": 0}',
-            b'{"entries": []}',
-            b'{"total_size": 0}',
         ]
         cm.return_value = cm
         mock_urlopen.return_value = cm
@@ -103,11 +79,11 @@ class DistroRequestValidationTests(SubmitTestBase):
             self.submit.validate_distro_request(
                 "testy", "C51", "badpkg", ["ab/1"], "joe"
             )
-        self.assertIn("package badpkg", str(cme.exception))
+        self.assertEqual(str(cme.exception), "badpkg is not published in testy")
 
     def test_bad_argument(self):
         """Unknown argument."""
-        with self.assertRaises(ValueError) as cme:
+        with self.assertRaises(BadRequest) as cme:
             self.submit.validate_distro_request(
                 "testy", "C51", "blue", ["ab/1"], "joe", foo="bar"
             )
@@ -150,7 +126,7 @@ class DistroRequestValidationTests(SubmitTestBase):
         """Testname not allowed for distro tests."""
         # we only allow this for GitHub requests; with distro requests it would
         # be cheating as proposed-migration would consider those
-        with self.assertRaises(ValueError) as cme:
+        with self.assertRaises(BadRequest) as cme:
             self.submit.validate_distro_request(
                 "testy", "C51", "blue", ["ab/1.2"], "joe", testname="first"
             )
@@ -167,17 +143,12 @@ class DistroRequestValidationTests(SubmitTestBase):
         self.assertEqual(str(cme.exception), "ppa b~ad/ppa not found")
         self.assertEqual(mock_urlopen.call_count, 0)
 
-        # mock Launchpad response: successful form, but no match
+        # mock Launchpad response: missing PPA, then a valid PPA
         cm = MagicMock()
         cm.__enter__.return_value = cm
-        cm.getcode.return_value = 200
+        cm.getcode.return_value = 404
         cm.geturl.return_value = "http://mock.launchpad.net"
-        cm.read.side_effect = [
-            b"{}",
-            b'{"name": "there"}',
-            b"not { json}",
-            b"<html>not found</html>",
-        ]
+        cm.read.side_effect = [b"{}", b'{"name": "there"}', b"not { json}", b"{}"]
         cm.return_value = cm
         mock_urlopen.return_value = cm
 
@@ -186,10 +157,10 @@ class DistroRequestValidationTests(SubmitTestBase):
                 "testy", "C51", "foo", ["ab/1.2"], "joe", ["bad/ppa"]
             )
         self.assertEqual(str(cme.exception), "ppa bad/ppa not found")
-        # self.assertEqual(mock_urlopen.call_count, 4)
         self.assertEqual(mock_urlopen.call_count, 1)
 
         # success
+        cm.getcode.return_value = 200
         self.assertTrue(self.submit.is_valid_ppa("hi/there"))
 
         # broken JSON response
@@ -216,10 +187,7 @@ class DistroRequestValidationTests(SubmitTestBase):
         cm.getcode.return_value = 200
         cm.geturl.return_value = "http://mock.launchpad.net"
         cm.read.side_effect = [
-            b'{"entries": [{"name": "asdf"}]}',
-            b'{"total_size": 0}',
-            b'{"entries": [{"name": "asdf"}]}',
-            b'{"total_size": 0}',
+            b'{"entries": []}',
         ]
         cm.return_value = cm
         mock_urlopen.return_value = cm
@@ -229,27 +197,25 @@ class DistroRequestValidationTests(SubmitTestBase):
                 "testy", "C51", "blue", ["ab/1.2"], "joe"
             )
         self.assertEqual(str(cme.exception), "ab/1.2 is not published in testy")
-        self.assertEqual(mock_urlopen.call_count, 2)
+        self.assertEqual(mock_urlopen.call_count, 1)
 
         # broken JSON response
-        cm.read.return_value = b"not { json}"
+        self.submit.lp_cache.clear()
+        cm.read.side_effect = [b"not { json}"]
         with self.assertRaises(WebControlException) as cme:
             self.submit.validate_distro_request(
                 "testy", "C51", "blue", ["ab/1.2"], "joe"
             )
 
         # same, but entirely failing query -- let's be on the safe side
-        cm.getcode.side_effect = [200, 404]
-        cm.read.side_effect = [
-            b'{"entries": [{"name": "asdf"}]}',
-            b"<html>not found</html>",
-            # b'{"entries": [{"name": "asdf"}]}',
-        ]
+        self.submit.lp_cache.clear()
+        cm.getcode.return_value = 404
+        cm.read.side_effect = [b"{}"]
         with self.assertRaises(WebControlException) as cme:
             self.submit.validate_distro_request(
                 "testy", "C51", "blue", ["ab/1.2"], "joe"
             )
-        self.assertEqual(str(cme.exception), "ab/1.2 is not published in testy")
+        self.assertEqual(cme.exception.exit_code(), 503)
 
     @patch("request.submit.urllib.request.urlopen")
     def test_bad_package_ppa(self, mock_urlopen):
@@ -263,12 +229,9 @@ class DistroRequestValidationTests(SubmitTestBase):
         cm.read.side_effect = [
             b'{"name": "overlay"}',
             b'{"name": "goodstuff"}',
-            b'{"entries": [{"name": "asdf"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
+            b'{"entries": [{"component_name": "main"}]}',
+            b'{"entries": [{"component_name": "main"}]}',
+            b"true",
         ]
         cm.return_value = cm
         mock_urlopen.return_value = cm
@@ -281,7 +244,7 @@ class DistroRequestValidationTests(SubmitTestBase):
             "joe",
             ppas=["team/overlay", "joe/goodstuff"],
         )
-        self.assertEqual(mock_urlopen.call_count, 8)
+        self.assertEqual(mock_urlopen.call_count, 5)
 
     @patch("request.submit.urllib.request.urlopen")
     def test_nonexisting_trigger_ppa(self, mock_urlopen):
@@ -295,8 +258,7 @@ class DistroRequestValidationTests(SubmitTestBase):
         cm.read.side_effect = [
             b'{"name": "overlay"}',
             b'{"name": "goodstuff"}',
-            b'{"entries": [{"name": "asdf"}]}',
-            b'{"total_size": 0}',
+            b'{"entries": []}',
         ]
         cm.return_value = cm
         mock_urlopen.return_value = cm
@@ -314,7 +276,7 @@ class DistroRequestValidationTests(SubmitTestBase):
             str(cme.exception),
             "ab/1.2 is not published in PPA joe/goodstuff testy",
         )
-        self.assertEqual(mock_urlopen.call_count, 4)
+        self.assertEqual(mock_urlopen.call_count, 3)
 
     @patch("request.submit.urllib.request.urlopen")
     def test_no_upload_perm(self, mock_urlopen):
@@ -323,14 +285,13 @@ class DistroRequestValidationTests(SubmitTestBase):
         # source/version, upload not allowed
         cm = MagicMock()
         cm.__enter__.return_value = cm
-        cm.getcode.return_value = 200
+        cm.getcode.side_effect = [200, 200, 403, 403, 200]
         cm.read.side_effect = [
-            b'{"entries": [{"name": "asdf"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{not: json}{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{not: json}{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"entries": [{"name": "asdf"}]}',
+            b'{"entries": [{"component_name": "main"}]}',
+            b'{"entries": [{"component_name": "main"}]}',
+            b"false",
+            b"false",
+            b'{"entries": []}',
         ]
         cm.return_value = cm
         mock_urlopen.return_value = cm
@@ -340,7 +301,7 @@ class DistroRequestValidationTests(SubmitTestBase):
                 "testy", "C51", "blue", ["ab/1.2"], "joe"
             )
         self.assertIn("not allowed to upload blue or ab", str(cme.exception))
-        self.assertEqual(mock_urlopen.call_count, 6)
+        self.assertEqual(mock_urlopen.call_count, 5)
 
     @patch("request.submit.urllib.request.urlopen")
     def test_distro_ok(self, mock_urlopen):
@@ -351,19 +312,15 @@ class DistroRequestValidationTests(SubmitTestBase):
         cm.__enter__.return_value = cm
         cm.getcode.return_value = 200
         cm.read.side_effect = [
-            b'{"entries": [{"name": "asdf"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"entries": [{"name": "autopkgtest-requestors"}]}',
+            b'{"entries": [{"component_name": "main"}]}',
+            b'{"entries": [{"component_name": "main"}]}',
+            b"true",
         ]
         cm.return_value = cm
         mock_urlopen.return_value = cm
 
         self.submit.validate_distro_request("testy", "C51", "blue", ["ab/1.2"], "joe")
-        self.assertEqual(mock_urlopen.call_count, 5)
+        self.assertEqual(mock_urlopen.call_count, 3)
 
     @patch("request.submit.urllib.request.urlopen")
     def test_distro_all_proposed(self, mock_urlopen):
@@ -374,13 +331,9 @@ class DistroRequestValidationTests(SubmitTestBase):
         cm.__enter__.return_value = cm
         cm.getcode.return_value = 200
         cm.read.side_effect = [
-            b'{"entries": [{"name": "asdf"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"entries": [{"name": "autopkgtest-requestors"}]}',
+            b'{"entries": [{"component_name": "main"}]}',
+            b'{"entries": [{"component_name": "main"}]}',
+            b"true",
         ]
         cm.return_value = cm
         mock_urlopen.return_value = cm
@@ -388,11 +341,11 @@ class DistroRequestValidationTests(SubmitTestBase):
         self.submit.validate_distro_request(
             "testy", "C51", "blue", ["ab/1.2"], "joe", **{"all-proposed": "1"}
         )
-        self.assertEqual(mock_urlopen.call_count, 5)
+        self.assertEqual(mock_urlopen.call_count, 3)
 
     def test_distro_all_proposed_bad_value(self):
         """Valid distro request with invalid all-proposed value."""
-        with self.assertRaises(ValueError) as cme:
+        with self.assertRaises(BadRequest) as cme:
             self.submit.validate_distro_request(
                 "testy", "C51", "blue", ["ab/1.2"], "joe", **{"all-proposed": "bogus"}
             )
@@ -401,17 +354,16 @@ class DistroRequestValidationTests(SubmitTestBase):
     @patch("request.submit.urllib.request.urlopen")
     def test_validate_distro_whitelisted_team(self, mock_urlopen):
         """Valid distro request via whitelisted team is accepted."""
-        # mock Launchpad response: successful form, matching
-        # source/version, upload allowed
+        # mock Launchpad response: published sources, denied uploads, allowed team
         cm = MagicMock()
         cm.__enter__.return_value = cm
-        cm.getcode.return_value = 200
+        cm.getcode.side_effect = [200, 200, 403, 403, 200]
         cm.read.side_effect = [
-            b'{"entries": [{"name": "asdf"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"name": "joe"}]}',
+            b'{"entries": [{"component_name": "main"}]}',
+            b'{"entries": [{"component_name": "main"}]}',
+            b"false",
+            b"false",
+            b'{"entries": [{"name": "list"}]}',
         ]
         cm.return_value = cm
         mock_urlopen.return_value = cm
@@ -429,12 +381,9 @@ class DistroRequestValidationTests(SubmitTestBase):
         cm.getcode.return_value = 200
         cm.read.side_effect = [
             b'{"name": "1.10-4ubuntu4.1"}',
-            b'{"entries": [{"name": "asdf"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
-            b'{"total_size": 1, "entries": [{"component_name": "main"}]}',
+            b'{"entries": [{"component_name": "main"}]}',
+            b'{"entries": [{"component_name": "main"}]}',
+            b"true",
         ]
         cm.return_value = cm
         mock_urlopen.return_value = cm
@@ -447,7 +396,7 @@ class DistroRequestValidationTests(SubmitTestBase):
             "joe",
             ppas=["blue/1.10-4ubuntu4.1"],
         )
-        self.assertEqual(mock_urlopen.call_count, 7)
+        self.assertEqual(mock_urlopen.call_count, 4)
 
     def test_migration_reference_all_proposed_combo(self):
         """Tests when a test request has migration-reference/0 + all-proposed=1 in the request args."""
@@ -492,10 +441,10 @@ class GitRequestValidationTests(SubmitTestBase):
 
     @patch("request.submit.urllib.request.urlopen")
     def test_unknown_ppa(self, mock_urlopen):
-        # mock Launchpad response: successful form, but no match
+        # mock Launchpad response: PPA not found
         cm = MagicMock()
         cm.__enter__.return_value = cm
-        cm.getcode.return_value = 200
+        cm.getcode.return_value = 404
         cm.geturl.return_value = "http://mock.launchpad.net"
         cm.read.return_value = b"{}"
         cm.return_value = cm
@@ -624,16 +573,8 @@ class GitRequestValidationTests(SubmitTestBase):
 class SendAMQPTests(SubmitTestBase):
     """Test test request sending via AMQP."""
 
-    @patch("request.submit.amqp.Connection")
-    @patch("request.submit.amqp.Message")
-    @patch(
-        "helpers.utils.get_autopkgtest_cloud_conf",
-        MagicMock(return_value={"amqp": {"uri": "amqp://user:s3kr1t@1.2.3.4"}}),
-    )
-    def test_valid_request(self, message_con, mock_con):
-        # mostly a passthrough, but ensure that we do wrap the string in Message()
-        message_con.side_effect = lambda x, **kwargs: f">{x}<"
-
+    @patch("request.submit.amqp_connect")
+    def test_valid_request(self, mock_connect):
         self.submit.send_amqp_request(
             "testy",
             "C51",
@@ -642,17 +583,17 @@ class SendAMQPTests(SubmitTestBase):
             requester="joe",
             ppas=["my/ppa"],
         )
-        mock_con.assert_called_once_with("1.2.3.4", userid="user", password="s3kr1t")
-        cm_amqp_con = mock_con.return_value.__enter__.return_value
+        mock_connect.assert_called_once_with()
+        cm_amqp_con = mock_connect.return_value.__enter__.return_value
         cm_channel = cm_amqp_con.channel.return_value.__enter__.return_value
-
-        args, kwargs = cm_channel.basic_publish.call_args
-        self.assertEqual({"routing_key": "debci-testy-C51"}, kwargs)
-        search = (
-            r'>foo\n{"ppas": \["my\/ppa"], "requester": "joe", '
-            + r'"submit-time": .*, "triggers": \["ab\/1"]}<'
-        )
-        self.assertIsNotNone(re.match(search, args[0]))
+        kwargs = cm_channel.basic_publish.call_args.kwargs
+        self.assertEqual(kwargs["routing_key"], "debci-testy-C51")
+        package, params = kwargs["body"].split("\n", 1)
+        self.assertEqual(package, "foo")
+        self.assertEqual(json.loads(params)["triggers"], ["ab/1"])
+        self.assertEqual(json.loads(params)["ppas"], ["my/ppa"])
+        self.assertEqual(json.loads(params)["requester"], "joe")
+        self.assertIn("submit-time", json.loads(params))
 
 
 @patch("request.submit.amqp.Connection")
