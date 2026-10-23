@@ -1,0 +1,392 @@
+{
+  "title": "Autopkgtest",
+  "description": "Autopkgtest dispatcher operational metrics",
+  "tags": ["autopkgtest"],
+  "schemaVersion": 36,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "1m",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "autopkgtest queue size (by release)",
+      "description": "",
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true,
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false}
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "hideEmpty": true,
+          "hideZero": true
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+          "expr": "sum by (release) (autopkgtest_queue_size{})",
+          "legendFormat": "{{release}}",
+          "interval": "5m"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "autopkgtest queue size (by arch)",
+      "description": "",
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 9},
+      "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true,
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false}
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true,
+          "hideEmpty": true,
+          "hideZero": true
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+          "expr": "sum by (arch) (autopkgtest_queue_size{})",
+          "legendFormat": "{{arch}}",
+          "interval": "5m"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "autopkgtest job throughput (by arch)",
+      "description": "Exited normally includes passes and fails; abnormally is for things like infrastructure problems. Abnormal also includes packages marked to never run.",
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 18},
+      "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false}
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+          "expr": "sum by (arch) (increase(autopkgtest_exit_event_total{exit_status=~\"0|2\"}[$__rate_interval]))",
+          "legendFormat": "{{arch}} total",
+          "interval": "5m"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "autopkgtest jobs abnormal failure rate",
+      "description": "Exited normally includes passes and fails; abnormally is for things like infrastructure problems. Abnormal also includes packages marked to never run.",
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 27},
+      "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false}
+          },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+          "expr": "sum by (arch) (increase(autopkgtest_exit_event_total{exit_status=~\"16|20|99\"}[$__rate_interval]))\n/ sum by (arch) (increase(autopkgtest_exit_event_total{}[$__rate_interval]))",
+          "legendFormat": "{{arch}}",
+          "interval": "5m"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "autopkgtest testbed failure count",
+      "description": "Tests that exit with code 16 or 20 are testbed or unexpected failures and are likely due to issues provisioning instances.",
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 36},
+      "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false}
+          },
+          "max": 40
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+          "expr": "sum by (arch) (increase(autopkgtest_exit_event_total{exit_status=~\"16|20|99\"}[$__rate_interval]))",
+          "legendFormat": "{{arch}} (exited abnormally)",
+          "interval": "5m"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "autopkgtest jobs finished (normal vs abnormal)",
+      "description": "Exited normally includes passes and fails; abnormally is for things like infrastructure problems. Abnormal also includes packages marked to never run.",
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 45},
+      "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false}
+          },
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byFrameRefID", "options": "B"},
+            "properties": [
+              {"id": "custom.fillOpacity", "value": 30}
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+          "expr": "sum by (arch) (increase(autopkgtest_exit_event_total{arch!=\"armhf\",exit_status=~\"0|2|4|6|8|12\"}[$__rate_interval]))",
+          "legendFormat": "{{arch}} (exited normally)",
+          "interval": "5m"
+        },
+        {
+          "refId": "B",
+          "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+          "expr": "sum by (arch) (increase(autopkgtest_exit_event_total{arch!=\"armhf\",exit_status=~\"16|20|99\"}[$__rate_interval]))",
+          "legendFormat": "{{arch}} (exited abnormally)",
+          "interval": "5m"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Cloud workers in active / error",
+      "description": "Sourced from the opentelemetry-collector subordinate's node-exporterTo see data here, include the opentelemetry-collector application name in the \"Juju application\" filter above (or leave it on \"All\"), and leave \"Juju unit\" on \"All\" (this metric carries no juju_unit label).",
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 54},
+      "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true,
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false}
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+          "expr": "sum by (arch, state) (label_replace(node_systemd_unit_state{name=~\"autopkgtest-worker@remote-.*\\\\.service\"}, \"arch\", \"$1\", \"name\", \"autopkgtest-worker@remote-([^-]+)-.*\\\\.service\"))",
+          "legendFormat": "{{arch}}/{{state}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "LXD remotes in active/error",
+      "description": "",
+      "gridPos": {"h": 7, "w": 24, "x": 0, "y": 64},
+      "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": true,
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false}
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "active"},
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"color": "red", "value": null},
+                    {"color": "green", "value": 27}
+                  ]
+                }
+              },
+              {"id": "custom.thresholdsStyle", "value": {"mode": "line+area"}}
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "none"},
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+          "expr": "autopkgtest_lxd_status{status=\"active\"}",
+          "legendFormat": "active"
+        },
+        {
+          "refId": "B",
+          "datasource": {"type": "prometheus", "uid": "${prometheusds}"},
+          "expr": "autopkgtest_lxd_status{status=\"error\"}",
+          "legendFormat": "error"
+        }
+      ]
+    }
+  ],
+  "links": []
+}

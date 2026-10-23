@@ -15,4 +15,7 @@ Environment="MIRROR={{ mirror }}"
 Environment="AUTOPKGTEST_TEMP_INSTANCE=autopkgtest-prepare-%i"
 RuntimeDirectory=%p
 RuntimeDirectoryPreserve=yes
+SyslogIdentifier=autopkgtest-build-image-%i
+StandardOutput=journal
+StandardError=journal
 ExecStart=build-image-on-remote %i
