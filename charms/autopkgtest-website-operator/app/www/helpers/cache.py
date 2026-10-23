@@ -2,6 +2,19 @@ import fcntl
 import json
 import logging
 import os
+import time
+
+
+def _flock(file, op, timeout, interval=0.02):
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            fcntl.flock(file, op | fcntl.LOCK_NB)
+            return
+        except BlockingIOError:
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"flock timeout after {timeout}s")
+            time.sleep(interval)
 
 
 class KeyValueCache:
@@ -21,11 +34,11 @@ class KeyValueCache:
     def get(self, key):
         try:
             with open(self.path) as file:
-                fcntl.flock(file, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                _flock(file, fcntl.LOCK_SH, timeout=1)
                 return self._read(file).get(key)
         except FileNotFoundError:
             return None
-        except OSError as e:
+        except (TimeoutError, OSError) as e:
             logging.warning("Cannot read cache %s: %s", self.path, e)
             return None
 
