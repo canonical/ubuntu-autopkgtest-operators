@@ -47,7 +47,7 @@ class KeyValueCache:
             with os.fdopen(
                 os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600), "r+"
             ) as file:
-                fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                _flock(file, fcntl.LOCK_SH, timeout=1)
                 data = self._read(file)
                 data[key] = value
                 file.seek(0)
