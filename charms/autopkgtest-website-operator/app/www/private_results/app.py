@@ -15,6 +15,7 @@ from flask import (
     session,
 )
 from flask_openid import OpenID
+from helpers.exceptions import LaunchpadError
 from helpers.utils import setup_key, swift_connect
 from request.submit import Submit
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -66,12 +67,23 @@ def validate_user_path(connection, container, nick, path):
     # Check if user is allowed via team membership
     for entity in allowed:
         (code, response) = Submit.lp_request(f"~{entity}/participants", {})
+        if code == 404:  # participants: person or team not found.
+            continue
         if code != 200:
             logging.error(f"Unable to validate user {nick} ({code})")
-            return False
-        for e in response.get("entries", []):
-            if e.get("name") == nick:
-                return True
+            raise LaunchpadError(
+                "Unexpected response to a Launchpad team participant lookup."
+            )
+        try:
+            if not isinstance(response["entries"], list):
+                raise ValueError("Expected a list of team participants")
+            for e in response["entries"]:
+                if e["name"] == nick:
+                    return True
+        except (KeyError, TypeError, ValueError) as e:
+            raise LaunchpadError(
+                "Unexpected response to a Launchpad team participant lookup."
+            ) from e
     return False
 
 
@@ -91,6 +103,11 @@ connection = swift_connect()
 #
 # Flask routes
 #
+
+
+@app.errorhandler(LaunchpadError)
+def launchpad_error(error):
+    return render_template_string(HTML, content=str(error)), error.exit_code()
 
 
 @app.route("/", methods=["GET"])

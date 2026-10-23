@@ -69,7 +69,7 @@ class DistroRequestTests(AppTestBase):
         self.assertIn(b"not 31337 enough", ret.data)
         mock_submit.return_value.validate_distro_request.assert_called_once_with(
             release="testy",
-            arch="i386",
+            arch=["i386"],
             package="hi",
             triggers=["foo/1"],
             requester="person",
@@ -92,6 +92,7 @@ class DistroRequestTests(AppTestBase):
                 "release": "testy",
                 "triggers": ["foo/1"],
                 "requester": "person",
+                "arch": [],
             }
         )
 
@@ -104,7 +105,7 @@ class DistroRequestTests(AppTestBase):
         self.assertIn(b"ubmitted", ret.data)
         mock_submit.return_value.validate_distro_request.assert_called_once_with(
             release="testy",
-            arch="i386",
+            arch=["i386"],
             package="hi",
             triggers=["foo/1"],
             requester="person",
@@ -121,7 +122,7 @@ class DistroRequestTests(AppTestBase):
         self.assertIn(b"ubmitted", ret.data)
         mock_submit.return_value.validate_distro_request.assert_called_once_with(
             release="testy",
-            arch="i386",
+            arch=["i386"],
             package="hi",
             triggers=["foo/1", "bar/2"],
             requester="person",
@@ -138,7 +139,7 @@ class DistroRequestTests(AppTestBase):
         self.assertIn(b"ubmitted", ret.data)
         mock_submit.return_value.validate_distro_request.assert_called_once_with(
             release="testy",
-            arch="i386",
+            arch=["i386"],
             package="hi",
             triggers=["foo/1"],
             requester="person",
@@ -147,7 +148,7 @@ class DistroRequestTests(AppTestBase):
         mock_submit.return_value.send_amqp_request.assert_called_once_with(
             context="ppa",
             release="testy",
-            arch="i386",
+            arch=["i386"],
             package="hi",
             triggers=["foo/1"],
             requester="person",
@@ -165,15 +166,16 @@ class DistroRequestTests(AppTestBase):
         self.assertIn(b"ubmitted", ret.data)
         mock_submit.return_value.validate_distro_request.assert_called_once_with(
             release="testy",
-            arch="i386",
+            arch=["i386"],
             package="hi",
             triggers=["foo/1"],
             requester="person",
             **{"all-proposed": "1"},
         )
         mock_submit.return_value.send_amqp_request.assert_called_once_with(
+            context=None,
             release="testy",
-            arch="i386",
+            arch=["i386"],
             package="hi",
             triggers=["foo/1"],
             requester="person",
@@ -183,6 +185,22 @@ class DistroRequestTests(AppTestBase):
 
 class GitHubRequestTests(AppTestBase):
     """Test GitHub test requests (via PSK signatures)."""
+
+    def setUp(self):
+        super().setUp()
+        config = patch(
+            "request.app.get_autopkgtest_cloud_conf",
+            return_value={
+                "github": {
+                    "secrets": "/ignored/github-secrets.json",
+                    "status_credentials": os.path.expanduser(
+                        "~/github-status-credentials.txt"
+                    ),
+                }
+            },
+        )
+        config.start()
+        self.addCleanup(config.stop)
 
     @patch(
         "request.app.open",

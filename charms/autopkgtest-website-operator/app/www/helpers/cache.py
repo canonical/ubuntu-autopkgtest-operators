@@ -1,59 +1,57 @@
 import fcntl
 import json
-from pathlib import Path
+import logging
+import os
+import time
+
+
+def _flock(file, op, timeout, interval=0.02):
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            fcntl.flock(file, op | fcntl.LOCK_NB)
+            return
+        except BlockingIOError:
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"flock timeout after {timeout}s")
+            time.sleep(interval)
 
 
 class KeyValueCache:
     def __init__(self, cache_path):
-        self.path = Path(cache_path)
-        if not self.path.exists():
-            with open(self.path, "w") as f:
-                json.dump({}, f)
+        self.path = cache_path
 
-    def _lock(self, file, mode):
-        if mode == "r":
-            fcntl.flock(file, fcntl.LOCK_SH)
-        if mode == "w":
-            fcntl.flock(file, fcntl.LOCK_EX)
-
-    def _unlock(self, file):
-        fcntl.flock(file, fcntl.LOCK_UN)
-
-    def _write(self, data, file):
-        file.seek(0)
-        json.dump(data, file, default=str)
-        file.truncate()
+    def _read(self, file):
+        try:
+            data = json.loads(file.read() or "{}")
+            if not isinstance(data, dict):
+                raise ValueError("Expected a cache dictionary")
+            return data
+        except ValueError as e:
+            logging.warning("Ignoring invalid cache %s: %s", self.path, e)
+            return {}
 
     def get(self, key):
-        with open(self.path) as f:
-            self._lock(f, "r")
-            try:
-                data = json.load(f)
-                return data.get(key, None)
-            finally:
-                self._unlock(f)
+        try:
+            with open(self.path) as file:
+                _flock(file, fcntl.LOCK_SH, timeout=1)
+                return self._read(file).get(key)
+        except FileNotFoundError:
+            return None
+        except (TimeoutError, OSError) as e:
+            logging.warning("Cannot read cache %s: %s", self.path, e)
+            return None
 
     def set(self, key, value):
-        with open(self.path, "r+") as f:
-            self._lock(f, "w")
-            try:
-                data = json.load(f)
+        try:
+            with os.fdopen(
+                os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600), "r+"
+            ) as file:
+                fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                data = self._read(file)
                 data[key] = value
-                self._write(data, f)
-            finally:
-                self._unlock(f)
-
-    def delete(self, key):
-        with open(self.path, "r+") as f:
-            self._lock(f, "w")
-            try:
-                data = json.load(f)
-                if key in data:
-                    del data[key]
-                    self._write(data, f)
-            finally:
-                self._unlock(f)
-
-    def clear(self):
-        with open(self.path, "w") as f:
-            json.dump({}, f)
+                file.seek(0)
+                json.dump(data, file)
+                file.truncate()
+        except OSError as e:
+            logging.warning("Cannot write cache %s: %s", self.path, e)

@@ -21,23 +21,19 @@ class WebControlException(Exception):
         return self._code
 
 
-class RequestInQueue(WebControlException):
-    def __init__(self, release, package, arch, triggers):
-        super().__init__(
-            "Test already queued:\nrelease: {}\npkg: {}\narch: {}\ntriggers: {}".format(
-                release, package, arch, ", ".join(triggers)
-            ),
-            403,
-        )
+class LaunchpadError(WebControlException):
+    """An error during an interaction with Launchpad."""
+
+    def __init__(self, message, exit_code=500):
+        super().__init__(message, exit_code)
 
 
-class RequestRunning(WebControlException):
-    def __init__(self, release, package, arch, triggers):
+class LaunchpadUnavailable(LaunchpadError):
+    def __init__(self):
         super().__init__(
-            "Test already running:\nrelease: {}\npkg: {}\narch: {}\ntriggers: {}".format(
-                release, package, arch, ", ".join(triggers)
-            ),
-            403,
+            "Unable to contact Launchpad or complete the request. "
+            "Please try again later.",
+            503,
         )
 
 
@@ -47,11 +43,6 @@ class BadRequest(WebControlException):
             super().__init__("Bad request - unacceptable passed variables", 400)
         else:
             super().__init__(msg, 400)
-
-
-class Unauthorized(WebControlException):
-    def __init__(self):
-        super().__init__("Authorization failure", 401)
 
 
 class ForbiddenRequest(WebControlException):
@@ -78,14 +69,6 @@ class NotFound(WebControlException):
                 f"{element_name} {element} {msg}",
                 404,
             )
-
-
-class TooManyRequests(WebControlException):
-    def __init__(self, requester):
-        super().__init__(
-            f"You, {requester}, have requested too many tests. Please try again later.",
-            429,
-        )
 
 
 class InvalidArgs(WebControlException):

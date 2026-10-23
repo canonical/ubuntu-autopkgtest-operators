@@ -6,13 +6,13 @@ Author: Martin Pitt <martin.pitt@ubuntu.com>
 import base64
 import json
 import logging
-import os
 import re
 import urllib.parse
 import urllib.request
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
+from http.client import HTTPException
 from time import time
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 import pika
 from helpers.cache import KeyValueCache
@@ -20,9 +20,9 @@ from helpers.exceptions import (
     BadRequest,
     ForbiddenRequest,
     InvalidArgs,
+    LaunchpadError,
+    LaunchpadUnavailable,
     NotFound,
-    RequestInQueue,
-    RequestRunning,
 )
 from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf, get_release_arches
 
@@ -35,36 +35,26 @@ ENV = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]+=[a-zA-Z0-9.:~/ -=]*$")
 # URL and optional branch name
 GIT = re.compile(r"^https?://[a-zA-Z0-9._/~+-]+(#[a-zA-Z0-9._/-]+)?$")
 
-# not teams
-ALLOWED_USERS_PERPACKAGE = {"snapcraft": ["snappy-m-o"]}
+ALLOWED_USER_CACHE_TIME = 6 * 60 * 60
 
-ALLOWED_USER_CACHE_TIME = timedelta(hours=3)
+LP_TIMEOUT = 60
 
 
 class Submit:
     def __init__(self):
-        self.config = get_autopkgtest_cloud_conf()
+        config = get_autopkgtest_cloud_conf()
+        self.lp_cache = {}
 
         self.release_arches = get_release_arches()
         logging.debug(f"Valid arches per release: {self.release_arches}")
 
         self.allowed_user_cache = KeyValueCache("/dev/shm/autopkgtest_users.json")
-
-    def clear_cache(self):
-        self.allowed_user_cache.clear()
-
-    def migration_reference_all_proposed_check(self, triggers, kwargs):
-        if (
-            "migration-reference/0" in triggers
-            and "all-proposed" in kwargs.keys()
-            and int(kwargs["all-proposed"]) == 1
-        ):
-            raise BadRequest(
-                "migration-reference/0 and all-proposed=1 are not compatible arguments."
-            )
+        self.allowed_teams = {
+            team.strip() for team in config["web"]["allowed_requestors"].split(",")
+        }
 
     def validate_distro_request(
-        self, release, arch, package, triggers, requester, ppas=[], **kwargs
+        self, release, arch, package, triggers, requester, ppas=(), **kwargs
     ):
         """Validate package and triggers for a distro test request.
 
@@ -73,38 +63,34 @@ class Submit:
 
         'ppas' is a list of 'team/ppaname' strings.
 
-        Raise ValueError with error message if the request is invalid,
+        'arch' is an architecture or a list of architectures.
+
+        Raise WebControlException with error message if the request is invalid,
         otherwise return.
         """
-        self.is_request_queued_or_running(release, arch, package, triggers)
-
-        self.migration_reference_all_proposed_check(triggers, kwargs)
-
-        can_upload_any_trigger = False
-
-        try:
-            if kwargs["all-proposed"] != "1":
-                raise ValueError("Invalid all-proposed value")
-            del kwargs["all-proposed"]
-        except KeyError:
-            pass
-        try:
-            if not kwargs["readable-by"]:
-                raise ValueError("Invalid readable-by value")
-            del kwargs["readable-by"]
-        except KeyError:
-            pass
+        if "migration-reference/0" in triggers and kwargs.get("all-proposed") == "1":
+            raise BadRequest(
+                "migration-reference/0 and all-proposed=1 are not compatible arguments."
+            )
+        if "all-proposed" in kwargs and kwargs["all-proposed"] != "1":
+            raise BadRequest("Invalid all-proposed value")
+        if "readable-by" in kwargs and not kwargs["readable-by"]:
+            raise BadRequest("Invalid readable-by value")
         # no other kwargs supported
-        if kwargs:
-            raise ValueError(f"Invalid argument {list(kwargs)[0]}")
+        for key in kwargs:
+            if key not in {"all-proposed", "readable-by"}:
+                raise BadRequest(f"Invalid argument {key}")
 
         if release not in self.release_arches:
             raise NotFound("release", release)
-        if arch not in self.release_arches[release]:
-            raise NotFound("arch", arch)
-        for ppa in ppas:
-            if not self.is_valid_ppa(ppa):
-                raise NotFound("ppa", ppa)
+        arches = [arch] if isinstance(arch, str) else arch
+        if not arches:
+            raise BadRequest("Must specify at least one architecture")
+        for architecture in arches:
+            if architecture not in self.release_arches[release]:
+                raise NotFound("arch", architecture)
+        if not NAME.fullmatch(package):
+            raise BadRequest("Malformed package name")
 
         if "migration-reference/0" in triggers:
             if len(triggers) != 1:
@@ -113,15 +99,13 @@ class Submit:
                 )
             if ppas:
                 raise BadRequest("Cannot use PPAs with migration-reference/0")
-            if "all-proposed" in kwargs:
-                raise BadRequest('Cannot use "all-proposed" with migration-reference/0')
         for trigger in triggers:
             try:
                 trigsrc, trigver = trigger.split("/")
             except ValueError as e:
                 raise BadRequest("Malformed trigger, must be srcpackage/version") from e
             # Debian Policy 5.6.1 and 5.6.12
-            if not NAME.match(trigsrc) or not VERSION.match(trigver):
+            if not NAME.fullmatch(trigsrc) or not VERSION.fullmatch(trigver):
                 raise BadRequest(f"Malformed trigger: {trigsrc}\nversion: {trigver}")
 
             # The raspi kernel can't be tested with autopkgtest. It doesn't
@@ -129,52 +113,57 @@ class Submit:
             if trigsrc.startswith("linux-meta-raspi"):
                 raise BadRequest("The raspi kernel can't be tested with autopkgtest.")
 
+        for ppa in ppas:
+            if not self.is_valid_ppa(ppa):
+                raise NotFound("ppa", ppa)
+
+        upload_targets = []
+        for trigger in triggers:
+            trigsrc, trigver = trigger.split("/")
             # Special snowflake
             if trigger in ("qemu-efi-noacpi/0", "migration-reference/0"):
                 continue
 
             if ppas:
-                if not self.is_valid_package_version(
-                    release, trigsrc, trigver, ppas and ppas[-1] or None
+                if not self.get_published_source_component(
+                    release, trigsrc, trigver, ppas[-1]
                 ):
                     raise BadRequest(
                         f"{trigger} is not published in PPA {ppas[-1]} {release}"
                     )
-                # PPAs don't have components, so we need to determine it from the
-                # Ubuntu archive
-                trigsrc_component = (
-                    self.is_valid_package_version(release, trigsrc, None) or "main"
-                )
+                trigsrc_component = None
             else:
-                trigsrc_component = self.is_valid_package_version(
+                trigsrc_component = self.get_published_source_component(
                     release, trigsrc, trigver
                 )
                 if not trigsrc_component:
                     raise BadRequest(f"{trigger} is not published in {release}")
 
-            can_upload_any_trigger = can_upload_any_trigger or self.can_upload(
-                requester, release, trigsrc_component, trigsrc
-            )
+            upload_targets.append((trigsrc, trigsrc_component))
 
         if ppas:
-            package_component = (
-                self.is_valid_package_version(release, package, None) or "main"
-            )
+            component = None
         else:
-            package_component = self.is_valid_package_version(release, package, None)
-            if not package_component:
+            component = self.get_published_source_component(release, package, None)
+            if not component:
                 raise BadRequest(f"{package} is not published in {release}")
+        upload_targets.append((package, component))
 
-        # verify that requester can upload package or trigsrc
-        if (
-            not self.can_upload(requester, release, package_component, package)
-            and not can_upload_any_trigger
-            and requester not in ALLOWED_USERS_PERPACKAGE.get(package, [])
-            and not self.in_allowed_team(requester)
-        ):
-            raise ForbiddenRequest(package, ",".join(triggers))
+        if self.cached_allowed_user(requester):
+            return
+        for source, component in upload_targets:
+            component = (
+                component
+                or self.get_published_source_component(release, source, None)
+                or "main"
+            )
+            if self.can_upload(requester, release, component, source):
+                return
+        if self.in_allowed_team(requester):
+            return
+        raise ForbiddenRequest(package, ",".join(triggers))
 
-    def validate_git_request(self, release, arch, package, ppas=[], env=[], **kwargs):
+    def validate_git_request(self, release, arch, package, ppas=(), env=(), **kwargs):
         """Validate parameters for an upstream git test request.
 
         Supported kwargs:
@@ -183,24 +172,9 @@ class Submit:
         - 'env' is a list of 'key=value' strings.
         - 'testname' is a string.
 
-        Raise ValueError with error message if the request is invalid,
+        Raise WebControlException with an error message if the request is invalid,
         otherwise return.
         """
-        triggers = []
-        for env_var in env:
-            if "trigger" in env_var:
-                if "," in env_var:
-                    for trig in env_var.split("=")[1].split(","):
-                        triggers.append(trig)
-                else:
-                    triggers.append(env_var.split("=")[1])
-
-        self.is_request_queued_or_running(
-            release, arch, package, triggers, kwargs, git=True
-        )
-
-        self.migration_reference_all_proposed_check(triggers, kwargs)
-
         if release not in self.release_arches:
             raise NotFound("release", release)
         if arch not in self.release_arches[release]:
@@ -211,9 +185,6 @@ class Submit:
             raise BadRequest(
                 "Must specify at least one PPA (to associate results with)"
             )
-        for ppa in ppas:
-            if not self.is_valid_ppa(ppa):
-                raise NotFound("ppa", ppa)
         for e in env:
             if not ENV.match(e):
                 raise BadRequest(f'Invalid environment variable format "{e}"')
@@ -230,12 +201,14 @@ class Submit:
                 "Unsupported arguments: {}".format(" ".join(unsupported_keys))
             )
 
+        for ppa in ppas:
+            if not self.is_valid_ppa(ppa):
+                raise NotFound("ppa", ppa)
+
     def send_amqp_request(self, release, arch, package, context=None, **params):
-        """Send autopkgtest AMQP request."""
-        if context:
-            queue = f"debci-{context}-{release}-{arch}"
-        else:
-            queue = f"debci-{release}-{arch}"
+        """Submit jobs for one or more architectures over one AMQP connection."""
+        arches = [arch] if isinstance(arch, str) else arch
+        queue_prefix = f"debci-{context}-{release}" if context else f"debci-{release}"
 
         params["submit-time"] = datetime.strftime(
             datetime.now().astimezone(UTC), "%Y-%m-%d %H:%M:%S%z"
@@ -243,14 +216,15 @@ class Submit:
         body = f"{package}\n{json.dumps(params, sort_keys=True)}"
         with amqp_connect() as amqp_con:
             with amqp_con.channel() as ch:
-                ch.basic_publish(
-                    exchange="",
-                    routing_key=queue,
-                    body=body,
-                    properties=pika.BasicProperties(
-                        delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
-                    ),
-                )
+                for architecture in arches:
+                    ch.basic_publish(
+                        exchange="",
+                        routing_key=f"{queue_prefix}-{architecture}",
+                        body=body,
+                        properties=pika.BasicProperties(
+                            delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
+                        ),
+                    )
 
     @classmethod
     def post_json(cls, url, data, auth_file, project):
@@ -303,10 +277,10 @@ class Submit:
     def is_valid_ppa(self, ppa):
         """Check if a ppa exists."""
         team, _, name = ppa.partition("/")
-        if not NAME.match(team) or not NAME.match(name):
-            return None
+        if not NAME.fullmatch(team) or not NAME.fullmatch(name):
+            return False
         # https://launchpad.net/+apidoc/1.0.html#person-getPPAByName
-        (code, response) = self.lp_request(
+        (code, response) = self.cached_lp_request(
             "~" + team,
             {
                 "ws.op": "getPPAByName",
@@ -317,19 +291,18 @@ class Submit:
         logging.debug(
             "is_valid_ppa(%s): code %u, response %s", ppa, code, repr(response)
         )
-        if code < 200 or code >= 300:
-            return None
-        if response.get("name") == name:
-            return True
+        if code == 404:  # getPPAByName: owner or PPA not found.
+            return False
+        if code != 200 or response.get("name") != name:
+            raise LaunchpadError("Unexpected response to a Launchpad PPA lookup.")
+        return True
 
-    def is_valid_package_version(self, release, package, version, ppa=None):
-        """Check if package/version exists in the given release.
+    def get_published_source_component(self, release, package, version, ppa=None):
+        """Return the component of a published source, or None if absent.
 
         Use this for validating trigger packages. This queries the Launchpad
         REST API. Check given ppa (team/name), or the main Ubuntu archive if
         this is None.
-
-        Return the component name if package/version exists, otherwise None.
         """
         # https://launchpad.net/+apidoc/1.0.html#archive-getPublishedSources
         if ppa:
@@ -343,29 +316,42 @@ class Submit:
             "distro_series": json.dumps(LP + "ubuntu/" + release),
             "status": "Published",
             "exact_match": "true",
+            "ws.size": "1",
         }
         if version is not None:
             req["version"] = json.dumps(version)
-        (code, response) = self.lp_request(obj, req)
-        if code < 200 or code >= 300:
-            return None
+        (code, response) = self.cached_lp_request(obj, req)
+        if code != 200:
+            raise LaunchpadError(
+                "Unexpected response to a Launchpad source publication lookup."
+            )
         logging.debug(
-            "is_valid_package_version(%s, %s, %s): code %u, response %s",
+            "get_published_source_component(%s, %s, %s): code %u, response %s",
             release,
             package,
             version,
             code,
             repr(response),
         )
-        if response.get("total_size", 0) > 0:
-            return response["entries"][0]["component_name"]
-        else:
-            return None
+        try:
+            entries = response["entries"]
+            if not isinstance(entries, list):
+                raise ValueError("Expected a list of source publications")
+            if not entries:
+                return None
+            component = entries[0]["component_name"]
+            if not isinstance(component, str) or not component:
+                raise ValueError("Expected a non-empty component name")
+            return component
+        except (KeyError, TypeError, ValueError) as e:
+            raise LaunchpadError(
+                "Unexpected response to a Launchpad source publication lookup."
+            ) from e
 
     def can_upload(self, person, release, component, package):
         """Check if person can upload package into Ubuntu release."""
         # https://launchpad.net/+apidoc/1.0.html#archive-checkUpload
-        (code, response) = self.lp_request(
+        (code, response) = self.cached_lp_request(
             "ubuntu/+archive/primary",
             {
                 "ws.op": "checkUpload",
@@ -385,30 +371,60 @@ class Submit:
             code,
             repr(response),
         )
-        return code >= 200 and code < 300
+        if code == 403:  # checkUpload: uploading is not permitted.
+            return False
+        if code == 404:  # checkUpload: unknown source package name.
+            raise NotFound("package", package)
+        if code != 200 or response is not True:
+            raise LaunchpadError(
+                "Unexpected response to a Launchpad upload permission check."
+            )
+        return True
+
+    def allowed_user_cache_key(self, person):
+        return json.dumps([person, sorted(self.allowed_teams)])
+
+    def cached_allowed_user(self, person):
+        timestamp = self.allowed_user_cache.get(self.allowed_user_cache_key(person))
+        try:
+            return 0 <= time() - float(timestamp) <= ALLOWED_USER_CACHE_TIME
+        except (TypeError, ValueError, OverflowError):
+            return False
 
     def in_allowed_team(self, person):
         """Check if person is allowed to queue tests."""
-        cached_entry = self.allowed_user_cache.get(person)
-        if cached_entry is not None:
-            cached_entry = datetime.fromtimestamp(float(cached_entry))
-            cache_age = datetime.now() - cached_entry
-            if cache_age <= ALLOWED_USER_CACHE_TIME:
-                return True
-            else:
-                self.allowed_user_cache.delete(person)
-
-        # In the case someone is in more than 300 teams, and the first
-        # 300 teams are alphabetically before "autopkgtest-requestors",
-        # the following will fail.
-        _, response = self.lp_request(f"~{person}/super_teams?ws.size=300", {})
-        entries = response.get("entries")
-        for e in entries:
-            for team in self.config["web"]["allowed_requestors"].split(","):
-                if team == e["name"]:
-                    self.allowed_user_cache.set(person, time())
+        obj, query = f"~{person}/super_teams", {"ws.size": "300"}
+        while True:
+            code, response = self.cached_lp_request(obj, query)
+            if code != 200:
+                raise LaunchpadError(
+                    "Unexpected response to a Launchpad team membership lookup."
+                )
+            try:
+                if not isinstance(response.get("entries"), list):
+                    raise ValueError("Expected a list of teams")
+                if any(
+                    entry["name"] in self.allowed_teams for entry in response["entries"]
+                ):
+                    self.allowed_user_cache.set(
+                        self.allowed_user_cache_key(person), time()
+                    )
                     return True
-        return False
+            except (KeyError, TypeError, ValueError) as e:
+                raise LaunchpadError(
+                    "Unexpected response to a Launchpad team membership lookup."
+                ) from e
+            next_page = response.get("next_collection_link")
+            if not next_page:
+                return False
+            obj, query = next_page, {}
+
+    def cached_lp_request(self, obj, query):
+        """Reuse identical lookups only within this submission."""
+        key = (obj, tuple(sorted(query.items())))
+        if key not in self.lp_cache:
+            self.lp_cache[key] = self.lp_request(obj, query)
+        return self.lp_cache[key]
 
     @classmethod
     def lp_request(cls, obj, query):
@@ -416,181 +432,60 @@ class Submit:
 
         Request https://api.launchpad.net/1.0/<obj>?<query>.
 
-        Return (code, json), where json is defined for successful codes
-        (200 <= code < 300) and None otherwise.
+        Return (code, json) for successful responses, or (code, None) for
+        client errors other than timeouts and rate limiting. Callers handle
+        expected client errors according to the operation's semantics.
+
+        Raise LaunchpadUnavailable for transport failures, server errors,
+        timeouts, or rate limiting. Raise LaunchpadError for other unexpected
+        responses, without assuming which side caused the failure.
         """
-        url = LP + obj + "?" + urllib.parse.urlencode(query)
+        url = urllib.parse.urljoin(LP, obj)
+        if not url.startswith(LP):
+            raise LaunchpadError("Unexpected URL during a Launchpad request.")
+        if query:
+            url += ("&" if "?" in url else "?") + urllib.parse.urlencode(query)
         try:
-            with urllib.request.urlopen(url, timeout=60) as req:
+            with urllib.request.urlopen(url, timeout=LP_TIMEOUT) as req:
                 code = req.getcode()
-                if code >= 300:
-                    logging.error("URL %s failed with code %u", req.geturl(), code)
-                    return (code, None)
                 response = req.read()
         except HTTPError as e:
             logging.error("%s failed with %u: %s\n%s", url, e.code, e.reason, e.headers)
-            return (e.code, None)
+            # Upstream server errors, timeouts, and rate limiting prevent us
+            # from completing the request. Return our own 503, not their code.
+            if e.code >= 500 or e.code in (
+                408,  # Request Timeout
+                429,  # Too Many Requests
+            ):
+                raise LaunchpadUnavailable() from e
+            if 400 <= e.code < 500:
+                # The caller decides whether this is an expected outcome.
+                return (e.code, None)
+            raise LaunchpadError("Unexpected HTTP status from Launchpad.") from e
+        except (URLError, OSError, HTTPException) as e:
+            logging.warning("Launchpad request failed: %s: %s", url, e)
+            raise LaunchpadUnavailable() from e
+
+        if code != 200:
+            logging.error("Unexpected HTTP status %s from %s", code, url)
+            raise LaunchpadError("Unexpected HTTP status from Launchpad.")
 
         try:
             response = json.loads(response.decode("UTF-8"))
-        except (UnicodeDecodeError, ValueError) as e:
+            if query.get("ws.op") != "checkUpload" and not isinstance(response, dict):
+                raise ValueError("Unexpected Launchpad response")
+        except ValueError as e:
             logging.error(
                 "URL %s gave invalid response %s: %s",
                 req.geturl(),
                 response,
                 str(e),
             )
-            return (500, None)
+            raise LaunchpadError(
+                "Unexpected response during a Launchpad request."
+            ) from e
         logging.debug("lp_request %s succeeded: %s", url, response)
         return (code, response)
-
-    def is_test_running(
-        self,
-        req_series,
-        req_arch,
-        req_package,
-        req_triggers,
-        kwargs,
-        ppas,
-        git,
-    ):
-        if not os.path.isfile(self.config["web"]["running_cache"]):
-            return False
-        data = {}
-        with open(self.config["web"]["running_cache"]) as f:
-            data = json.load(f)
-        if data == {}:
-            return False
-        for pkg in data:
-            if pkg != req_package:
-                continue
-            for submitted in data[pkg]:
-                releases = data[pkg][submitted].keys()
-                for release in data[pkg][submitted]:
-                    architectures = data[pkg][submitted][release].keys()
-                    for arch in architectures:
-                        triggers = data[pkg][submitted][release][arch][0].get(
-                            "triggers", []
-                        )
-                        running_all_proposed = "all-proposed_1" in submitted
-                        req_all_proposed = "all-proposed" in kwargs.keys()
-                        git_same = False
-                        if git and "build-git" in submitted:
-                            build_git_url = data[pkg][submitted][release][arch][0].get(
-                                "build-git", []
-                            )
-                            ppas_running = data[pkg][submitted][release][arch][0].get(
-                                "ppas", []
-                            )
-                            env = data[pkg][submitted][release][arch][0].get("env", [])
-                            if (
-                                kwargs.get("build-git", "") == build_git_url
-                                and ppas_running == ppas
-                                and (set(kwargs.get("env", [])) == set(env))
-                            ):
-                                git_same = True
-                        if (
-                            req_arch in architectures
-                            and req_series in releases
-                            and req_package == pkg
-                            and sorted(triggers) == sorted(req_triggers)
-                            and (running_all_proposed == req_all_proposed)
-                            and (not git or git_same)
-                        ):
-                            return True
-        return False
-
-    def is_test_in_queue(
-        self,
-        req_series,
-        req_arch,
-        req_package,
-        req_triggers,
-        kwargs,
-        ppas,
-        git,
-    ):
-        if not os.path.isfile(self.config["web"]["amqp_queue_cache"]):
-            return False
-        data = {}
-        with open(self.config["web"]["amqp_queue_cache"]) as f:
-            data = json.load(f)
-        data = data["queues"]
-        this_test = {
-            "release": req_series,
-            "arch": req_arch,
-            "package": req_package,
-            "triggers": sorted(req_triggers),
-        }
-        for test_type in data:
-            # Because the huge queue is huge it is possible some tests won't
-            # run for quite some time. To shortcut the wait developers should
-            # have the ability to request the same items run in the "normal"
-            # queue which will execute sooner.
-            if test_type == "huge":
-                continue
-            for release in data[test_type]:
-                for arch in data[test_type][release]:
-                    packages = data[test_type][release][arch]
-                    if req_package not in packages:
-                        continue
-                    if packages["size"] != 0:
-                        for req in packages["requests"]:
-                            pkg = req[: req.find("{")].rstrip()
-                            try:
-                                details = json.loads(req[req.find("{") :])
-                            except json.decoder.JSONDecodeError:
-                                return False
-                            triggers = details.get("triggers", [])
-                            running_all_proposed = (
-                                "all-proposed"
-                                in data[test_type][release][arch]["requests"]
-                            )
-                            req_all_proposed = "all-proposed" in kwargs.keys()
-                            test = {
-                                "release": release,
-                                "arch": arch,
-                                "package": pkg,
-                                "triggers": sorted(triggers),
-                            }
-                            git_same = False
-                            if git and "build-git" in details:
-                                build_git_url = details.get("build-git", [])
-                                ppas_queued = details.get("ppas", [])
-                                env = details.get("env", [])
-                                if (
-                                    kwargs.get("build-git", "") == build_git_url
-                                    and ppas_queued == ppas
-                                    and (set(kwargs.get("env", [])) == set(env))
-                                ):
-                                    git_same = True
-                            if (
-                                test == this_test
-                                and running_all_proposed != req_all_proposed
-                                and (not git or git_same)
-                            ):
-                                return True
-        return False
-
-    def is_request_queued_or_running(
-        self,
-        req_series,
-        req_arch,
-        req_package,
-        req_triggers=[],
-        kwargs={},
-        ppas=[],
-        git=False,
-    ):
-        if self.is_test_running(
-            req_series, req_arch, req_package, req_triggers, kwargs, ppas, git
-        ):
-            raise RequestRunning(req_series, req_package, req_arch, req_triggers)
-
-        if self.is_test_in_queue(
-            req_series, req_arch, req_package, req_triggers, kwargs, ppas, git
-        ):
-            raise RequestInQueue(req_series, req_package, req_arch, req_triggers)
 
     def validate_args(self, parameters):
         base = ["arch", "release", "package", "triggers"]

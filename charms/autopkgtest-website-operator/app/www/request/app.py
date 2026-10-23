@@ -5,9 +5,7 @@ import json
 import logging
 import os
 import pathlib
-import sys
 import traceback
-from collections import ChainMap
 from html import escape as _escape
 
 from flask import Flask, redirect, request, session
@@ -95,10 +93,11 @@ def invalid(inv_exception, code=400):
     else:
         html = ""
     message = str(inv_exception)
+    prefix = "Request failed" if code >= 500 else "You submitted an invalid request"
     if "\n" not in message:
-        html += f"<p>You submitted an invalid request: {maybe_escape(str(message))}</p>"
+        html += f"<p>{prefix}: {maybe_escape(str(message))}</p>"
     else:
-        html += "<p>You submitted an invalid request: </p>"
+        html += f"<p>{prefix}: </p>"
         list_of_messages = message.split("\n")
         for msg in list_of_messages:
             html += "<p>" + maybe_escape(str(msg)) + "</p>"
@@ -219,8 +218,6 @@ def index_root():
                     github_params["number"],
                 )
             s.validate_git_request(**params)
-        except WebControlException as e:
-            return invalid(e, e.exit_code())
         except KeyError as e:
             return invalid(f"Missing field in JSON data: {e}")
 
@@ -273,29 +270,21 @@ def index_root():
         if list(params.keys()) == ["/login", "requester"]:
             return redirect("/")
 
-        arches = [a for a in request.args.getlist("arch")]
+        arches = list(dict.fromkeys(request.args.getlist("arch")))
+        params["arch"] = arches
+        s.validate_args(params)
+        s.validate_distro_request(**params)
 
+        context = "ppa" if params.get("ppas") else None
+        s.send_amqp_request(context=context, **params)
         result_urls = []
-        for arch in arches:
-            request_params = dict(params)
-            request_params["arch"] = arch
-            try:
-                s.validate_args(request_params)
-                s.validate_distro_request(**request_params)
-            except WebControlException as e:
-                return invalid(e, e.exit_code())
-
-            if request_params.get("ppas"):
-                s.send_amqp_request(context="ppa", **request_params)
-            else:
-                s.send_amqp_request(**request_params)
-
-            if not request_params.get("ppas"):
+        if context is None:
+            for arch in arches:
                 url = os.path.join(
                     request.host_url,
                     "packages",
-                    request_params["package"],
-                    request_params["release"],
+                    params["package"],
+                    params["release"],
                     arch,
                 )
                 result_urls.append(f'<a href="{url}">{url}</a>')
@@ -309,9 +298,9 @@ def index_root():
                 ROW.format(key, val) for key, val in sorted(display_params.items())
             )
         )
-        return HTML.format(LOGOUT + success).format(**ChainMap(session, display_params))
+        return HTML.format(LOGOUT.format(**session) + success)
     else:
-        return HTML.format(LOGIN).format(**session), 403
+        return HTML.format(LOGIN.format(**session)), 403
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -342,26 +331,22 @@ def logout():
     return redirect(oid.get_next_url())
 
 
+@app.errorhandler(WebControlException)
+def web_control_exception_handler(error):
+    return invalid(error, error.exit_code())
+
+
 @app.errorhandler(Exception)
 def all_exception_handler(error):
-    # If the exception doesn't have the exit_code method, it's not an expected
-    # exception defined in helpers/exceptions.py
-    try:
-        return invalid(error, error.exit_code())
-    except Exception:
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        traceback.print_exception(exc_type, exc_value, exc_traceback)
-        return (
-            HTML.format(
-                (
-                    "<p>A server error has occurred. Traceback:</p> <pre>{}</pre>".format(
-                        "\n".join(
-                            traceback.format_exception(
-                                exc_type, exc_value, exc_traceback
-                            )
-                        )
-                    )
-                ),
-            ),
-            500,
-        )
+    logging.error(
+        "Unhandled request exception",
+        exc_info=(type(error), error, error.__traceback__),
+    )
+    return (
+        HTML.format(
+            "<p>A server error has occurred. Traceback:</p> <pre>{}</pre>".format(
+                "\n".join(traceback.format_exception(error))
+            )
+        ),
+        500,
+    )
