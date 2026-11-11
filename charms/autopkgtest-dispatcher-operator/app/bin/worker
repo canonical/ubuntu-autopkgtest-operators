@@ -995,6 +995,21 @@ def amqp_queues_channel():
     return channel, queues
 
 
+def probe_lxd_remote(remote):
+    """Return whether the LXD remote responds to a simple probing command."""
+    try:
+        subprocess.run(
+            ["lxc", "ls", "--fast", f"{remote}:"],
+            check=True,
+            timeout=10,
+            stdout=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        logging.error("Pre-flight check failed for LXD remote %s: %s", remote, e)
+        return False
+    return True
+
+
 def main():
     global cfg, args, swift_creds, swift_upload, debug
 
@@ -1039,6 +1054,8 @@ def main():
     else:
         logging.info("Debug disabled")
 
+    remote = dict(v.split("=", 1) for v in args.variable)["LXD_REMOTE"]
+
     if not os.environ.get("SWIFT_AUTH_URL"):
         logging.warning(
             "No SWIFT_AUTH_URL detected, disabling swift upload and keeping results locally instead"
@@ -1069,6 +1086,11 @@ def main():
     logging.info("Waiting for and processing AMQP requests")
     try:
         for q in itertools.cycle(queues):
+            remote_responsive = probe_lxd_remote(remote)
+            if exit_requested is not None:
+                break
+            if not remote_responsive:
+                sys.exit(1)
             method, properties, body = channel.basic_get(q)
             if method:
                 request(channel, method, properties, body)
