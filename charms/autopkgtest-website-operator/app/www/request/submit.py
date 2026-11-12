@@ -265,7 +265,7 @@ class Submit:
                 "Authorization": f"Basic {base64.b64encode(credentials.encode()).decode()}",
             },
         )
-        with urllib.request.urlopen(req) as f:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as f:
             logging.debug(
                 "POST to URL %s succeeded with code %u: %s",
                 f.geturl(),
