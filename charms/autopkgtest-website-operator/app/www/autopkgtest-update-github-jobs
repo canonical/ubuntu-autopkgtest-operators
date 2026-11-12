@@ -314,10 +314,14 @@ if __name__ == "__main__":
 
     logging.info("start processing jobs")
 
+    failed = False
     for job in jobs:
         try:
             process_job(job, swift_conn, external_url)
         except Exception:
+            failed = True
             logging.exception("couldn't process job %s, skipping", job)
 
     logging.info("done processing jobs")
+    if failed:
+        sys.exit(1)
