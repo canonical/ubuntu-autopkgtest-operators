@@ -314,6 +314,9 @@ if __name__ == "__main__":
     logging.info("start processing jobs")
 
     for job in jobs:
-        process_job(job, swift_conn, external_url)
+        try:
+            process_job(job, swift_conn, external_url)
+        except Exception:
+            logging.exception("couldn't process job %s, skipping", job)
 
     logging.info("done processing jobs")
