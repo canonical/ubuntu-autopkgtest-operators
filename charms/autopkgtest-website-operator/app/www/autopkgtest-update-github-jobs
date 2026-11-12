@@ -20,7 +20,7 @@ from request.submit import Submit
 PENDING_DIR = Path("/run/autopkgtest_webcontrol/github-pending")
 MAX_DAY_DIFF = 30
 
-swift_container_cache = None
+swift_container_cache = {}
 result_cache = {}
 
 
@@ -62,13 +62,14 @@ def result_matches_job(swift_conn, container, result_obj, params):
         )
         return
 
-    if result_obj not in result_cache:
+    cache_key = (container, result_obj)
+    if cache_key not in result_cache:
         tar_bytes = io.BytesIO(swift_conn.get_object(container, result_obj)[1])
         try:
             with tarfile.open(None, "r", tar_bytes) as tar:
                 exitcode = int(tar.extractfile("exitcode").read().strip())
                 info = json.loads(tar.extractfile("testinfo.json").read().decode())
-            result_cache[result_obj] = (exitcode, info)
+            result_cache[cache_key] = (exitcode, info)
         except (KeyError, ValueError, tarfile.TarError) as e:
             logging.error("broken result %s: %s", result_obj, e)
             logging.warning(
@@ -85,7 +86,7 @@ def result_matches_job(swift_conn, container, result_obj, params):
                 else None
             )
     else:
-        exitcode, info = result_cache[result_obj]
+        exitcode, info = result_cache[cache_key]
 
     try:
         result_env = info["custom_environment"]
@@ -241,12 +242,12 @@ def process_job(jobfile: Path, swift_conn, ext_url):
     except (KeyError, IndexError):
         pass
 
-    if swift_container_cache is None:
-        _, swift_container_cache = swift_conn.get_container(
+    if container not in swift_container_cache:
+        _, swift_container_cache[container] = swift_conn.get_container(
             container, full_listing=True
         )
 
-    object_list = swift_container_cache
+    object_list = swift_container_cache[container]
 
     result_for_finishing_job = {}
     for obj in object_list:
