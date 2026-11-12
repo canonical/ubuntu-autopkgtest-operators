@@ -11,6 +11,8 @@ from pathlib import Path
 import pika
 import swiftclient
 
+HTTP_TIMEOUT = 60
+
 sqlite3.paramstyle = "named"
 
 
@@ -222,6 +224,7 @@ def swift_connect() -> swiftclient.Connection:
                 "user_domain_name": config["swift"]["os_user_domain_name"],
             },
             "auth_version": "3",
+            "timeout": HTTP_TIMEOUT,
         }
         swift_conn = swiftclient.Connection(**swift_creds)
         return swift_conn
