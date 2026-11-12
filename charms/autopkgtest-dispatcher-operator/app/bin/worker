@@ -63,8 +63,8 @@ ARCH_RELEASE_RESTRICTION_MAPPING = {
 # Architectures supporting VM testbeds.
 VM_ARCHES = ["amd64", "amd64v3", "s390x"]
 
+NORMAL_RESULT_CODES = (0, 2, 4, 6, 8, 12, 14)
 SUCCESS_CODES = (0, 2, 8)
-TESTBED_FAILURE_CODE = 16
 
 KEYS_FOR_ADDITIONAL_PARAMS = ["all-proposed", "testname"]
 
@@ -935,11 +935,9 @@ def request(channel, method, properties, body):
 
     running_test = False
 
-    if code == TESTBED_FAILURE_CODE:
-        logging.error(
-            f"autopkgtest exited with status {code}, probable infrastructure issue"
-        )
-        sys.exit(code)
+    if not dont_run and code not in NORMAL_RESULT_CODES:
+        logging.error("autopkgtest exited with status %s", code)
+        sys.exit(1)
 
 
 def amqp_connect(cfg):
