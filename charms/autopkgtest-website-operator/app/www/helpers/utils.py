@@ -11,6 +11,8 @@ from pathlib import Path
 import pika
 import swiftclient
 
+HTTP_TIMEOUT = 60
+
 sqlite3.paramstyle = "named"
 
 
