@@ -8,6 +8,7 @@ import action_types
 import autopkgtest_website
 import config_types
 import ops
+from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer as IngressRequirer
 from ops.framework import StoredState
 
@@ -27,6 +28,11 @@ class AutopkgtestWebsiteCharm(ops.CharmBase):
             self,
             port=HTTP_PORT,
             relation_name="ingress",
+        )
+
+        self.cos_agent = COSAgentProvider(
+            self,
+            metrics_endpoints=[{"path": "/metrics", "port": 9117}],
         )
 
         self._stored.set_default(

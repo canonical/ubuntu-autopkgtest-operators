@@ -46,6 +46,7 @@ PACKAGES = [
     "amqp-tools",
     "git",
     "jq",
+    "prometheus-apache-exporter",
     "python3-distro-info",
     "python3-flask",
     "python3-flask-openid",
@@ -159,6 +160,7 @@ def configure(
             "remoteip",
             "rewrite",
             "ssl",
+            "status",
         ],
         check=True,
     )
@@ -181,6 +183,12 @@ def configure(
     with open(SITES_AVAILABLE_PATH / "autopkgtest.conf", "w") as f:
         f.write(j2template.render(j2context))
     subprocess.run(["a2ensite", "autopkgtest"])
+
+    logger.info("Configuring prometheus-apache-exporter")
+    j2template = j2env.get_template("prometheus-apache-exporter.default.j2")
+    with open("/etc/default/prometheus-apache-exporter", "w") as f:
+        f.write(j2template.render({"http_port": http_port}))
+    systemd.service_restart("prometheus-apache-exporter")
 
     logger.info("Generating autopkgtest config")
     j2template = j2env.get_template("autopkgtest-cloud.conf.j2")
