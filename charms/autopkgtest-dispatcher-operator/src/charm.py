@@ -8,6 +8,7 @@ import action_types
 import autopkgtest_dispatcher
 import config_types
 import ops
+from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from ops.framework import StoredState
 
 RABBITMQ_USERNAME = "dispatcher"
@@ -27,6 +28,11 @@ class AutopkgtestDispatcherCharm(ops.CharmBase):
             amqp_hostname=None,
             amqp_password=None,
             workers={},
+        )
+
+        self.cos_agent = COSAgentProvider(
+            self,
+            metrics_endpoints=[{"path": "/metrics", "port": 9101}],
         )
 
         self.typed_config = self.load_config(
