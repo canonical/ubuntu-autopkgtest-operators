@@ -24,7 +24,12 @@ from helpers.exceptions import (
     LaunchpadUnavailable,
     NotFound,
 )
-from helpers.utils import amqp_connect, get_autopkgtest_cloud_conf, get_release_arches
+from helpers.utils import (
+    HTTP_TIMEOUT,
+    amqp_connect,
+    get_autopkgtest_cloud_conf,
+    get_release_arches,
+)
 
 # Launchpad REST API base
 LP = "https://api.launchpad.net/1.0/"
@@ -36,8 +41,6 @@ ENV = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]+=[a-zA-Z0-9.:~/ -=]*$")
 GIT = re.compile(r"^https?://[a-zA-Z0-9._/~+-]+(#[a-zA-Z0-9._/-]+)?$")
 
 ALLOWED_USER_CACHE_TIME = 6 * 60 * 60
-
-LP_TIMEOUT = 60
 
 
 class Submit:
@@ -262,7 +265,7 @@ class Submit:
                 "Authorization": f"Basic {base64.b64encode(credentials.encode()).decode()}",
             },
         )
-        with urllib.request.urlopen(req) as f:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as f:
             logging.debug(
                 "POST to URL %s succeeded with code %u: %s",
                 f.geturl(),
@@ -446,7 +449,7 @@ class Submit:
         if query:
             url += ("&" if "?" in url else "?") + urllib.parse.urlencode(query)
         try:
-            with urllib.request.urlopen(url, timeout=LP_TIMEOUT) as req:
+            with urllib.request.urlopen(url, timeout=HTTP_TIMEOUT) as req:
                 code = req.getcode()
                 response = req.read()
         except HTTPError as e:
