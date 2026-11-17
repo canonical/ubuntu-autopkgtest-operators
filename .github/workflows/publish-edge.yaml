@@ -69,7 +69,7 @@ jobs:
   publish:
     needs: detect-changes
     if: needs.detect-changes.outputs.any == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     strategy:
