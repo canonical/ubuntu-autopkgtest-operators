@@ -1,5 +1,5 @@
 [Unit]
-Description=Timer to cleanup stale LXD instances
+Description=Timer to clean up LXD images for unconfigured releases
 
 [Timer]
 OnCalendar=hourly
