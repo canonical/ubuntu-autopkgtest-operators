@@ -74,7 +74,7 @@ def term_handler(signum, frame):
     logging.info("Caught SIGTERM, requesting exit")
     global exit_requested
     exit_requested = 0
-    if not running_test:
+    if not running_test and amqp_con is not None:
         amqp_con.close()
 
 
@@ -83,7 +83,7 @@ def hup_handler(signum, frame):
     logging.info("Caught SIGHUP, requesting restart")
     global exit_requested
     exit_requested = 10
-    if not running_test:
+    if not running_test and amqp_con is not None:
         amqp_con.close()
 
 
@@ -993,6 +993,26 @@ def amqp_queues_channel():
     return channel, queues
 
 
+def remove_lxd_instance(remote, name):
+    """Remove the named LXD instance if it exists."""
+    instance = f"{remote}:{name}"
+    try:
+        names = subprocess.check_output(
+            ["lxc", "list", f"{remote}:", "--columns=n", "--format=csv"],
+            text=True,
+            timeout=10,
+        ).splitlines()
+        if name in names:
+            logging.info("Removing previous LXD testbed %s", instance)
+            subprocess.run(
+                ["lxc", "delete", "--force", instance], check=True, timeout=600
+            )
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        logging.error("Could not prepare LXD worker slot %s: %s", instance, e)
+        return False
+    return True
+
+
 def probe_lxd_remote(remote):
     """Return whether the LXD remote responds to a simple probing command."""
     try:
@@ -1052,7 +1072,13 @@ def main():
     else:
         logging.info("Debug disabled")
 
-    remote = dict(v.split("=", 1) for v in args.variable)["LXD_REMOTE"]
+    variables = dict(v.split("=", 1) for v in args.variable)
+    remote = variables["LXD_REMOTE"]
+    slot_ready = remove_lxd_instance(remote, variables["NAME"])
+    if exit_requested is not None:
+        return
+    if not slot_ready:
+        sys.exit(1)
 
     if not os.environ.get("SWIFT_AUTH_URL"):
         logging.warning(
