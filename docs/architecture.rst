@@ -14,7 +14,7 @@ Overview
                 web [label="{autopkgtest-website-operator|* results browser for developers\n* shows which tests are running\n* receives requests to run tests from developers or GitHub PRs}"]
                 rabbitmq [label="{RabbitMQ AMQP server|debci-$release-$arch\ndebci-ppa-$release-$arch\ndebci-upstream-$release-$arch\ndebci-huge-$release-$arch}"]
                 dispatcher [label="{autopkgtest-dispatcher-operator|charm which hosts all workers\ncall autopkgtest on lxd remotes}"]
-                janitor [label="{autopkgtest-janitor-operator|charm which does maintenance on workers\nbuilds images and cleans stale instances"]
+                janitor [label="{autopkgtest-janitor-operator|builds and prunes LXD images}"]
                 swift [label="{OpenStack Swift object store|public test results\nautopkgtest-$release\nautopkgtest-$release-$lpusername-$ppaname}"]
                 swiftprivate [label="{OpenStack Swift object store|* private PPA test results\n* embargoed CVEs}"]
                 haproxyweb [label="{HAproxy|* provides SSL termination\n* https://autopkgtest.ubuntu.com}"]
