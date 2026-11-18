@@ -74,7 +74,7 @@ def term_handler(signum, frame):
     logging.info("Caught SIGTERM, requesting exit")
     global exit_requested
     exit_requested = 0
-    if not running_test:
+    if not running_test and amqp_con is not None:
         amqp_con.close()
 
 
@@ -83,7 +83,7 @@ def hup_handler(signum, frame):
     logging.info("Caught SIGHUP, requesting restart")
     global exit_requested
     exit_requested = 10
-    if not running_test:
+    if not running_test and amqp_con is not None:
         amqp_con.close()
 
 
