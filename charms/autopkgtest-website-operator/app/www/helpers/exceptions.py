@@ -46,13 +46,10 @@ class BadRequest(WebControlException):
 
 
 class ForbiddenRequest(WebControlException):
-    def __init__(self, package, trigger):
+    def __init__(self, allowed_teams):
+        teams = ", ".join(sorted(allowed_teams))
         super().__init__(
-            (
-                "You are not allowed to upload %s or %s to Ubuntu, "
-                + "thus you are not allowed to use this service."
-            )
-            % (package, trigger),
+            f"Test requests require membership in an allowed Launchpad team: {teams}.",
             403,
         )
 

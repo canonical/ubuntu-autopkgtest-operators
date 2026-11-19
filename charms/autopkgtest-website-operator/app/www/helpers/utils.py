@@ -12,6 +12,7 @@ import pika
 import swiftclient
 
 HTTP_TIMEOUT = 60
+WEB_RUNTIME_DIR = Path(os.getenv("XDG_RUNTIME_DIR", "/run"), "autopkgtest_webcontrol")
 
 sqlite3.paramstyle = "named"
 
