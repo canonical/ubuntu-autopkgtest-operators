@@ -66,14 +66,9 @@ def validate_user_path(connection, container, nick, path):
         return True
     # Check if user is allowed via team membership
     for entity in allowed:
-        (code, response) = Submit.lp_request(f"~{entity}/participants", {})
-        if code == 404:  # participants: person or team not found.
+        response = Submit.lp_request(f"~{entity}/participants", {})
+        if response is None:  # participants: person or team not found.
             continue
-        if code != 200:
-            logging.error(f"Unable to validate user {nick} ({code})")
-            raise LaunchpadError(
-                "Unexpected response to a Launchpad team participant lookup."
-            )
         try:
             if not isinstance(response["entries"], list):
                 raise ValueError("Expected a list of team participants")

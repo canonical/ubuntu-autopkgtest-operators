@@ -12,7 +12,7 @@ import urllib.request
 from datetime import UTC, datetime
 from http.client import HTTPException
 from time import time
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 
 import pika
 from helpers.cache import KeyValueCache
@@ -26,6 +26,7 @@ from helpers.exceptions import (
 )
 from helpers.utils import (
     HTTP_TIMEOUT,
+    WEB_RUNTIME_DIR,
     amqp_connect,
     get_autopkgtest_cloud_conf,
     get_release_arches,
@@ -46,12 +47,13 @@ ALLOWED_USER_CACHE_TIME = 6 * 60 * 60
 class Submit:
     def __init__(self):
         config = get_autopkgtest_cloud_conf()
-        self.lp_cache = {}
 
         self.release_arches = get_release_arches()
         logging.debug(f"Valid arches per release: {self.release_arches}")
 
-        self.allowed_user_cache = KeyValueCache("/dev/shm/autopkgtest_users.json")
+        self.allowed_user_cache = KeyValueCache(
+            WEB_RUNTIME_DIR / "autopkgtest_users.json"
+        )
         self.allowed_teams = {
             team.strip() for team in config["web"]["allowed_requestors"].split(",")
         }
@@ -116,55 +118,10 @@ class Submit:
             if trigsrc.startswith("linux-meta-raspi"):
                 raise BadRequest("The raspi kernel can't be tested with autopkgtest.")
 
-        for ppa in ppas:
-            if not self.is_valid_ppa(ppa):
-                raise NotFound("ppa", ppa)
+        self.validate_ppas(ppas, check_exists=False)
 
-        upload_targets = []
-        for trigger in triggers:
-            trigsrc, trigver = trigger.split("/")
-            # Special snowflake
-            if trigger in ("qemu-efi-noacpi/0", "migration-reference/0"):
-                continue
-
-            if ppas:
-                if not self.get_published_source_component(
-                    release, trigsrc, trigver, ppas[-1]
-                ):
-                    raise BadRequest(
-                        f"{trigger} is not published in PPA {ppas[-1]} {release}"
-                    )
-                trigsrc_component = None
-            else:
-                trigsrc_component = self.get_published_source_component(
-                    release, trigsrc, trigver
-                )
-                if not trigsrc_component:
-                    raise BadRequest(f"{trigger} is not published in {release}")
-
-            upload_targets.append((trigsrc, trigsrc_component))
-
-        if ppas:
-            component = None
-        else:
-            component = self.get_published_source_component(release, package, None)
-            if not component:
-                raise BadRequest(f"{package} is not published in {release}")
-        upload_targets.append((package, component))
-
-        if self.cached_allowed_user(requester):
-            return
-        for source, component in upload_targets:
-            component = (
-                component
-                or self.get_published_source_component(release, source, None)
-                or "main"
-            )
-            if self.can_upload(requester, release, component, source):
-                return
-        if self.in_allowed_team(requester):
-            return
-        raise ForbiddenRequest(package, ",".join(triggers))
+        if not self.in_allowed_team(requester):
+            raise ForbiddenRequest(self.allowed_teams)
 
     def validate_git_request(self, release, arch, package, ppas=(), env=(), **kwargs):
         """Validate parameters for an upstream git test request.
@@ -182,20 +139,20 @@ class Submit:
             raise NotFound("release", release)
         if arch not in self.release_arches[release]:
             raise NotFound("arch", arch)
-        if not NAME.match(package):
+        if not NAME.fullmatch(package):
             raise NotFound("package", package)
         if not ppas:
             raise BadRequest(
                 "Must specify at least one PPA (to associate results with)"
             )
         for e in env:
-            if not ENV.match(e):
+            if not ENV.fullmatch(e):
                 raise BadRequest(f'Invalid environment variable format "{e}"')
         # we should only be called in this mode
         assert "build-git" in kwargs
-        if not GIT.match(kwargs["build-git"]):
+        if not GIT.fullmatch(kwargs["build-git"]):
             raise BadRequest("Malformed build-git")
-        if "testname" in kwargs and not NAME.match(kwargs["testname"]):
+        if "testname" in kwargs and not NAME.fullmatch(kwargs["testname"]):
             raise BadRequest("Malformed testname")
 
         unsupported_keys = set(kwargs.keys()) - {"build-git", "testname"}
@@ -204,9 +161,7 @@ class Submit:
                 "Unsupported arguments: {}".format(" ".join(unsupported_keys))
             )
 
-        for ppa in ppas:
-            if not self.is_valid_ppa(ppa):
-                raise NotFound("ppa", ppa)
+        self.validate_ppas(ppas)
 
     def send_amqp_request(self, release, arch, package, context=None, **params):
         """Submit jobs for one or more architectures over one AMQP connection."""
@@ -277,141 +232,50 @@ class Submit:
     # helper methods
     #
 
-    def is_valid_ppa(self, ppa):
-        """Check if a ppa exists."""
-        team, _, name = ppa.partition("/")
-        if not NAME.fullmatch(team) or not NAME.fullmatch(name):
-            return False
-        # https://launchpad.net/+apidoc/1.0.html#person-getPPAByName
-        (code, response) = self.cached_lp_request(
-            "~" + team,
-            {
-                "ws.op": "getPPAByName",
-                "distribution": json.dumps(LP + "ubuntu"),
-                "name": json.dumps(name),
-            },
-        )
-        logging.debug(
-            "is_valid_ppa(%s): code %u, response %s", ppa, code, repr(response)
-        )
-        if code == 404:  # getPPAByName: owner or PPA not found.
-            return False
-        if code != 200 or response.get("name") != name:
-            raise LaunchpadError("Unexpected response to a Launchpad PPA lookup.")
-        return True
+    def validate_ppas(self, ppas, *, check_exists=True):
+        for ppa in dict.fromkeys(ppas):
+            team, _, name = ppa.partition("/")
+            if not NAME.fullmatch(team) or not NAME.fullmatch(name):
+                raise BadRequest(f"Malformed PPA name: {ppa}")
+            if not check_exists:
+                continue
 
-    def get_published_source_component(self, release, package, version, ppa=None):
-        """Return the component of a published source, or None if absent.
-
-        Use this for validating trigger packages. This queries the Launchpad
-        REST API. Check given ppa (team/name), or the main Ubuntu archive if
-        this is None.
-        """
-        # https://launchpad.net/+apidoc/1.0.html#archive-getPublishedSources
-        if ppa:
-            team, name = ppa.split("/")
-            obj = f"~{team}/+archive/ubuntu/{name}"
-        else:
-            obj = "ubuntu/+archive/primary"
-        req = {
-            "ws.op": "getPublishedSources",
-            "source_name": json.dumps(package),
-            "distro_series": json.dumps(LP + "ubuntu/" + release),
-            "status": "Published",
-            "exact_match": "true",
-            "ws.size": "1",
-        }
-        if version is not None:
-            req["version"] = json.dumps(version)
-        (code, response) = self.cached_lp_request(obj, req)
-        if code != 200:
-            raise LaunchpadError(
-                "Unexpected response to a Launchpad source publication lookup."
+            response = self.lp_request(
+                "~" + team,
+                {
+                    "ws.op": "getPPAByName",
+                    "distribution": json.dumps(LP + "ubuntu"),
+                    "name": json.dumps(name),
+                },
             )
-        logging.debug(
-            "get_published_source_component(%s, %s, %s): code %u, response %s",
-            release,
-            package,
-            version,
-            code,
-            repr(response),
-        )
-        try:
-            entries = response["entries"]
-            if not isinstance(entries, list):
-                raise ValueError("Expected a list of source publications")
-            if not entries:
-                return None
-            component = entries[0]["component_name"]
-            if not isinstance(component, str) or not component:
-                raise ValueError("Expected a non-empty component name")
-            return component
-        except (KeyError, TypeError, ValueError) as e:
-            raise LaunchpadError(
-                "Unexpected response to a Launchpad source publication lookup."
-            ) from e
-
-    def can_upload(self, person, release, component, package):
-        """Check if person can upload package into Ubuntu release."""
-        # https://launchpad.net/+apidoc/1.0.html#archive-checkUpload
-        (code, response) = self.cached_lp_request(
-            "ubuntu/+archive/primary",
-            {
-                "ws.op": "checkUpload",
-                "distroseries": json.dumps(LP + "ubuntu/" + release),
-                "person": json.dumps(LP + "~" + person),
-                "component": component,
-                "pocket": "Proposed",
-                "sourcepackagename": json.dumps(package),
-            },
-        )
-        logging.debug(
-            "can_upload(%s, %s, %s, %s): (%u, %s)",
-            person,
-            release,
-            component,
-            package,
-            code,
-            repr(response),
-        )
-        if code == 403:  # checkUpload: uploading is not permitted.
-            return False
-        if code == 404:  # checkUpload: unknown source package name.
-            raise NotFound("package", package)
-        if code != 200 or response is not True:
-            raise LaunchpadError(
-                "Unexpected response to a Launchpad upload permission check."
-            )
-        return True
-
-    def allowed_user_cache_key(self, person):
-        return json.dumps([person, sorted(self.allowed_teams)])
-
-    def cached_allowed_user(self, person):
-        timestamp = self.allowed_user_cache.get(self.allowed_user_cache_key(person))
-        try:
-            return 0 <= time() - float(timestamp) <= ALLOWED_USER_CACHE_TIME
-        except (TypeError, ValueError, OverflowError):
-            return False
+            if response is None:
+                raise NotFound("ppa", ppa)
+            if response.get("name") != name:
+                raise LaunchpadError("Unexpected response to a Launchpad PPA lookup.")
 
     def in_allowed_team(self, person):
-        """Check if person is allowed to queue tests."""
-        obj, query = f"~{person}/super_teams", {"ws.size": "300"}
+        """Check for allowed team membership, caching positive results."""
+        cache_key = json.dumps([person, sorted(self.allowed_teams)])
+        timestamp = self.allowed_user_cache.get(cache_key)
+        now = time()
+        if (
+            isinstance(timestamp, (int, float))
+            and now - ALLOWED_USER_CACHE_TIME <= timestamp <= now
+        ):
+            return True
+
+        response = self.lp_request(f"~{person}/super_teams", {"ws.size": "300"})
+        if response is None:
+            raise NotFound("Launchpad user", person)
+
         while True:
-            code, response = self.cached_lp_request(obj, query)
-            if code != 200:
-                raise LaunchpadError(
-                    "Unexpected response to a Launchpad team membership lookup."
-                )
             try:
                 if not isinstance(response.get("entries"), list):
                     raise ValueError("Expected a list of teams")
                 if any(
                     entry["name"] in self.allowed_teams for entry in response["entries"]
                 ):
-                    self.allowed_user_cache.set(
-                        self.allowed_user_cache_key(person), time()
-                    )
+                    self.allowed_user_cache.set(cache_key, time())
                     return True
             except (KeyError, TypeError, ValueError) as e:
                 raise LaunchpadError(
@@ -420,29 +284,13 @@ class Submit:
             next_page = response.get("next_collection_link")
             if not next_page:
                 return False
-            obj, query = next_page, {}
+            response = self.lp_request(next_page, {})
+            if response is None:
+                raise LaunchpadError("Launchpad team membership page not found.")
 
-    def cached_lp_request(self, obj, query):
-        """Reuse identical lookups only within this submission."""
-        key = (obj, tuple(sorted(query.items())))
-        if key not in self.lp_cache:
-            self.lp_cache[key] = self.lp_request(obj, query)
-        return self.lp_cache[key]
-
-    @classmethod
-    def lp_request(cls, obj, query):
-        """Do a Launchpad REST request.
-
-        Request https://api.launchpad.net/1.0/<obj>?<query>.
-
-        Return (code, json) for successful responses, or (code, None) for
-        client errors other than timeouts and rate limiting. Callers handle
-        expected client errors according to the operation's semantics.
-
-        Raise LaunchpadUnavailable for transport failures, server errors,
-        timeouts, or rate limiting. Raise LaunchpadError for other unexpected
-        responses, without assuming which side caused the failure.
-        """
+    @staticmethod
+    def lp_request(obj, query) -> dict | None:
+        """Return a Launchpad JSON object, or None on 404."""
         url = urllib.parse.urljoin(LP, obj)
         if not url.startswith(LP):
             raise LaunchpadError("Unexpected URL during a Launchpad request.")
@@ -453,19 +301,16 @@ class Submit:
                 code = req.getcode()
                 response = req.read()
         except HTTPError as e:
-            logging.error("%s failed with %u: %s\n%s", url, e.code, e.reason, e.headers)
-            # Upstream server errors, timeouts, and rate limiting prevent us
-            # from completing the request. Return our own 503, not their code.
-            if e.code >= 500 or e.code in (
-                408,  # Request Timeout
-                429,  # Too Many Requests
-            ):
+            if e.code == 404:
+                return None
+            request_id = e.headers.get("X-Request-Id") if e.headers else None
+            logging.error(
+                "%s returned HTTP %d (request ID: %s)", url, e.code, request_id or "-"
+            )
+            if e.code >= 500 or e.code in (408, 429):
                 raise LaunchpadUnavailable() from e
-            if 400 <= e.code < 500:
-                # The caller decides whether this is an expected outcome.
-                return (e.code, None)
             raise LaunchpadError("Unexpected HTTP status from Launchpad.") from e
-        except (URLError, OSError, HTTPException) as e:
+        except (OSError, HTTPException) as e:
             logging.warning("Launchpad request failed: %s: %s", url, e)
             raise LaunchpadUnavailable() from e
 
@@ -475,22 +320,15 @@ class Submit:
 
         try:
             response = json.loads(response.decode("UTF-8"))
-            if query.get("ws.op") != "checkUpload" and not isinstance(response, dict):
+            if not isinstance(response, dict):
                 raise ValueError("Unexpected Launchpad response")
         except ValueError as e:
-            logging.error(
-                "URL %s gave invalid response %s: %s",
-                req.geturl(),
-                response,
-                str(e),
-            )
+            logging.error("URL %s gave an invalid response: %s", req.geturl(), e)
             raise LaunchpadError(
                 "Unexpected response during a Launchpad request."
             ) from e
-        logging.debug("lp_request %s succeeded: %s", url, response)
-        return (code, response)
+        return response
 
     def validate_args(self, parameters):
-        base = ["arch", "release", "package", "triggers"]
-        if not set(base).issubset(set(parameters.keys())):
+        if not {"arch", "release", "package", "triggers"}.issubset(parameters):
             raise InvalidArgs(parameters)

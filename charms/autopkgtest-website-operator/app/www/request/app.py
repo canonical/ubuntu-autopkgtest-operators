@@ -11,7 +11,12 @@ from html import escape as _escape
 from flask import Flask, redirect, request, session
 from flask_openid import OpenID
 from helpers.exceptions import WebControlException
-from helpers.utils import get_autopkgtest_cloud_conf, get_github_context, setup_key
+from helpers.utils import (
+    WEB_RUNTIME_DIR,
+    get_autopkgtest_cloud_conf,
+    get_github_context,
+    setup_key,
+)
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from request.submit import Submit
@@ -130,9 +135,7 @@ def get_api_keys():
 
 
 # Initialize app
-PATH = os.path.join(
-    os.path.sep, os.getenv("XDG_RUNTIME_DIR", "/run"), "autopkgtest_webcontrol"
-)
+PATH = WEB_RUNTIME_DIR
 os.makedirs(PATH, exist_ok=True)
 app = Flask("request")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
