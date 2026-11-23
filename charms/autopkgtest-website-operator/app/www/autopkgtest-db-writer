@@ -188,13 +188,13 @@ if __name__ == "__main__":
     )
 
     db_con = db_connect()
-    try:
-        c = db_con.cursor()
-        c.execute("SELECT env FROM result")
-    except sqlite3.OperationalError as e:
-        if "no such column" in str(e):
-            c = db_con.cursor()
-            c.execute("ALTER TABLE result ADD COLUMN env TEXT")
+    # Inspect the schema for the env column and consume all query rows when
+    # collecting column names (row[1]). An unfinished query would keep a read
+    # transaction open on this long-lived connection, preventing automatic
+    # WAL checkpoints and allowing the WAL to grow indefinitely.
+    result_columns = {row[1] for row in db_con.execute("PRAGMA table_info(result)")}
+    if "env" not in result_columns:
+        db_con.execute("ALTER TABLE result ADD COLUMN env TEXT")
 
     amqp_con = amqp_connect()
     status_ch = amqp_con.channel()
