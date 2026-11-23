@@ -1,11 +1,9 @@
 #!/usr/bin/python3
 
-import datetime
 import json
 import subprocess
 import sys
 
-MAX_AGE_HOURS = 12
 TARGETS_PATH = "/etc/autopkgtest-janitor/targets.conf"
 
 
@@ -30,10 +28,7 @@ def image_target(image):
 
 
 def main():
-    """Clean stale LXD instances."""
-    print(f"Deleting instances older than {MAX_AGE_HOURS} hours")
-
-    now = datetime.datetime.now(datetime.UTC)
+    """Clean up LXD images for releases no longer configured."""
     releases = configured_releases()
     remotes = json.loads(subprocess.check_output(["lxc", "remote", "list", "-fjson"]))
     remotes = [r for r in remotes if r.startswith("remote-")]
@@ -41,47 +36,6 @@ def main():
     errors = False
     for remote in remotes:
         remote_arch = remote.split("-")[1]
-        try:
-            instances = json.loads(
-                subprocess.check_output(["lxc", "list", "-fjson", remote + ":"])
-            )
-        except Exception as e:
-            print(
-                f"Error getting list of instances from remote {remote}: {e}",
-                file=sys.stderr,
-            )
-            errors = True
-            continue
-
-        for instance in instances:
-            created_at = datetime.datetime.fromisoformat(instance["created_at"])
-            if now - created_at >= datetime.timedelta(hours=MAX_AGE_HOURS):
-                print(f"Instance {remote}:{instance['name']} is old - deleting")
-                try:
-                    subprocess.check_call(
-                        [
-                            "lxc",
-                            "delete",
-                            "--force",
-                            f"{remote}:{instance['name']}",
-                        ],
-                        timeout=60,
-                    )
-                except subprocess.CalledProcessError as e:
-                    print(
-                        f"Error deleting {remote}:{instance['name']}: {e}",
-                        file=sys.stderr,
-                    )
-                    errors = True
-                    continue
-                except subprocess.TimeoutExpired as e:
-                    print(
-                        f"Timeout deleting {remote}:{instance['name']}: {e}",
-                        file=sys.stderr,
-                    )
-                    errors = True
-                    continue
-
         try:
             images = json.loads(
                 subprocess.check_output(
