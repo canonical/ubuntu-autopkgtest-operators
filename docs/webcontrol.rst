@@ -30,6 +30,8 @@ It's made up of the following parts:
 * ``browse.cgi`` is a simple Flask app that renders results and statistics from
   the above database, currently running tests from ``running.json``, and
   queued tests from ``queued.json``.
-* ``request.cgi`` provides a Launchpad SSO authenticated CGI API for
-  (re)triggering test requests for Ubuntu and github. Pages like britney's
-  ``excuses.html`` link to it for retrying regressions.
+* ``request.cgi`` handles retries linked from britney's ``excuses.html``.
+  Archive and PPA requests require SSO or an API key and direct or indirect
+  membership in a configured Launchpad team (default:
+  ``autopkgtest-requestors``). Positive membership is cached for six hours.
+  GitHub webhooks use signatures.

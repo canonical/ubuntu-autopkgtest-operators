@@ -38,7 +38,7 @@ class KeyValueCache:
                 return self._read(file).get(key)
         except FileNotFoundError:
             return None
-        except (TimeoutError, OSError) as e:
+        except OSError as e:
             logging.warning("Cannot read cache %s: %s", self.path, e)
             return None
 
@@ -47,7 +47,7 @@ class KeyValueCache:
             with os.fdopen(
                 os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600), "r+"
             ) as file:
-                _flock(file, fcntl.LOCK_SH, timeout=1)
+                _flock(file, fcntl.LOCK_EX, timeout=1)
                 data = self._read(file)
                 data[key] = value
                 file.seek(0)

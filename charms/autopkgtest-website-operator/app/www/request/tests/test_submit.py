@@ -63,26 +63,6 @@ class DistroRequestValidationTests(SubmitTestBase):
             self.submit.validate_distro_request("testy", "wut", "blue", ["ab/1"], "joe")
         self.assertEqual(str(cme.exception), "arch wut not found")
 
-    @patch("request.submit.urllib.request.urlopen")
-    def test_bad_package(self, mock_urlopen):
-        """Unknown package."""
-        cm = MagicMock()
-        cm.__enter__.return_value = cm
-        cm.getcode.return_value = 200
-        cm.geturl.return_value = "http://mock.launchpad.net"
-        cm.read.side_effect = [
-            b'{"entries": [{"component_name": "main"}]}',
-            b'{"entries": []}',
-        ]
-        cm.return_value = cm
-        mock_urlopen.return_value = cm
-
-        with self.assertRaises(WebControlException) as cme:
-            self.submit.validate_distro_request(
-                "testy", "C51", "badpkg", ["ab/1"], "joe"
-            )
-        self.assertEqual(str(cme.exception), "badpkg is not published in testy")
-
     def test_bad_argument(self):
         """Unknown argument."""
         with self.assertRaises(BadRequest) as cme:
@@ -91,21 +71,8 @@ class DistroRequestValidationTests(SubmitTestBase):
             )
         self.assertIn("Invalid argument foo", str(cme.exception))
 
-    @patch("request.submit.urllib.request.urlopen")
-    def test_invalid_trigger_syntax(self, mock_urlopen):
+    def test_invalid_trigger_syntax(self):
         """Invalid syntax in trigger."""
-        cm = MagicMock()
-        cm.__enter__.return_value = cm
-        cm.getcode.return_value = 200
-        cm.geturl.return_value = "http://mock.launchpad.net"
-        cm.read.side_effect = [
-            b'{"entries": []}',
-            b'{"entries": []}',
-            b'{"entries": []}',
-        ]
-        cm.return_value = cm
-        mock_urlopen.return_value = cm
-
         # invalid trigger format
         with self.assertRaises(WebControlException) as cme:
             self.submit.validate_distro_request("testy", "C51", "blue", ["ab"], "joe")
@@ -134,216 +101,31 @@ class DistroRequestValidationTests(SubmitTestBase):
             )
         self.assertIn("Invalid argument testname", str(cme.exception))
 
-    @patch("request.submit.urllib.request.urlopen")
-    def test_ppa(self, mock_urlopen):
-        """PPA does not exist."""
-        # invalid name don't even call lp
-        with self.assertRaises(WebControlException) as cme:
+    def test_ppa(self):
+        """Reject malformed PPA names locally."""
+        with self.assertRaises(BadRequest) as cme:
             self.submit.validate_distro_request(
                 "testy", "C51", "foo", ["ab/1.2"], "joe", ["b~ad/ppa"]
             )
-        self.assertEqual(str(cme.exception), "ppa b~ad/ppa not found")
-        self.assertFalse(self.submit.is_valid_ppa("bad\n/ppa"))
-        self.assertEqual(mock_urlopen.call_count, 0)
+        self.assertEqual(str(cme.exception), "Malformed PPA name: b~ad/ppa")
 
-        # mock Launchpad response: missing PPA, then a valid PPA
-        cm = MagicMock()
-        cm.__enter__.return_value = cm
-        cm.getcode.return_value = 200
-        cm.geturl.return_value = "http://mock.launchpad.net"
-        cm.read.side_effect = [b'{"name": "there"}', b"not { json}"]
-        cm.return_value = cm
-        missing_ppa = HTTPError("http://mock.launchpad.net", 404, "Not Found", {}, None)
-        mock_urlopen.side_effect = [missing_ppa, cm, cm, missing_ppa]
-
-        with self.assertRaises(WebControlException) as cme:
-            self.submit.validate_distro_request(
-                "testy", "C51", "foo", ["ab/1.2"], "joe", ["bad/ppa"]
-            )
-        self.assertEqual(str(cme.exception), "ppa bad/ppa not found")
-        self.assertEqual(mock_urlopen.call_count, 1)
-
-        # success
-        self.assertTrue(self.submit.is_valid_ppa("hi/there"))
-
-        # broken JSON response
-        with self.assertRaises(WebControlException) as cme:
-            self.submit.validate_distro_request(
-                "testy", "C51", "foo", ["ab/1.2"], "joe", ["broke/ness"]
-            )
-
-        # same, but entirely failing query -- let's be on the safe side
-        with self.assertRaises(WebControlException) as cme:
-            self.submit.validate_distro_request(
-                "testy", "C51", "foo", ["ab/1.2"], "joe", ["bro/ken"]
-            )
-        self.assertEqual(str(cme.exception), "ppa bro/ken not found")
-
-    @patch("request.submit.urllib.request.urlopen")
-    def test_nonexisting_trigger(self, mock_urlopen):
-        """Trigger source package/version does not exist."""
-        # mock Launchpad response: successful form, but no matching
-        # source/version
-        cm = MagicMock()
-        cm.__enter__.return_value = cm
-        cm.getcode.return_value = 200
-        cm.geturl.return_value = "http://mock.launchpad.net"
-        cm.read.side_effect = [
-            b'{"entries": []}',
-        ]
-        cm.return_value = cm
-        mock_urlopen.return_value = cm
-
+    @patch("request.submit.Submit.lp_request", return_value={"entries": []})
+    def test_nonmember_forbidden(self, _mock_lp_request):
+        """Reject users outside the allowed teams."""
         with self.assertRaises(WebControlException) as cme:
             self.submit.validate_distro_request(
                 "testy", "C51", "blue", ["ab/1.2"], "joe"
             )
-        self.assertEqual(str(cme.exception), "ab/1.2 is not published in testy")
-        self.assertEqual(mock_urlopen.call_count, 1)
+        self.assertEqual(cme.exception.exit_code(), 403)
 
-        # broken JSON response
-        self.submit.lp_cache.clear()
-        cm.read.side_effect = [b"not { json}"]
-        with self.assertRaises(WebControlException) as cme:
-            self.submit.validate_distro_request(
-                "testy", "C51", "blue", ["ab/1.2"], "joe"
-            )
-
-        # same, but entirely failing query -- let's be on the safe side
-        self.submit.lp_cache.clear()
-        mock_urlopen.side_effect = HTTPError(
-            "http://mock.launchpad.net", 404, "Not Found", {}, None
-        )
-        with self.assertRaises(WebControlException) as cme:
-            self.submit.validate_distro_request(
-                "testy", "C51", "blue", ["ab/1.2"], "joe"
-            )
-        self.assertEqual(cme.exception.exit_code(), 500)
-
-    @patch("request.submit.urllib.request.urlopen")
-    def test_bad_package_ppa(self, mock_urlopen):
-        """Unknown package with a PPA request, assert no exception."""
-        # mock Launchpad response: successful form, but no matching
-        # source/version
-        cm = MagicMock()
-        cm.__enter__.return_value = cm
-        cm.getcode.return_value = 200
-        cm.geturl.return_value = "http://mock.launchpad.net"
-        cm.read.side_effect = [
-            b'{"name": "overlay"}',
-            b'{"name": "goodstuff"}',
-            b'{"entries": [{"component_name": "main"}]}',
-            b'{"entries": [{"component_name": "main"}]}',
-            b"true",
-        ]
-        cm.return_value = cm
-        mock_urlopen.return_value = cm
-
-        self.submit.validate_distro_request(
-            "testy",
-            "C51",
-            "badpkg",
-            ["ab/1.2"],
-            "joe",
-            ppas=["team/overlay", "joe/goodstuff"],
-        )
-        self.assertEqual(mock_urlopen.call_count, 5)
-
-    @patch("request.submit.urllib.request.urlopen")
-    def test_nonexisting_trigger_ppa(self, mock_urlopen):
-        """Trigger source package/version does not exist in PPA."""
-        # mock Launchpad response: successful form, but no matching
-        # source/version
-        cm = MagicMock()
-        cm.__enter__.return_value = cm
-        cm.getcode.return_value = 200
-        cm.geturl.return_value = "http://mock.launchpad.net"
-        cm.read.side_effect = [
-            b'{"name": "overlay"}',
-            b'{"name": "goodstuff"}',
-            b'{"entries": []}',
-        ]
-        cm.return_value = cm
-        mock_urlopen.return_value = cm
-
-        with self.assertRaises(WebControlException) as cme:
-            self.submit.validate_distro_request(
-                "testy",
-                "C51",
-                "blue",
-                ["ab/1.2"],
-                "joe",
-                ppas=["team/overlay", "joe/goodstuff"],
-            )
-        self.assertEqual(
-            str(cme.exception),
-            "ab/1.2 is not published in PPA joe/goodstuff testy",
-        )
-        self.assertEqual(mock_urlopen.call_count, 3)
-
-    @patch("request.submit.urllib.request.urlopen")
-    def test_no_upload_perm(self, mock_urlopen):
-        """Requester is not allowed to upload package."""
-        # mock Launchpad response: successful form, matching
-        # source/version, upload not allowed
-        cm = MagicMock()
-        cm.__enter__.return_value = cm
-        cm.getcode.return_value = 200
-        cm.read.side_effect = [
-            b'{"entries": [{"component_name": "main"}]}',
-            b'{"entries": [{"component_name": "main"}]}',
-            b'{"entries": []}',
-        ]
-        cm.return_value = cm
-        denied = HTTPError("http://mock.launchpad.net", 403, "Forbidden", {}, None)
-        mock_urlopen.side_effect = [cm, cm, denied, denied, cm]
-
-        with self.assertRaises(WebControlException) as cme:
-            self.submit.validate_distro_request(
-                "testy", "C51", "blue", ["ab/1.2"], "joe"
-            )
-        self.assertIn("not allowed to upload blue or ab", str(cme.exception))
-        self.assertEqual(mock_urlopen.call_count, 5)
-
-    @patch("request.submit.urllib.request.urlopen")
-    def test_distro_ok(self, mock_urlopen):
-        """Valid distro request is accepted."""
-        # mock Launchpad response: successful form, matching
-        # source/version, upload allowed
-        cm = MagicMock()
-        cm.__enter__.return_value = cm
-        cm.getcode.return_value = 200
-        cm.read.side_effect = [
-            b'{"entries": [{"component_name": "main"}]}',
-            b'{"entries": [{"component_name": "main"}]}',
-            b"true",
-        ]
-        cm.return_value = cm
-        mock_urlopen.return_value = cm
-
-        self.submit.validate_distro_request("testy", "C51", "blue", ["ab/1.2"], "joe")
-        self.assertEqual(mock_urlopen.call_count, 3)
-
-    @patch("request.submit.urllib.request.urlopen")
-    def test_distro_all_proposed(self, mock_urlopen):
+    @patch(
+        "request.submit.Submit.lp_request", return_value={"entries": [{"name": "list"}]}
+    )
+    def test_distro_all_proposed(self, _mock_lp_request):
         """Valid distro request with all-proposed is accepted."""
-        # mock Launchpad response: successful form, matching
-        # source/version, upload allowed
-        cm = MagicMock()
-        cm.__enter__.return_value = cm
-        cm.getcode.return_value = 200
-        cm.read.side_effect = [
-            b'{"entries": [{"component_name": "main"}]}',
-            b'{"entries": [{"component_name": "main"}]}',
-            b"true",
-        ]
-        cm.return_value = cm
-        mock_urlopen.return_value = cm
-
         self.submit.validate_distro_request(
             "testy", "C51", "blue", ["ab/1.2"], "joe", **{"all-proposed": "1"}
         )
-        self.assertEqual(mock_urlopen.call_count, 3)
 
     def test_distro_all_proposed_bad_value(self):
         """Valid distro request with invalid all-proposed value."""
@@ -353,88 +135,28 @@ class DistroRequestValidationTests(SubmitTestBase):
             )
         self.assertIn("nvalid all-proposed value", str(cme.exception))
 
-    @patch("request.submit.urllib.request.urlopen")
-    def test_validate_distro_whitelisted_team(self, mock_urlopen):
-        """Valid distro request via whitelisted team is accepted."""
-        # mock Launchpad response: published sources, denied uploads, allowed team
-        cm = MagicMock()
-        cm.__enter__.return_value = cm
-        cm.getcode.return_value = 200
-        cm.read.side_effect = [
-            b'{"entries": [{"component_name": "main"}]}',
-            b'{"entries": [{"component_name": "main"}]}',
-            b'{"entries": [{"name": "list"}]}',
-        ]
-        cm.return_value = cm
-        denied = HTTPError("http://mock.launchpad.net", 403, "Forbidden", {}, None)
-        mock_urlopen.side_effect = [cm, cm, denied, denied, cm]
+    @patch("request.submit.Submit.lp_request")
+    def test_validate_distro_whitelisted_team(self, mock_lp_request):
+        """A member of an allowed team can submit without publication lookups."""
+        mock_lp_request.return_value = {"entries": [{"name": "list"}]}
 
         self.submit.validate_distro_request("testy", "C51", "blue", ["ab/1.2"], "joe")
-        self.assertEqual(mock_urlopen.call_count, 5)
+        mock_lp_request.assert_called_once_with("~joe/super_teams", {"ws.size": "300"})
 
-    @patch("request.submit.urllib.request.urlopen")
-    def test_validate_distro_cached_user(self, mock_urlopen):
-        """Recently allowed requester skips the upload and team checks."""
-        # mock Launchpad response: published sources, upload allowed
-        cm = MagicMock()
-        cm.__enter__.return_value = cm
-        cm.getcode.return_value = 200
-        cm.read.side_effect = [
-            b'{"entries": [{"component_name": "main"}]}',
-            b'{"entries": [{"component_name": "main"}]}',
-            b"true",
-        ]
-        cm.return_value = cm
-        mock_urlopen.return_value = cm
+    @patch("request.submit.Submit.lp_request")
+    def test_validate_distro_cached_user(self, mock_lp_request):
+        """Recently allowed requester can submit without Launchpad lookups."""
+        mock_lp_request.return_value = {"entries": [{"name": "list"}]}
 
         self.submit.allowed_user_cache.get.return_value = time()
         self.submit.validate_distro_request("testy", "C51", "blue", ["ab/1.2"], "joe")
-        self.assertEqual(mock_urlopen.call_count, 2)
+        mock_lp_request.assert_not_called()
 
-        # expired entry: checkUpload again (source lookups are reused)
         self.submit.allowed_user_cache.get.return_value = (
             time() - request.submit.ALLOWED_USER_CACHE_TIME - 1
         )
         self.submit.validate_distro_request("testy", "C51", "blue", ["ab/1.2"], "joe")
-        self.assertEqual(mock_urlopen.call_count, 3)
-
-    @patch("request.submit.urllib.request.urlopen")
-    def test_ppa_ok(self, mock_urlopen):
-        """Valid PPA request is accepted."""
-        # mock Launchpad response: successful form, matching
-        # source/version, upload allowed
-        cm = MagicMock()
-        cm.__enter__.return_value = cm
-        cm.getcode.return_value = 200
-        cm.read.side_effect = [
-            b'{"name": "1.10-4ubuntu4.1"}',
-            b'{"entries": [{"component_name": "main"}]}',
-            b'{"entries": [{"component_name": "main"}]}',
-            b"true",
-        ]
-        cm.return_value = cm
-        mock_urlopen.return_value = cm
-
-        self.submit.validate_distro_request(
-            "testy",
-            "C51",
-            "blue",
-            ["ab/1.2"],
-            "joe",
-            ppas=["blue/1.10-4ubuntu4.1"],
-        )
-        self.assertEqual(mock_urlopen.call_count, 4)
-
-    @patch("request.submit.urllib.request.urlopen")
-    def test_can_upload_unknown_package(self, mock_urlopen):
-        """Package unknown to Launchpad (only reachable in PPA requests)."""
-        mock_urlopen.side_effect = HTTPError(
-            "http://mock.launchpad.net", 404, "Not Found", {}, None
-        )
-        with self.assertRaises(WebControlException) as cme:
-            self.submit.can_upload("joe", "testy", "main", "blue")
-        self.assertEqual(str(cme.exception), "package blue not found")
-        self.assertEqual(cme.exception.exit_code(), 404)
+        mock_lp_request.assert_called_once_with("~joe/super_teams", {"ws.size": "300"})
 
     def test_migration_reference_all_proposed_combo(self):
         """Tests when a test request has migration-reference/0 + all-proposed=1 in the request args."""
@@ -491,15 +213,13 @@ class GitRequestValidationTests(SubmitTestBase):
         self.assertEqual(str(cme.exception), "ppa bad/ppa not found")
         self.assertEqual(mock_urlopen.call_count, 1)
 
-    @patch("request.submit.Submit.is_valid_ppa")
-    def test_bad_env(self, is_valid_ppa):
-        is_valid_ppa.return_value = True
+    def test_bad_env(self):
         with self.assertRaises(WebControlException) as cme:
             self.submit.validate_git_request(
                 "testy",
                 "C51",
                 "ab",
-                env=["foo=1", "bar=1\n="],
+                env=["foo=1", "bar=1\n"],
                 **{"build-git": "https://x.com/proj", "ppas": ["a/b"]},
             )
         self.assertIn("Invalid environment", str(cme.exception))
@@ -516,9 +236,7 @@ class GitRequestValidationTests(SubmitTestBase):
             "Must specify at least one PPA (to associate results with)",
         )
 
-    @patch("request.submit.Submit.is_valid_ppa")
-    def test_bad_git_url(self, is_valid_ppa):
-        is_valid_ppa.return_value = True
+    def test_bad_git_url(self):
         with self.assertRaises(WebControlException) as cme:
             self.submit.validate_git_request(
                 "testy",
@@ -528,9 +246,7 @@ class GitRequestValidationTests(SubmitTestBase):
             )
         self.assertEqual(str(cme.exception), "Malformed build-git")
 
-    @patch("request.submit.Submit.is_valid_ppa")
-    def test_unknown_param(self, is_valid_ppa):
-        is_valid_ppa.return_value = True
+    def test_unknown_param(self):
         with self.assertRaises(WebControlException) as cme:
             self.submit.validate_git_request(
                 "testy",
@@ -544,9 +260,7 @@ class GitRequestValidationTests(SubmitTestBase):
             )
         self.assertEqual(str(cme.exception), "Unsupported arguments: foo")
 
-    @patch("request.submit.Submit.is_valid_ppa")
-    def test_bad_testname(self, is_valid_ppa):
-        is_valid_ppa.return_value = True
+    def test_bad_testname(self):
         with self.assertRaises(WebControlException) as cme:
             self.submit.validate_git_request(
                 "testy",
@@ -560,9 +274,8 @@ class GitRequestValidationTests(SubmitTestBase):
             )
         self.assertEqual(str(cme.exception), "Malformed testname")
 
-    @patch("request.submit.Submit.is_valid_ppa")
-    def test_valid(self, is_valid_ppa):
-        is_valid_ppa.return_value = True
+    @patch("request.submit.Submit.lp_request", return_value={"name": "ppa"})
+    def test_valid(self, _mock_lp_request):
         self.submit.validate_git_request(
             "testy",
             "C51",
@@ -570,13 +283,12 @@ class GitRequestValidationTests(SubmitTestBase):
             **{
                 "build-git": "http://x.com/proj",
                 "env": ["STATUS_URL=https://api.github.com/proj/123deadbeef"],
-                "ppas": ["a/b"],
+                "ppas": ["team/ppa"],
             },
         )
 
-    @patch("request.submit.Submit.is_valid_ppa")
-    def test_branch(self, is_valid_ppa):
-        is_valid_ppa.return_value = True
+    @patch("request.submit.Submit.lp_request", return_value={"name": "ppa"})
+    def test_branch(self, _mock_lp_request):
         self.submit.validate_git_request(
             "testy",
             "C51",
@@ -584,13 +296,12 @@ class GitRequestValidationTests(SubmitTestBase):
             **{
                 "build-git": "http://x.com/proj#refs/pull/2/head",
                 "env": ["STATUS_URL=https://api.github.com/proj/123deadbeef"],
-                "ppas": ["a/b"],
+                "ppas": ["team/ppa"],
             },
         )
 
-    @patch("request.submit.Submit.is_valid_ppa")
-    def test_valid_testname(self, is_valid_ppa):
-        is_valid_ppa.return_value = True
+    @patch("request.submit.Submit.lp_request", return_value={"name": "ppa"})
+    def test_valid_testname(self, _mock_lp_request):
         self.submit.validate_git_request(
             "testy",
             "C51",
@@ -599,7 +310,7 @@ class GitRequestValidationTests(SubmitTestBase):
                 "build-git": "http://x.com/proj",
                 "testname": "first",
                 "env": ["STATUS_URL=https://api.github.com/proj/123deadbeef"],
-                "ppas": ["a/b"],
+                "ppas": ["team/ppa"],
             },
         )
 
