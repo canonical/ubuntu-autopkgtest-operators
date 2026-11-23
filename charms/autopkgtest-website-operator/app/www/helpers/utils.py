@@ -9,7 +9,6 @@ import urllib.parse
 from pathlib import Path
 
 import pika
-import swiftclient
 
 HTTP_TIMEOUT = 60
 WEB_RUNTIME_DIR = Path(os.getenv("XDG_RUNTIME_DIR", "/run"), "autopkgtest_webcontrol")
@@ -211,8 +210,11 @@ def db_connect_public_readonly():
     )
 
 
-def swift_connect() -> swiftclient.Connection:
+def swift_connect():
     """Establish connection to swift storage."""
+    # swiftclient is slow to import; only do so when necessary.
+    import swiftclient
+
     try:
         config = get_autopkgtest_cloud_conf()
         swift_creds = {
