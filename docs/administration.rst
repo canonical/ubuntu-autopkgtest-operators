@@ -152,6 +152,61 @@ remotes, so for amd64 only use ``arch=amd64``, not ``arch=i386``::
 
 For other architectures, replace ``amd64`` with the remote architecture.
 
+LXD remote TLS errors
+---------------------
+
+A test may fail with an error like this in its ``log.gz``::
+
+  Error: Get "https://<remote-ip>:8443/1.0": tls: failed to verify certificate: x509: certificate is valid for 127.0.0.1, ::1, not <remote-ip>
+
+LXD always generates its self-signed server certificate for the host name,
+``127.0.0.1`` and ``::1``. It never includes the network addresses, so every
+remote has such a certificate, including healthy ones. When a remote is added,
+the ``lxc`` client saves the server certificate in
+``~/snap/lxd/common/config/servercerts/<remote>.crt``. It then checks
+connections against that certificate and the host name it contains instead of
+the IP address.
+
+This error therefore means that the ``lxc`` client on the dispatcher did not
+use a saved certificate for that remote. It does not mean that the remote has
+the wrong certificate: if the certificate had changed, the error would be
+``certificate signed by unknown authority`` instead. Do not regenerate the LXD
+server certificate on the remote: the janitor and every dispatcher would then
+reject it. Changing when ``lxd init`` runs on the remote does not change the
+certificate addresses either.
+
+To check the remote from the dispatcher unit reporting the error::
+
+  juju ssh <dispatcher-unit>
+  sudo -iu ubuntu
+  lxc remote list --format=csv | grep '^remote-<arch>-<index>,'
+  ls -l ~/snap/lxd/common/config/servercerts/remote-<arch>-<index>.crt
+  openssl x509 -noout -fingerprint -sha256 \
+      -in ~/snap/lxd/common/config/servercerts/remote-<arch>-<index>.crt |
+      cut -d= -f2 | tr -d : | tr 'A-F' 'a-f'
+  lxc ls --fast remote-<arch>-<index>:
+
+Compare the fingerprint with the ``certificate_fingerprint`` shown by
+``lxc info`` on the remote. amd64 remotes are registered twice on each
+dispatcher, as ``remote-amd64-<index>`` and ``remote-i386-<index>``, with one
+saved certificate for each name. Check both.
+
+If the certificate file is missing, empty or does not match, register the
+remote again on that dispatcher. Set its worker count to zero and reconcile the
+worker units, as described in `Removing LXD remotes`_. Then remove the remote
+from the dispatcher, generate a new trust token on the remote, and add the
+remote again::
+
+  juju run <dispatcher-unit> remove-remote arch=<arch> index=<index>
+  juju run <dispatcher-unit> add-remote arch=<arch> index=<index> token=<token>
+
+The token can be generated on the remote with ``lxc config trust add``, as for
+the initial registration. This works even though the remote already trusts the
+dispatcher's client certificate. ``add-remote`` uses the
+``default-worker-count`` setting: if a different count is needed, set it with
+``set-worker-count``. Finally, run ``reconcile-worker-units`` on that
+dispatcher.
+
 Updating autopkgtest
 ---------------------------------
 The dispatcher and janitor applications have
